@@ -40,6 +40,60 @@ describe('Repository.listActiveStems', () => {
   });
 });
 
+describe('Repository.getRecentStemUsage', () => {
+  it('returns sessions from the last 14 days with the stem category, most recent first', () => {
+    const { db, repo } = freshRepository();
+    const stemId = firstStemId(repo);
+    const category = (db.prepare('SELECT category FROM stems WHERE id = ?').get(stemId) as { category: string | null })
+      .category;
+
+    repo.createSession({
+      stemId,
+      stemTextSnapshot: 'snap',
+      origin: 'manual',
+      targetEndings: 3,
+      timerSeconds: 90,
+      uncensoredMode: true,
+      startedAt: '2026-09-01T08:00:00.000Z',
+      deviceLocale: 'en-US',
+    });
+    repo.createSession({
+      stemId,
+      stemTextSnapshot: 'snap',
+      origin: 'manual',
+      targetEndings: 3,
+      timerSeconds: 90,
+      uncensoredMode: true,
+      startedAt: '2026-09-05T08:00:00.000Z',
+      deviceLocale: 'en-US',
+    });
+
+    const usage = repo.getRecentStemUsage();
+    expect(usage).toHaveLength(2);
+    expect(usage[0].startedAt).toBe('2026-09-05T08:00:00.000Z');
+    expect(usage[0].stemId).toBe(stemId);
+    expect(usage[0].category).toBe(category);
+  });
+
+  it('excludes soft-deleted sessions', () => {
+    const { db, repo } = freshRepository();
+    const stemId = firstStemId(repo);
+    const sessionId = repo.createSession({
+      stemId,
+      stemTextSnapshot: 'snap',
+      origin: 'manual',
+      targetEndings: 3,
+      timerSeconds: 90,
+      uncensoredMode: true,
+      startedAt: '2026-09-05T08:00:00.000Z',
+      deviceLocale: 'en-US',
+    });
+    db.prepare('UPDATE sessions SET deleted_at = ? WHERE id = ?').run('2026-09-06T00:00:00.000Z', sessionId);
+
+    expect(repo.getRecentStemUsage()).toHaveLength(0);
+  });
+});
+
 describe('Repository session lifecycle', () => {
   it('createSession inserts a row with the given config, snapshot, and origin', () => {
     const { db, repo } = freshRepository();

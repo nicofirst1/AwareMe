@@ -112,11 +112,28 @@ export class Repository {
     return { ...DEFAULT_SETTINGS, ...values };
   }
 
-  /** Active, non-deleted stems, for the (temporary) session-start picker. */
+  /** Active, non-deleted stems, for session start and the stem library. */
   listActiveStems(): StemRow[] {
     return this.db.getAllSync<StemRow>(
       "SELECT id, text, origin, category, weight FROM stems WHERE active = 1 AND deleted_at IS NULL ORDER BY created_at",
       [],
+    );
+  }
+
+  /**
+   * Recent session starts (stem id, its category, when started), for the
+   * weighted selection's recency/category penalties (§6.2). 14 days covers
+   * the widest window either penalty looks at; the caller doesn't need
+   * anything older.
+   */
+  getRecentStemUsage(): { stemId: string; category: string | null; startedAt: string }[] {
+    return this.db.getAllSync<{ stemId: string; category: string | null; startedAt: string }>(
+      `SELECT s.stem_id as stemId, st.category as category, s.started_at as startedAt
+       FROM sessions s
+       JOIN stems st ON st.id = s.stem_id
+       WHERE s.deleted_at IS NULL AND s.started_at >= ?
+       ORDER BY s.started_at DESC`,
+      [new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()],
     );
   }
 
