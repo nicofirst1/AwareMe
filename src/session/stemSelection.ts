@@ -4,6 +4,8 @@
  * deterministically unit-testable — no database, no clock, no RNG import.
  */
 
+import { mulberry32 } from '@/lib/prng';
+
 export interface SelectableStem {
   id: string;
   category: string | null;
@@ -20,18 +22,6 @@ export interface StemUsage {
 const RECENT_2_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
 const RECENT_7_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const CATEGORY_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
-
-/** A xorshift-ish PRNG seeded with a plain number, so selection is reproducible for a given seed. */
-function mulberry32(seed: number): () => number {
-  let a = seed;
-  return () => {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 /**
  * Effective weight for one stem: base weight, reduced by a recency penalty
