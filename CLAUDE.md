@@ -12,7 +12,7 @@ The project is scaffolded (ticket 01): Expo managed workflow, SDK 57, TypeScript
 
 Expo managed workflow, SDK 57 · TypeScript `strict: true`, no `any` in committed code · `expo-router` (file-based, rooted at `src/app`) · `expo-sqlite` · local-only `expo-notifications` · Zustand (not Redux) · `expo-file-system` · `expo-sharing` for export · `expo-local-authentication` for the optional lock · Jest (`jest-expo` preset) + `@testing-library/react-native`.
 
-`expo-linking` is also installed: not in spec §3's list, but it's a hard runtime peer of `expo-router` (app crashes on boot without it), not a discretionary addition.
+Two deps are installed beyond spec §3's list, both non-discretionary — see `DECISIONS.md`: `expo-linking` (hard runtime peer of `expo-router`) and `expo-crypto` (UUIDv7 needs real random bytes; Hermes doesn't polyfill `crypto.getRandomValues`).
 
 The app **MUST function fully in airplane mode.** No network calls. No dependency here pulls in network capability.
 
@@ -22,6 +22,16 @@ The app **MUST function fully in airplane mode.** No network calls. No dependenc
 - `npm test` — `jest` (preset `jest-expo`); `npx jest path/to/file.test.ts` for a single file
 - `npm run typecheck` — `tsc --noEmit`
 - `npm run lint` — `expo lint`
+
+## Data layer (`src/db/`, ticket 02)
+
+- `migrations/000N_*.ts` — one file per schema version, immutable once shipped; `migrations/index.ts` lists them in order.
+- `migrate.ts` — the runner: reads `schema_meta`, applies pending migrations in order, each in its own transaction.
+- `executor.ts` — the `SqlExecutor` interface migrations and repositories are written against; `expo-sqlite`'s `SQLiteDatabase` satisfies it directly (compile-time checked in `executorCompat.check.ts`).
+- `database.ts` — `getDatabase()`: opens the real on-device DB and runs `migrate()`. The one place production code calls `expo-sqlite`'s `openDatabaseSync`.
+- `uuidv7.ts` / `id.ts` — pure UUIDv7 generator + the one call site binding it to `expo-crypto`.
+- `fixtures/schema-vN.db` — a committed, real SQLite file per shipped version; `__tests__/migrate.test.ts` regenerates any missing one and asserts every fixture upgrades cleanly to current. Add a new fixture when you add a migration (see `fixtures/README.md`).
+- `testSupport/nodeSqliteExecutor.ts` — adapts Node's builtin `node:sqlite` to `SqlExecutor` so migration tests run against real SQLite without a device/simulator.
 
 ## Architecture: the data model is the load-bearing decision
 
