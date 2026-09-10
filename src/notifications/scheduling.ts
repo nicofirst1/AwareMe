@@ -140,3 +140,51 @@ function splitCount(total: number, parts: number): number[] {
   const remainder = total % parts;
   return Array.from({ length: parts }, (_, i) => base + (i < remainder ? 1 : 0));
 }
+
+/** One already-scheduled, still-pending notification, as read from `notification_schedule`. */
+export interface PendingNotification {
+  id: string;
+  scheduledFor: Date;
+}
+
+export interface ScheduleDiff {
+  /** Pending rows to cancel: past the horizon, or in excess of the cap. */
+  toCancel: readonly string[];
+  /** New fire times to schedule, filling the gap up to the desired set. */
+  toCreate: readonly Date[];
+}
+
+const MATCH_TOLERANCE_MS = 60 * 1000; // treat times within a minute as "the same slot"
+
+/**
+ * Reconciles `desired` (this call's fresh `generateFireTimes` output) against
+ * `existingPending` (what's actually still scheduled, per `notification_schedule`
+ * and the OS). A pending row whose time matches a desired time is left alone;
+ * anything pending but not in `desired` (superseded by a reschedule, or past
+ * the horizon) is cancelled; anything in `desired` with no matching pending
+ * row is newly created. Calling this repeatedly with an unchanged `desired`
+ * and the `existingPending` from the previous call's own output is a no-op
+ * (`toCancel`/`toCreate` both empty) — that's what makes rescheduling
+ * idempotent at the integration layer, on top of `generateFireTimes` already
+ * being a pure deterministic function of its own inputs.
+ */
+export function diffSchedule(desired: readonly Date[], existingPending: readonly PendingNotification[]): ScheduleDiff {
+  const unmatchedExisting = [...existingPending];
+  const toCreate: Date[] = [];
+
+  for (const time of desired) {
+    const matchIndex = unmatchedExisting.findIndex(
+      (p) => Math.abs(p.scheduledFor.getTime() - time.getTime()) < MATCH_TOLERANCE_MS,
+    );
+    if (matchIndex >= 0) {
+      unmatchedExisting.splice(matchIndex, 1);
+    } else {
+      toCreate.push(time);
+    }
+  }
+
+  return {
+    toCancel: unmatchedExisting.map((p) => p.id),
+    toCreate,
+  };
+}

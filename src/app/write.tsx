@@ -8,6 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
+import type { StemForSession } from '@/session/useWritingSession';
 import { useWritingSession } from '@/session/useWritingSession';
 
 /**
@@ -15,16 +16,26 @@ import { useWritingSession } from '@/session/useWritingSession';
  * exit affordance (§10) — the stem stays pinned above the input, previously
  * written endings are shown dimmed above it (§6.3.5), and the timer is a
  * thin, calm progress bar with no numerals larger than the text (§6.3.7).
+ *
+ * `origin`/`notificationId`/`notifiedAt` are only present when this screen
+ * was reached by tapping a notification (§6.4, ticket 10) — the stem was
+ * already chosen at schedule time, so this screen just looks it up rather
+ * than drawing again.
  */
 export default function WriteScreen() {
-  const { stemId } = useLocalSearchParams<{ stemId: string }>();
+  const { stemId, origin, notificationId, notifiedAt } = useLocalSearchParams<{
+    stemId: string;
+    origin?: string;
+    notificationId?: string;
+    notifiedAt?: string;
+  }>();
   const router = useRouter();
   const theme = useTheme();
   const session = useWritingSession();
   const inputRef = useRef<TextInput>(null);
 
   const [terminator, setTerminator] = useState('...');
-  const [pendingStem, setPendingStem] = useState<{ id: string; text: string } | null>(null);
+  const [pendingStem, setPendingStem] = useState<StemForSession | null>(null);
 
   useEffect(() => {
     const repo = getRepository();
@@ -34,9 +45,17 @@ export default function WriteScreen() {
       // writing on an archived stem deliberately, outside the weighted
       // rotation that `active` gates. A soft-deleted stem is excluded.
       const stem = repo.listAllStems().find((s) => s.id === stemId && s.deleted_at === null);
-      if (stem) setPendingStem({ id: stem.id, text: stem.text });
+      if (stem) {
+        setPendingStem({
+          id: stem.id,
+          text: stem.text,
+          origin: origin === 'notification' ? 'notification' : 'manual',
+          notificationId,
+          notifiedAt,
+        });
+      }
     }
-  }, [stemId]);
+  }, [stemId, origin, notificationId, notifiedAt]);
 
   useEffect(() => {
     if (session.phase === 'active') {

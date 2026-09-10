@@ -12,6 +12,7 @@ import {
   startSession,
   submitActiveEnding,
   updateActiveEndingText,
+  type SessionOrigin,
   type SessionState,
 } from './sessionMachine';
 
@@ -21,6 +22,11 @@ const AUTOSAVE_DEBOUNCE_MS = 400;
 export interface StemForSession {
   id: string;
   text: string; // without terminator
+  /** Defaults to 'manual'. 'notification' when opened via a notification tap (§6.4, ticket 10). */
+  origin?: SessionOrigin;
+  /** Set alongside origin='notification': the `notification_schedule` row this session was opened from. */
+  notificationId?: string;
+  notifiedAt?: string;
 }
 
 export type WritingPhase = 'idle' | 'active' | 'done';
@@ -187,12 +193,14 @@ export function useWritingSession(): WritingSessionView {
       const id = repo.createSession({
         stemId: stem.id,
         stemTextSnapshot: stem.text,
-        origin: 'manual',
+        origin: stem.origin ?? 'manual',
         targetEndings: config.targetEndings,
         timerSeconds: config.timerSeconds,
         uncensoredMode: config.uncensoredMode,
         startedAt: at,
         deviceLocale: getDeviceLocale(),
+        notificationId: stem.notificationId,
+        notifiedAt: stem.notifiedAt,
       });
 
       setSessionId(id);

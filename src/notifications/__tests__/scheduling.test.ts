@@ -1,4 +1,4 @@
-import { generateFireTimes, MIN_GAP_MS, type ScheduleInput } from '../scheduling';
+import { diffSchedule, generateFireTimes, MIN_GAP_MS, type PendingNotification, type ScheduleInput } from '../scheduling';
 
 const NOW = new Date(2026, 8, 10, 0, 0, 0, 0); // 2026-09-10 local midnight
 
@@ -196,5 +196,67 @@ describe('generateFireTimes: idempotency', () => {
       seed: 55,
     });
     expect(a.map((t) => t.getTime())).toEqual(b.map((t) => t.getTime()));
+  });
+});
+
+describe('diffSchedule', () => {
+  const t = (isoLocal: string) => new Date(isoLocal);
+
+  it('creates everything when nothing is pending yet', () => {
+    const desired = [t('2026-09-11T08:00:00'), t('2026-09-11T10:00:00')];
+    const result = diffSchedule(desired, []);
+    expect(result.toCancel).toEqual([]);
+    expect(result.toCreate.map((d) => d.getTime())).toEqual(desired.map((d) => d.getTime()));
+  });
+
+  it('is a no-op when existing pending exactly matches desired (the idempotency case)', () => {
+    const desired = [t('2026-09-11T08:00:00'), t('2026-09-11T10:00:00')];
+    const existing: PendingNotification[] = [
+      { id: 'a', scheduledFor: t('2026-09-11T08:00:00') },
+      { id: 'b', scheduledFor: t('2026-09-11T10:00:00') },
+    ];
+    const result = diffSchedule(desired, existing);
+    expect(result.toCancel).toEqual([]);
+    expect(result.toCreate).toEqual([]);
+  });
+
+  it('cancels pending rows with no match in desired (superseded or past the horizon)', () => {
+    const desired = [t('2026-09-11T08:00:00')];
+    const existing: PendingNotification[] = [
+      { id: 'keep', scheduledFor: t('2026-09-11T08:00:00') },
+      { id: 'stale', scheduledFor: t('2026-09-05T08:00:00') },
+    ];
+    const result = diffSchedule(desired, existing);
+    expect(result.toCancel).toEqual(['stale']);
+    expect(result.toCreate).toEqual([]);
+  });
+
+  it('creates only the desired times with no existing match, leaving matched ones alone', () => {
+    const desired = [t('2026-09-11T08:00:00'), t('2026-09-12T09:00:00')];
+    const existing: PendingNotification[] = [{ id: 'a', scheduledFor: t('2026-09-11T08:00:00') }];
+    const result = diffSchedule(desired, existing);
+    expect(result.toCancel).toEqual([]);
+    expect(result.toCreate.map((d) => d.getTime())).toEqual([t('2026-09-12T09:00:00').getTime()]);
+  });
+
+  it('running twice with the previous output folded back in settles to a no-op', () => {
+    const desired = generateFireTimes({
+      windows: [{ start: '08:00', end: '21:00' }],
+      sessionsPerDay: 2,
+      now: NOW,
+      seed: 77,
+    });
+    const firstRun = diffSchedule(desired, []);
+    expect(firstRun.toCreate.length).toBe(desired.length);
+
+    // Simulate persisting firstRun.toCreate as the new pending set, each
+    // assigned an id, then rerunning with the identical desired schedule.
+    const existingAfterFirstRun: PendingNotification[] = firstRun.toCreate.map((d, i) => ({
+      id: `id-${i}`,
+      scheduledFor: d,
+    }));
+    const secondRun = diffSchedule(desired, existingAfterFirstRun);
+    expect(secondRun.toCancel).toEqual([]);
+    expect(secondRun.toCreate).toEqual([]);
   });
 });

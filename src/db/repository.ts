@@ -59,6 +59,17 @@ export interface EndingRow {
   backspace_count: number;
 }
 
+export type NotificationScheduleState = 'pending' | 'fired' | 'cancelled' | 'superseded';
+
+export interface NotificationScheduleRow {
+  id: string;
+  scheduled_for: string; // UTC
+  stem_id: string | null;
+  os_identifier: string | null;
+  state: NotificationScheduleState;
+  created_at: string;
+}
+
 /**
  * Reads and writes shared by first-launch seeding and the debug dump
  * screen. Deliberately thin: M2+ tickets add session/ending/review
@@ -232,14 +243,17 @@ export class Repository {
     uncensoredMode: boolean;
     startedAt: string;
     deviceLocale: string;
+    /** Set when `origin === 'notification'`: the row this session was opened from (§6.4). */
+    notificationId?: string;
+    notifiedAt?: string;
   }): string {
     const id = newId();
     const { tz, offsetMin } = nowEventTime(new Date(input.startedAt));
     this.db.runSync(
       `INSERT INTO sessions
          (id, stem_id, stem_text_snapshot, origin, target_endings, timer_seconds, uncensored_mode,
-          started_at, last_activity_at, tz, offset_min, device_locale)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          started_at, last_activity_at, tz, offset_min, device_locale, notification_id, notified_at, opened_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         input.stemId,
@@ -253,6 +267,9 @@ export class Repository {
         tz,
         offsetMin,
         input.deviceLocale,
+        input.notificationId ?? null,
+        input.notifiedAt ?? null,
+        input.notificationId ? input.startedAt : null,
       ],
     );
     return id;
@@ -341,5 +358,61 @@ export class Repository {
       session.id,
     ]);
     return { session, endings };
+  }
+
+  /** Rows still `pending` — the OS scheduler's own notion of "not yet fired or cancelled" (§6.4). */
+  listPendingNotifications(): NotificationScheduleRow[] {
+    return this.db.getAllSync<NotificationScheduleRow>(
+      "SELECT * FROM notification_schedule WHERE state = 'pending' ORDER BY scheduled_for",
+      [],
+    );
+  }
+
+  /**
+   * Records a notification the scheduler just asked `expo-notifications` to
+   * fire (§6.4: "Record every scheduled notification in
+   * notification_schedule"). `stemId` is chosen at schedule time via the
+   * weighted draw (06) — deep-linking on tap reads it back rather than
+   * re-drawing, so what fires is what the user opens.
+   */
+  insertScheduledNotification(input: { scheduledFor: string; stemId: string | null; osIdentifier: string }): string {
+    const id = newId();
+    const { at } = nowEventTime();
+    this.db.runSync(
+      `INSERT INTO notification_schedule (id, scheduled_for, stem_id, os_identifier, state, created_at)
+       VALUES (?, ?, ?, ?, 'pending', ?)`,
+      [id, input.scheduledFor, input.stemId, input.osIdentifier, at],
+    );
+    return id;
+  }
+
+  /** Marks rows cancelled — superseded by a fresh reschedule, or past the horizon. Append-only: a state flag, not a delete. */
+  cancelPendingNotifications(ids: readonly string[]): void {
+    if (ids.length === 0) return;
+    this.db.withTransactionSync(() => {
+      for (const id of ids) {
+        this.db.runSync("UPDATE notification_schedule SET state = 'cancelled' WHERE id = ?", [id]);
+      }
+    });
+  }
+
+  /**
+   * Best-effort reconciliation (§6.4 "reconcile state on foreground"): any
+   * row still marked `pending` whose `scheduled_for` has already passed is
+   * relabelled `fired`. Local notifications don't call back on delivery, so
+   * this is inferred from the clock, not observed — good enough for a
+   * record that's descriptive, never load-bearing for app behaviour.
+   */
+  markPastPendingAsFired(now: string): void {
+    this.db.runSync("UPDATE notification_schedule SET state = 'fired' WHERE state = 'pending' AND scheduled_for <= ?", [
+      now,
+    ]);
+  }
+
+  /** One notification row by its `expo-notifications` identifier — used to resolve a tapped notification's stem. */
+  getNotificationByOsIdentifier(osIdentifier: string): NotificationScheduleRow | null {
+    return this.db.getFirstSync<NotificationScheduleRow>('SELECT * FROM notification_schedule WHERE os_identifier = ?', [
+      osIdentifier,
+    ]);
   }
 }
