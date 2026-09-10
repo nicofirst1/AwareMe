@@ -3,9 +3,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FilterChip } from '@/components/filter-chip';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { MinTouchTarget, Spacing } from '@/constants/theme';
 import { getRepository, LibraryStemRow } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
 import { matchesStemFilters, type ActiveFilter } from '@/session/stemLibraryFilter';
@@ -61,10 +62,10 @@ export default function StemsScreen() {
             Stems
           </ThemedText>
           <ThemedView style={styles.headerActions}>
-            <Pressable onPress={() => router.push('/stem-import')} accessibilityRole="button">
+            <Pressable onPress={() => router.push('/stem-import')} style={styles.headerAction} accessibilityRole="button">
               <ThemedText type="default">Import</ThemedText>
             </Pressable>
-            <Pressable onPress={() => router.push('/stem-edit')} accessibilityRole="button">
+            <Pressable onPress={() => router.push('/stem-edit')} style={styles.headerAction} accessibilityRole="button">
               <ThemedText type="default">Add</ThemedText>
             </Pressable>
           </ThemedView>
@@ -171,30 +172,15 @@ function FilterRow<T extends string>({
   value: T;
   onChange: (v: T) => void;
 }) {
-  const theme = useTheme();
   return (
     <ThemedView style={styles.filterRow}>
       <ThemedText type="small" themeColor="textSecondary" style={styles.filterLabel}>
         {label}
       </ThemedText>
       <ThemedView style={styles.filterOptions}>
-        {options.map((opt) => {
-          const selected = opt.value === value;
-          return (
-            <Pressable
-              key={opt.value}
-              onPress={() => onChange(opt.value)}
-              style={[
-                styles.chip,
-                { backgroundColor: selected ? theme.backgroundSelected : theme.backgroundElement },
-              ]}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-            >
-              <ThemedText type="small">{opt.label}</ThemedText>
-            </Pressable>
-          );
-        })}
+        {options.map((opt) => (
+          <FilterChip key={opt.value} label={opt.label} selected={opt.value === value} onPress={() => onChange(opt.value)} />
+        ))}
       </ThemedView>
     </ThemedView>
   );
@@ -218,6 +204,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.three,
   },
+  headerAction: {
+    minHeight: MinTouchTarget,
+    justifyContent: 'center',
+  },
   title: {
     paddingTop: 0,
   },
@@ -240,11 +230,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.one,
   },
-  chip: {
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.two,
-    borderRadius: Spacing.three,
-  },
   list: {
     padding: Spacing.four,
     gap: Spacing.two,
@@ -262,7 +247,8 @@ const styles = StyleSheet.create({
     gap: Spacing.half,
   },
   editLink: {
+    minHeight: MinTouchTarget,
     paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one,
+    justifyContent: 'center',
   },
 });

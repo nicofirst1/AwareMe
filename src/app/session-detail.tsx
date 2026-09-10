@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
 import { EndingRow, getRepository, SessionRow } from '@/db';
 import { nowEventTime } from '@/db/time';
 import { useTheme } from '@/hooks/use-theme';
@@ -86,7 +86,7 @@ export default function SessionDetailScreen() {
             ))}
           </ThemedView>
 
-          <Pressable onPress={confirmDelete} accessibilityRole="button" hitSlop={12}>
+          <Pressable onPress={confirmDelete} style={styles.deleteLink} accessibilityRole="button" hitSlop={12}>
             <ThemedText type="small" themeColor="textSecondary">
               Delete this session
             </ThemedText>
@@ -132,5 +132,9 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: Spacing.two,
     gap: Spacing.half,
+  },
+  deleteLink: {
+    minHeight: MinTouchTarget,
+    justifyContent: 'center',
   },
 });

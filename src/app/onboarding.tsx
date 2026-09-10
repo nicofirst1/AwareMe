@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Fonts, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { requestNotificationPermission, rescheduleNotifications } from '@/notifications/scheduler';
 import { clampSetting, isValidHHMM, SETTINGS_RANGES } from '@/session/settingsValidation';
@@ -68,6 +68,14 @@ export default function OnboardingScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ThemedView style={styles.content}>
+          <ThemedText
+            type="small"
+            themeColor="textSecondary"
+            accessibilityLabel={`Step ${step + 1} of ${STEP_COUNT}`}
+          >
+            {step + 1} of {STEP_COUNT}
+          </ThemedText>
+
           {step === 0 && (
             <>
               <ThemedText type="title">Finish the sentence</ThemedText>
@@ -87,7 +95,7 @@ export default function OnboardingScreen() {
                 Branden. Nothing here scores, interprets, or comments on what you write — it just gives you a quiet
                 place to write it.
               </ThemedText>
-              <Link href="/about-method">
+              <Link href="/about-method" style={styles.navLink}>
                 <ThemedText type="default" themeColor="textSecondary">
                   Read more about the method
                 </ThemedText>
@@ -120,6 +128,7 @@ export default function OnboardingScreen() {
                     setNotificationsEnabled(false);
                     setStep(3);
                   }}
+                  style={styles.textButton}
                   accessibilityRole="button"
                 >
                   <ThemedText type="default">Not now</ThemedText>
@@ -180,11 +189,11 @@ export default function OnboardingScreen() {
 
           <ThemedView style={styles.footer}>
             {step < STEP_COUNT - 1 && (
-              <Pressable onPress={() => setStep(step + 1)} accessibilityRole="button">
+              <Pressable onPress={() => setStep(step + 1)} style={styles.textButton} accessibilityRole="button">
                 <ThemedText type="default">Next</ThemedText>
               </Pressable>
             )}
-            <Pressable onPress={skip} accessibilityRole="button">
+            <Pressable onPress={skip} style={styles.textButton} accessibilityRole="button">
               <ThemedText type="small" themeColor="textSecondary">
                 Skip
               </ThemedText>
@@ -254,6 +263,14 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     alignItems: 'flex-start',
   },
+  textButton: {
+    minHeight: MinTouchTarget,
+    justifyContent: 'center',
+  },
+  navLink: {
+    minHeight: MinTouchTarget,
+    textAlignVertical: 'center',
+  },
   button: {
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.four,
@@ -271,8 +288,8 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   stepperButton: {
-    width: 40,
-    height: 40,
+    width: MinTouchTarget,
+    height: MinTouchTarget,
     borderRadius: Spacing.two,
     alignItems: 'center',
     justifyContent: 'center',
@@ -287,10 +304,12 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   timeInput: {
+    fontFamily: Fonts.sans,
     fontSize: 16,
     padding: Spacing.two,
     borderRadius: Spacing.two,
     width: 80,
+    minHeight: MinTouchTarget,
     textAlign: 'center',
   },
   footer: {

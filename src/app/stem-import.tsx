@@ -4,9 +4,10 @@ import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FilterChip } from '@/components/filter-chip';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -81,24 +82,9 @@ export default function StemImportScreen() {
             Category (optional, applied to all)
           </ThemedText>
           <ThemedView style={styles.chipRow}>
-            <Pressable
-              onPress={() => setCategory(null)}
-              style={[styles.chip, { backgroundColor: category === null ? theme.backgroundSelected : theme.backgroundElement }]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: category === null }}
-            >
-              <ThemedText type="small">None</ThemedText>
-            </Pressable>
+            <FilterChip label="None" selected={category === null} onPress={() => setCategory(null)} />
             {CATEGORIES.map((c) => (
-              <Pressable
-                key={c}
-                onPress={() => setCategory(c)}
-                style={[styles.chip, { backgroundColor: category === c ? theme.backgroundSelected : theme.backgroundElement }]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: category === c }}
-              >
-                <ThemedText type="small">{c}</ThemedText>
-              </Pressable>
+              <FilterChip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} />
             ))}
           </ThemedView>
 
@@ -121,6 +107,7 @@ export default function StemImportScreen() {
             disabled={lines.length === 0}
             style={[styles.button, { backgroundColor: theme.backgroundElement, opacity: lines.length === 0 ? 0.5 : 1 }]}
             accessibilityRole="button"
+            accessibilityState={{ disabled: lines.length === 0 }}
           >
             <ThemedText type="subtitle">Import</ThemedText>
           </Pressable>
@@ -145,6 +132,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   input: {
+    fontFamily: Fonts.sans,
     fontSize: 16,
     lineHeight: 24,
     minHeight: 140,
@@ -155,11 +143,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.one,
-  },
-  chip: {
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.two,
-    borderRadius: Spacing.three,
   },
   preview: {
     padding: Spacing.three,

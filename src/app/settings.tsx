@@ -3,9 +3,10 @@ import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FilterChip } from '@/components/filter-chip';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Fonts, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
 import { getRepository, Settings } from '@/db';
 import { cancelAllPendingNotifications, rescheduleNotifications } from '@/notifications/scheduler';
 import { clampSetting, isValidHHMM, SETTINGS_RANGES } from '@/session/settingsValidation';
@@ -80,7 +81,6 @@ function ChipToggle<T extends string>({
   onChange: (next: T) => void;
   display?: (opt: T) => string;
 }) {
-  const theme = useTheme();
   return (
     <ThemedView style={styles.section}>
       <ThemedText type="small" themeColor="textSecondary">
@@ -88,15 +88,7 @@ function ChipToggle<T extends string>({
       </ThemedText>
       <ThemedView style={styles.chipRow}>
         {options.map((opt) => (
-          <Pressable
-            key={opt}
-            onPress={() => onChange(opt)}
-            style={[styles.chip, { backgroundColor: value === opt ? theme.backgroundSelected : theme.backgroundElement }]}
-            accessibilityRole="button"
-            accessibilityState={{ selected: value === opt }}
-          >
-            <ThemedText type="small">{display ? display(opt) : opt}</ThemedText>
-          </Pressable>
+          <FilterChip key={opt} label={display ? display(opt) : opt} selected={value === opt} onPress={() => onChange(opt)} />
         ))}
       </ThemedView>
     </ThemedView>
@@ -237,7 +229,7 @@ export default function SettingsScreen() {
               />
             </ThemedView>
             {windowError && (
-              <ThemedText type="small" style={styles.error}>
+              <ThemedText type="small" themeColor="error" accessibilityLiveRegion="polite">
                 {windowError}
               </ThemedText>
             )}
@@ -274,7 +266,7 @@ export default function SettingsScreen() {
             </ThemedText>
           )}
 
-          <Link href="/about-method">
+          <Link href="/about-method" style={styles.navLink}>
             <ThemedText type="default">About the method</ThemedText>
           </Link>
 
@@ -287,8 +279,9 @@ export default function SettingsScreen() {
               disabled={wiping}
               style={[styles.deleteButton, { opacity: wiping ? 0.5 : 1 }]}
               accessibilityRole="button"
+              accessibilityState={{ disabled: wiping, busy: wiping }}
             >
-              <ThemedText type="default" style={styles.error}>
+              <ThemedText type="default" themeColor="error">
                 Delete all data
               </ThemedText>
             </Pressable>
@@ -323,8 +316,8 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   stepperButton: {
-    width: 44,
-    height: 44,
+    width: MinTouchTarget,
+    height: MinTouchTarget,
     borderRadius: Spacing.two,
     alignItems: 'center',
     justifyContent: 'center',
@@ -341,25 +334,19 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.one,
   },
-  chip: {
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.two,
-    borderRadius: Spacing.three,
-  },
   windowRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
   timeInput: {
+    fontFamily: Fonts.sans,
     fontSize: 16,
     padding: Spacing.two,
     borderRadius: Spacing.two,
     width: 80,
+    minHeight: MinTouchTarget,
     textAlign: 'center',
-  },
-  error: {
-    color: '#B3261E',
   },
   destructiveBlock: {
     gap: Spacing.two,
@@ -367,5 +354,11 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     paddingVertical: Spacing.two,
+    minHeight: MinTouchTarget,
+    justifyContent: 'center',
+  },
+  navLink: {
+    minHeight: MinTouchTarget,
+    textAlignVertical: 'center',
   },
 });

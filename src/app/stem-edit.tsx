@@ -3,9 +3,10 @@ import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FilterChip } from '@/components/filter-chip';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Fonts, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { nowEventTime } from '@/db/time';
 import { useTheme } from '@/hooks/use-theme';
@@ -122,7 +123,7 @@ export default function StemEditScreen() {
             accessibilityLabel="Stem text"
           />
           {error && (
-            <ThemedText type="small" themeColor="text" style={styles.error}>
+            <ThemedText type="small" themeColor="error" accessibilityLiveRegion="polite">
               {error}
             </ThemedText>
           )}
@@ -136,24 +137,9 @@ export default function StemEditScreen() {
             Category (optional)
           </ThemedText>
           <ThemedView style={styles.chipRow}>
-            <Pressable
-              onPress={() => setCategory(null)}
-              style={[styles.chip, { backgroundColor: category === null ? theme.backgroundSelected : theme.backgroundElement }]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: category === null }}
-            >
-              <ThemedText type="small">None</ThemedText>
-            </Pressable>
+            <FilterChip label="None" selected={category === null} onPress={() => setCategory(null)} />
             {CATEGORIES.map((c) => (
-              <Pressable
-                key={c}
-                onPress={() => setCategory(c)}
-                style={[styles.chip, { backgroundColor: category === c ? theme.backgroundSelected : theme.backgroundElement }]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: category === c }}
-              >
-                <ThemedText type="small">{c}</ThemedText>
-              </Pressable>
+              <FilterChip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} />
             ))}
           </ThemedView>
 
@@ -162,15 +148,12 @@ export default function StemEditScreen() {
           </ThemedText>
           <ThemedView style={styles.chipRow}>
             {(['less', 'normal', 'more'] as const).map((w) => (
-              <Pressable
+              <FilterChip
                 key={w}
+                label={w === 'less' ? 'Less often' : w === 'more' ? 'More often' : 'Normal'}
+                selected={weightSetting === w}
                 onPress={() => setWeightSetting(w)}
-                style={[styles.chip, { backgroundColor: weightSetting === w ? theme.backgroundSelected : theme.backgroundElement }]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: weightSetting === w }}
-              >
-                <ThemedText type="small">{w === 'less' ? 'Less often' : w === 'more' ? 'More often' : 'Normal'}</ThemedText>
-              </Pressable>
+              />
             ))}
           </ThemedView>
 
@@ -180,11 +163,11 @@ export default function StemEditScreen() {
 
           {existing && (
             <ThemedView style={styles.destructiveBlock}>
-              <Pressable onPress={toggleArchive} accessibilityRole="button">
+              <Pressable onPress={toggleArchive} style={styles.destructiveRow} accessibilityRole="button">
                 <ThemedText type="default">{existing.active ? 'Archive' : 'Unarchive'}</ThemedText>
               </Pressable>
               {!existing.deleted_at && (
-                <Pressable onPress={softDelete} accessibilityRole="button">
+                <Pressable onPress={softDelete} style={styles.destructiveRow} accessibilityRole="button">
                   <ThemedText type="default">Delete</ThemedText>
                 </Pressable>
               )}
@@ -211,24 +194,17 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   input: {
+    fontFamily: Fonts.sans,
     fontSize: 18,
     lineHeight: 26,
     minHeight: 80,
     padding: Spacing.three,
     borderRadius: Spacing.two,
   },
-  error: {
-    color: '#B3261E',
-  },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.one,
-  },
-  chip: {
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.two,
-    borderRadius: Spacing.three,
   },
   button: {
     paddingVertical: Spacing.three,
@@ -239,5 +215,9 @@ const styles = StyleSheet.create({
   destructiveBlock: {
     gap: Spacing.two,
     paddingTop: Spacing.three,
+  },
+  destructiveRow: {
+    minHeight: MinTouchTarget,
+    justifyContent: 'center',
   },
 });

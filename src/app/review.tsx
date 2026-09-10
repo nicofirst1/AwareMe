@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FilterChip } from '@/components/filter-chip';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -129,15 +130,7 @@ export default function ReviewScreen() {
 
           <ThemedView style={styles.periodRow}>
             {REVIEW_PERIOD_PRESETS.map((days) => (
-              <Pressable
-                key={days}
-                onPress={() => loadPeriod(days)}
-                style={[styles.chip, { backgroundColor: days === periodDays ? theme.backgroundSelected : theme.backgroundElement }]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: days === periodDays }}
-              >
-                <ThemedText type="small">{days} days</ThemedText>
-              </Pressable>
+              <FilterChip key={days} label={`${days} days`} selected={days === periodDays} onPress={() => loadPeriod(days)} />
             ))}
           </ThemedView>
 
@@ -255,11 +248,6 @@ const styles = StyleSheet.create({
   periodRow: {
     flexDirection: 'row',
     gap: Spacing.one,
-  },
-  chip: {
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.two,
-    borderRadius: Spacing.three,
   },
   sessionBlock: {
     gap: Spacing.one,

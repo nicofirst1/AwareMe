@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
 import { selectStem } from '@/session/stemSelection';
@@ -49,26 +49,26 @@ export default function HomeScreen() {
         >
           <ThemedText type="subtitle">Start now</ThemedText>
         </Pressable>
-        <Link href="/stems">
+        <Link href="/stems" style={styles.navLink}>
           <ThemedText type="default">Browse stems</ThemedText>
         </Link>
-        <Link href="/history">
+        <Link href="/history" style={styles.navLink}>
           <ThemedText type="default">History</ThemedText>
         </Link>
-        <Link href="/review">
+        <Link href="/review" style={styles.navLink}>
           <ThemedText type="default">Review</ThemedText>
         </Link>
-        <Link href="/export">
+        <Link href="/export" style={styles.navLink}>
           <ThemedText type="default">Export</ThemedText>
         </Link>
-        <Link href="/import">
+        <Link href="/import" style={styles.navLink}>
           <ThemedText type="default">Import</ThemedText>
         </Link>
-        <Link href="/settings">
+        <Link href="/settings" style={styles.navLink}>
           <ThemedText type="default">Settings</ThemedText>
         </Link>
         {__DEV__ && (
-          <Link href="/debug">
+          <Link href="/debug" style={styles.navLink}>
             <ThemedText type="small" themeColor="textSecondary">
               Debug: dump all tables
             </ThemedText>
@@ -98,5 +98,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     borderRadius: Spacing.two,
     alignItems: 'center',
+  },
+  navLink: {
+    minHeight: MinTouchTarget,
+    textAlignVertical: 'center',
   },
 });

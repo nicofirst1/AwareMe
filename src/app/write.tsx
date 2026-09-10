@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Fonts, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
 import type { StemForSession } from '@/session/useWritingSession';
@@ -88,13 +88,27 @@ export default function WriteScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <ThemedView style={styles.exitRow}>
-            <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Exit session">
-              <ThemedText type="small" themeColor="textSecondary">
-                Close
-              </ThemedText>
-            </Pressable>
-          </ThemedView>
+          {/*
+            Only shown before a session starts: once writing is under way,
+            "Done" (below) is the single exit affordance (§10) — it saves
+            and finishes rather than leaving a session dangling open, which
+            an equally-visible second exit here would invite.
+          */}
+          {session.phase === 'idle' && (
+            <ThemedView style={styles.exitRow}>
+              <Pressable
+                onPress={() => router.back()}
+                hitSlop={12}
+                style={styles.exitButton}
+                accessibilityRole="button"
+                accessibilityLabel="Exit session"
+              >
+                <ThemedText type="small" themeColor="textSecondary">
+                  Close
+                </ThemedText>
+              </Pressable>
+            </ThemedView>
+          )}
 
           <ThemedText type="stem">
             {stemText}
@@ -119,7 +133,7 @@ export default function WriteScreen() {
             user navigate back into an earlier ending (§6.3.6).
           */}
           {submittedEndings.map((e) => (
-            <ThemedText key={e.ordinal} type="stem" themeColor="textSecondary" style={styles.pastEnding}>
+            <ThemedText key={e.ordinal} type="stem" themeColor="textSecondary">
               {e.text}
             </ThemedText>
           ))}
@@ -157,7 +171,13 @@ export default function WriteScreen() {
               >
                 <ThemedText type="subtitle">Next</ThemedText>
               </Pressable>
-              <Pressable onPress={session.finishNow} accessibilityRole="button" hitSlop={12}>
+              <Pressable
+                onPress={session.finishNow}
+                style={styles.exitButton}
+                accessibilityRole="button"
+                accessibilityLabel="Finish session"
+                hitSlop={12}
+              >
                 <ThemedText type="small" themeColor="textSecondary">
                   Done
                 </ThemedText>
@@ -177,7 +197,11 @@ export default function WriteScreen() {
           )}
 
           {session.phase === 'active' && (
-            <ThemedText type="small" themeColor="textSecondary">
+            <ThemedText
+              type="small"
+              themeColor="textSecondary"
+              accessibilityLabel={`${submittedEndings.length} of ${targetEndings} endings written`}
+            >
               {submittedEndings.length} of {targetEndings}
             </ThemedText>
           )}
@@ -204,6 +228,12 @@ const styles = StyleSheet.create({
   exitRow: {
     alignItems: 'flex-end',
   },
+  exitButton: {
+    minHeight: MinTouchTarget,
+    minWidth: MinTouchTarget,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
   progressTrack: {
     height: 3,
     borderRadius: 2,
@@ -211,9 +241,6 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-  },
-  pastEnding: {
-    opacity: 0.5,
   },
   input: {
     fontFamily: Fonts.serif,

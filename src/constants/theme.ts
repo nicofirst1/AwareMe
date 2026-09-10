@@ -13,6 +13,8 @@ export const Colors = {
     backgroundElement: '#F0F0F3',
     backgroundSelected: '#E0E1E6',
     textSecondary: '#60646C',
+    // 6.5:1 against `background` (WCAG AA requires 4.5:1).
+    error: '#B3261E',
   },
   dark: {
     text: '#ffffff',
@@ -20,6 +22,8 @@ export const Colors = {
     backgroundElement: '#212225',
     backgroundSelected: '#2E3135',
     textSecondary: '#B0B4BA',
+    // 7.3:1 against `background` — the light theme's red fails AA (3.2:1) on black.
+    error: '#FF6659',
   },
 } as const;
 
@@ -51,3 +55,10 @@ export const Spacing = {
 } as const;
 
 export const MaxContentWidth = 800;
+
+/**
+ * Minimum touch target side (Apple HIG and Material Design both call for
+ * 44pt/48dp). Applied via `minHeight`/`minWidth` on `Pressable`s whose
+ * visible content (small text, an icon) would otherwise be smaller.
+ */
+export const MinTouchTarget = 44;

@@ -52,6 +52,7 @@ export default function ExportScreen() {
             disabled={busy !== null}
             style={[styles.card, { backgroundColor: theme.backgroundElement, opacity: busy !== null && busy !== format ? 0.5 : 1 }]}
             accessibilityRole="button"
+            accessibilityState={{ disabled: busy !== null, busy: busy === format }}
           >
             <ThemedText type="subtitle">{label}</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">

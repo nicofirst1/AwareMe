@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FilterChip } from '@/components/filter-chip';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -193,27 +194,15 @@ function FilterRow<T extends string>({
   value: T;
   onChange: (v: T) => void;
 }) {
-  const theme = useTheme();
   return (
     <ThemedView style={styles.filterRow}>
       <ThemedText type="small" themeColor="textSecondary" style={styles.filterLabel}>
         {label}
       </ThemedText>
       <ThemedView style={styles.filterOptions}>
-        {options.map((opt) => {
-          const selected = opt.value === value;
-          return (
-            <Pressable
-              key={opt.value}
-              onPress={() => onChange(opt.value)}
-              style={[styles.chip, { backgroundColor: selected ? theme.backgroundSelected : theme.backgroundElement }]}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-            >
-              <ThemedText type="small">{opt.label}</ThemedText>
-            </Pressable>
-          );
-        })}
+        {options.map((opt) => (
+          <FilterChip key={opt.value} label={opt.label} selected={opt.value === value} onPress={() => onChange(opt.value)} />
+        ))}
       </ThemedView>
     </ThemedView>
   );
@@ -248,11 +237,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.one,
-  },
-  chip: {
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.two,
-    borderRadius: Spacing.three,
   },
   list: {
     padding: Spacing.four,

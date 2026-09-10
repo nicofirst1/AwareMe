@@ -58,6 +58,7 @@ export default function ImportScreen() {
           disabled={busy !== null}
           style={[styles.card, { backgroundColor: theme.backgroundElement, opacity: busy !== null && busy !== 'merge' ? 0.5 : 1 }]}
           accessibilityRole="button"
+          accessibilityState={{ disabled: busy !== null, busy: busy === 'merge' }}
         >
           <ThemedText type="subtitle">Merge</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
@@ -71,6 +72,7 @@ export default function ImportScreen() {
           disabled={busy !== null}
           style={[styles.card, { backgroundColor: theme.backgroundElement, opacity: busy !== null && busy !== 'replace' ? 0.5 : 1 }]}
           accessibilityRole="button"
+          accessibilityState={{ disabled: busy !== null, busy: busy === 'replace' }}
         >
           <ThemedText type="subtitle">Replace</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
