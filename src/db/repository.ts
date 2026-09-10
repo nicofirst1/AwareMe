@@ -1,6 +1,6 @@
 import { newId } from './id';
 import { SqlBindValue, SqlExecutor } from './executor';
-import { SEED_STEMS } from './seed/stems';
+import { META_STEMS, SEED_STEMS } from './seed/stems';
 import { DEFAULT_SETTINGS, Settings } from './seed/settings';
 import { nowEventTime } from './time';
 import { EndReason, SessionOrigin } from '@/session/sessionMachine';
@@ -20,7 +20,7 @@ export type TableName = (typeof ALL_TABLES)[number];
 export interface StemRow {
   id: string;
   text: string;
-  origin: 'seed' | 'user' | 'imported';
+  origin: 'seed' | 'user' | 'imported' | 'meta';
   category: string | null;
   weight: number;
 }
@@ -151,6 +151,24 @@ export class Repository {
         );
       }
 
+      // Meta-stems (§5.4) are a distinct concept from stems (CONTEXT.md:
+      // "used only in review... avoid: review prompt"), not a category of
+      // them — seeded with `active = 0` so they can never surface via
+      // weighted selection (§6.2) or `listActiveStems`, and `origin =
+      // 'meta'` so `listAllStems` (the stem library) can exclude them by
+      // construction. They still need a real `stems` row because
+      // `sessions.stem_id` is a foreign key (spec §4.2) and review's
+      // meta-stem completion is "a normal timed session" (§6.5.2) with a
+      // real `sessions` row like any other.
+      for (const text of META_STEMS) {
+        const { at, tz, offsetMin } = nowEventTime();
+        this.db.runSync(
+          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min)
+           VALUES (?, ?, 'meta', NULL, 'en', 1.0, 0, ?, ?, ?)`,
+          [newId(), text, at, tz, offsetMin],
+        );
+      }
+
       for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
         const { at } = nowEventTime();
         this.db.runSync('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)', [
@@ -189,11 +207,22 @@ export class Repository {
   /**
    * Every stem, including archived and soft-deleted ones, for the stem
    * library (§6.6) — the library filters/searches client-side over this,
-   * unlike `listActiveStems`'s narrow session-start use.
+   * unlike `listActiveStems`'s narrow session-start use. Excludes
+   * `origin = 'meta'`: meta-stems (§5.4) are a distinct concept, used only
+   * in review, and never editable/browsable/writable-on-demand like a
+   * regular stem.
    */
   listAllStems(): LibraryStemRow[] {
     return this.db.getAllSync<LibraryStemRow>(
-      'SELECT id, text, origin, category, weight, active, deleted_at, created_at FROM stems ORDER BY created_at DESC',
+      "SELECT id, text, origin, category, weight, active, deleted_at, created_at FROM stems WHERE origin != 'meta' ORDER BY created_at DESC",
+      [],
+    );
+  }
+
+  /** The 3 seeded meta-stems (§5.4), each with the real `stems.id` a review session's `stem_id` FK needs. */
+  listMetaStems(): StemRow[] {
+    return this.db.getAllSync<StemRow>(
+      "SELECT id, text, origin, category, weight FROM stems WHERE origin = 'meta' ORDER BY created_at",
       [],
     );
   }
@@ -218,7 +247,7 @@ export class Repository {
   /** Every non-deleted stem's text, for the "not a verbatim duplicate" check (§6.6). */
   listStemTexts(): string[] {
     return this.db
-      .getAllSync<{ text: string }>('SELECT text FROM stems WHERE deleted_at IS NULL', [])
+      .getAllSync<{ text: string }>("SELECT text FROM stems WHERE deleted_at IS NULL AND origin != 'meta'", [])
       .map((r) => r.text);
   }
 
@@ -521,6 +550,76 @@ export class Repository {
    */
   rebuildEndingsFts(): void {
     this.db.runSync("INSERT INTO endings_fts(endings_fts) VALUES ('rebuild')", []);
+  }
+
+  /**
+   * Every session with at least one ending in `[periodStart, periodEnd)`
+   * (§6.5 step 1: "every ending written in the selected period, grouped by
+   * session, chronological"), each with its endings in ordinal order.
+   * Sessions themselves are ordered chronologically by `started_at`; within
+   * a session, endings are already chronological by construction (ordinal).
+   * Soft-deleted sessions/endings are excluded, same convention as history.
+   */
+  listSessionsForReview(periodStart: string, periodEnd: string): { session: SessionRow; endings: EndingRow[] }[] {
+    const sessionIds = this.db
+      .getAllSync<{ id: string }>(
+        `SELECT DISTINCT s.id as id
+         FROM sessions s JOIN endings e ON e.session_id = s.id
+         WHERE s.deleted_at IS NULL AND e.deleted_at IS NULL
+           AND e.started_at >= ? AND e.started_at < ?
+         ORDER BY s.started_at`,
+        [periodStart, periodEnd],
+      )
+      .map((r) => r.id);
+
+    return sessionIds.map((id) => this.getSessionDetail(id)).filter((d): d is { session: SessionRow; endings: EndingRow[] } => d !== null);
+  }
+
+  /**
+   * Stores the result of a review (§6.5 step 3): the exact sessions
+   * re-read, the period, which meta-stem was used, and the meta-stem
+   * session's own endings joined into one `reflection_text` — the meta-stem
+   * response is a normal session under the hood (its own `sessions`/
+   * `endings` rows, `origin='review'`), and this denormalises that result
+   * onto the review row itself, mirroring `stem_text_snapshot`'s reasoning
+   * (spec §4.4): a review's own record of what was written shouldn't shift
+   * if something upstream ever changed.
+   */
+  createReview(input: {
+    periodStart: string;
+    periodEnd: string;
+    sessionIds: readonly string[];
+    metaStemText: string;
+    reflectionText: string | null;
+    createdAt: string;
+  }): string {
+    const id = newId();
+    const { tz, offsetMin } = nowEventTime(new Date(input.createdAt));
+    this.db.runSync(
+      `INSERT INTO reviews (id, period_start, period_end, session_ids, reflection_text, meta_stem_text, created_at, tz, offset_min)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        input.periodStart,
+        input.periodEnd,
+        JSON.stringify(input.sessionIds),
+        input.reflectionText,
+        input.metaStemText,
+        input.createdAt,
+        tz,
+        offsetMin,
+      ],
+    );
+    return id;
+  }
+
+  /** `created_at` of the most recent non-deleted review, or null if none yet — for the "offered once a week" check (§6.5). */
+  getLastReviewAt(): string | null {
+    const row = this.db.getFirstSync<{ created_at: string }>(
+      'SELECT created_at FROM reviews WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 1',
+      [],
+    );
+    return row?.created_at ?? null;
   }
 
   /** Rows still `pending` — the OS scheduler's own notion of "not yet fired or cancelled" (§6.4). */

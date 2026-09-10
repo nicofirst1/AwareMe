@@ -52,6 +52,20 @@ describe('Repository.listStemTexts', () => {
   });
 });
 
+describe('Repository.listMetaStems', () => {
+  it('returns the 3 meta-stems with real ids, excluded from listActiveStems/listAllStems/listStemTexts', () => {
+    const { repo } = freshRepository();
+    const metaStems = repo.listMetaStems();
+    expect(metaStems).toHaveLength(3);
+    expect(metaStems.every((s) => s.origin === 'meta')).toBe(true);
+
+    const metaIds = new Set(metaStems.map((s) => s.id));
+    expect(repo.listActiveStems().some((s) => metaIds.has(s.id))).toBe(false);
+    expect(repo.listAllStems().some((s) => metaIds.has(s.id))).toBe(false);
+    expect(metaStems.some((s) => repo.listStemTexts().includes(s.text))).toBe(false);
+  });
+});
+
 describe('Repository.bulkImportStems', () => {
   it('adds one stem per line, all origin=imported, and returns the count', () => {
     const { db, repo } = freshRepository();

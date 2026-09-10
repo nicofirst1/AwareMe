@@ -26,6 +26,25 @@ describe('Repository.seedIfEmpty', () => {
     }
   });
 
+  it('also inserts the 3 meta-stems (§5.4), as inactive stems rows with origin=meta', () => {
+    const { db, repo } = freshRepository();
+    repo.seedIfEmpty();
+
+    const metaRows = db.prepare("SELECT * FROM stems WHERE origin = 'meta'").all() as {
+      text: string;
+      active: number;
+      category: string | null;
+    }[];
+    expect(metaRows).toHaveLength(3);
+    expect(metaRows.map((r) => r.text).sort()).toEqual([...META_STEMS].sort());
+    for (const r of metaRows) {
+      // Never selectable by the weighted rotation (§6.2) or shown in the
+      // library — they're a distinct concept from stems (CONTEXT.md).
+      expect(r.active).toBe(0);
+      expect(r.category).toBeNull();
+    }
+  });
+
   it('assigns one of the six spec categories, or null, to every seed stem', () => {
     const { db, repo } = freshRepository();
     repo.seedIfEmpty();
@@ -39,7 +58,13 @@ describe('Repository.seedIfEmpty', () => {
       'integrity',
       null,
     ]);
-    const stems = db.prepare('SELECT category FROM stems').all() as { category: string | null }[];
+    // origin != 'meta': meta-stems (§5.4) are a distinct concept from
+    // stems (see the dedicated test above) and have no category by
+    // construction, which would otherwise inflate the "exactly two" count
+    // below.
+    const stems = db.prepare("SELECT category FROM stems WHERE origin != 'meta'").all() as {
+      category: string | null;
+    }[];
     for (const s of stems) {
       expect(validCategories.has(s.category)).toBe(true);
     }
@@ -47,7 +72,7 @@ describe('Repository.seedIfEmpty', () => {
     expect(stems.filter((s) => s.category === null)).toHaveLength(2);
   });
 
-  it('has 3 meta-stems matching spec §5.4 (not stored in `stems`; used at review time per §6.5)', () => {
+  it('has 3 meta-stems matching spec §5.4, used only at review time per §6.5', () => {
     expect(META_STEMS).toHaveLength(3);
     expect(META_STEMS[0]).toBe('If any of what I wrote this week is true, it might be helpful if I');
   });
@@ -71,7 +96,7 @@ describe('Repository.seedIfEmpty', () => {
 
     const stemCount = (db.prepare('SELECT COUNT(*) as c FROM stems').get() as { c: number }).c;
     const settingsCount = (db.prepare('SELECT COUNT(*) as c FROM settings').get() as { c: number }).c;
-    expect(stemCount).toBe(26);
+    expect(stemCount).toBe(26 + META_STEMS.length);
     expect(settingsCount).toBe(Object.keys(DEFAULT_SETTINGS).length);
   });
 
@@ -118,7 +143,7 @@ describe('Repository.dumpAllTables', () => {
     repo.seedIfEmpty();
     const dump = repo.dumpAllTables();
 
-    expect(dump.stems).toHaveLength(26);
+    expect(dump.stems).toHaveLength(26 + META_STEMS.length);
     expect(dump.settings).toHaveLength(Object.keys(DEFAULT_SETTINGS).length);
   });
 });

@@ -1,0 +1,200 @@
+import { DatabaseSync } from 'node:sqlite';
+
+import { migrate } from '../migrate';
+import { Repository } from '../repository';
+import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
+import { META_STEMS } from '../seed/stems';
+
+function freshRepository(): { db: DatabaseSync; repo: Repository } {
+  const raw = new DatabaseSync(':memory:');
+  const executor = nodeSqliteExecutor(raw);
+  migrate(executor, '1.0.0');
+  const repo = new Repository(executor);
+  repo.seedIfEmpty();
+  return { db: raw, repo };
+}
+
+function firstStemId(repo: Repository): string {
+  return repo.listActiveStems()[0].id;
+}
+
+function sessionWithEnding(repo: Repository, stemId: string, startedAt: string): string {
+  const sessionId = repo.createSession({
+    stemId,
+    stemTextSnapshot: 'snap',
+    origin: 'manual',
+    targetEndings: 1,
+    timerSeconds: 90,
+    uncensoredMode: true,
+    startedAt,
+    deviceLocale: 'en-US',
+  });
+  repo.recordFirstKeypress(sessionId, 1, startedAt);
+  repo.submitEnding(sessionId, 1, startedAt);
+  return sessionId;
+}
+
+describe('Repository.listSessionsForReview', () => {
+  it('returns sessions with an ending inside the period, chronological, with their endings', () => {
+    const { repo } = freshRepository();
+    const stemId = firstStemId(repo);
+
+    const inPeriod1 = sessionWithEnding(repo, stemId, '2026-09-05T08:00:00.000Z');
+    const inPeriod2 = sessionWithEnding(repo, stemId, '2026-09-08T08:00:00.000Z');
+    const beforePeriod = sessionWithEnding(repo, stemId, '2026-09-01T08:00:00.000Z');
+    const afterPeriod = sessionWithEnding(repo, stemId, '2026-09-11T08:00:00.000Z');
+
+    const results = repo.listSessionsForReview('2026-09-03T00:00:00.000Z', '2026-09-10T00:00:00.000Z');
+    const ids = results.map((r) => r.session.id);
+    expect(ids).toEqual([inPeriod1, inPeriod2]);
+    expect(ids).not.toContain(beforePeriod);
+    expect(ids).not.toContain(afterPeriod);
+    expect(results[0].endings).toHaveLength(1);
+  });
+
+  it('excludes soft-deleted sessions', () => {
+    const { db, repo } = freshRepository();
+    const stemId = firstStemId(repo);
+    const sessionId = sessionWithEnding(repo, stemId, '2026-09-05T08:00:00.000Z');
+    db.prepare('UPDATE sessions SET deleted_at = ? WHERE id = ?').run('2026-09-06T00:00:00.000Z', sessionId);
+
+    expect(repo.listSessionsForReview('2026-09-01T00:00:00.000Z', '2026-09-10T00:00:00.000Z')).toHaveLength(0);
+  });
+
+  it('returns an empty array for a period with nothing written', () => {
+    const { repo } = freshRepository();
+    expect(repo.listSessionsForReview('2026-01-01T00:00:00.000Z', '2026-01-08T00:00:00.000Z')).toEqual([]);
+  });
+});
+
+describe('end-to-end review flow', () => {
+  it('a meta-stem session (a real session/endings pair, stem_id pointing at a real stems row) feeds createReview', () => {
+    const { db, repo } = freshRepository();
+    const stemId = firstStemId(repo);
+    const reviewedId = sessionWithEnding(repo, stemId, '2026-09-05T08:00:00.000Z');
+
+    const metaStem = repo.listMetaStems()[0];
+
+    // Review's meta-stem completion is "a normal timed session" (§6.5.2):
+    // exercise the exact same repository calls write.tsx/useWritingSession
+    // use for any other session.
+    const metaSessionId = repo.createSession({
+      stemId: metaStem.id,
+      stemTextSnapshot: metaStem.text,
+      origin: 'review',
+      targetEndings: 1,
+      timerSeconds: 180,
+      uncensoredMode: true,
+      startedAt: '2026-09-10T09:00:00.000Z',
+      deviceLocale: 'en-US',
+    });
+    repo.recordFirstKeypress(metaSessionId, 1, '2026-09-10T09:00:05.000Z');
+    repo.autosaveEndingText(metaSessionId, 1, 'It might be helpful if I slowed down.', 0, '2026-09-10T09:00:20.000Z');
+    repo.finalizeSession(metaSessionId, 'user_done', '2026-09-10T09:00:25.000Z');
+
+    const metaSessionRow = db.prepare('SELECT stem_id, origin FROM sessions WHERE id = ?').get(metaSessionId) as {
+      stem_id: string;
+      origin: string;
+    };
+    expect(metaSessionRow.stem_id).toBe(metaStem.id);
+    expect(metaSessionRow.origin).toBe('review');
+
+    const reviewId = repo.createReview({
+      periodStart: '2026-09-03T00:00:00.000Z',
+      periodEnd: '2026-09-10T00:00:00.000Z',
+      sessionIds: [reviewedId],
+      metaStemText: metaStem.text,
+      reflectionText: 'It might be helpful if I slowed down.',
+      createdAt: '2026-09-10T09:00:25.000Z',
+    });
+
+    const reviewRow = db.prepare('SELECT * FROM reviews WHERE id = ?').get(reviewId) as Record<string, unknown>;
+    expect(JSON.parse(reviewRow.session_ids as string)).toEqual([reviewedId]);
+    expect(reviewRow.reflection_text).toBe('It might be helpful if I slowed down.');
+
+    // The meta-stem session itself shows up in ordinary history/session
+    // reads exactly like any other session — nothing about review hides it.
+    expect(repo.getSessionDetail(metaSessionId)?.session.origin).toBe('review');
+  });
+});
+
+describe('Repository.createReview and getLastReviewAt', () => {
+  it('inserts a review row with the reviewed session ids and reflection text', () => {
+    const { db, repo } = freshRepository();
+    const stemId = firstStemId(repo);
+    const reviewedId = sessionWithEnding(repo, stemId, '2026-09-05T08:00:00.000Z');
+
+    const reviewId = repo.createReview({
+      periodStart: '2026-09-03T00:00:00.000Z',
+      periodEnd: '2026-09-10T00:00:00.000Z',
+      sessionIds: [reviewedId],
+      metaStemText: META_STEMS[0],
+      reflectionText: 'It might be helpful if I slowed down.',
+      createdAt: '2026-09-10T09:00:00.000Z',
+    });
+
+    const row = db.prepare('SELECT * FROM reviews WHERE id = ?').get(reviewId) as Record<string, unknown>;
+    expect(JSON.parse(row.session_ids as string)).toEqual([reviewedId]);
+    expect(row.meta_stem_text).toBe(META_STEMS[0]);
+    expect(row.reflection_text).toBe('It might be helpful if I slowed down.');
+    expect(row.period_start).toBe('2026-09-03T00:00:00.000Z');
+    expect(row.period_end).toBe('2026-09-10T00:00:00.000Z');
+    expect(typeof row.tz).toBe('string');
+    expect(typeof row.offset_min).toBe('number');
+  });
+
+  it('permits a null reflection_text (e.g. the meta-stem session timed out with nothing typed)', () => {
+    const { db, repo } = freshRepository();
+    const reviewId = repo.createReview({
+      periodStart: '2026-09-03T00:00:00.000Z',
+      periodEnd: '2026-09-10T00:00:00.000Z',
+      sessionIds: [],
+      metaStemText: META_STEMS[0],
+      reflectionText: null,
+      createdAt: '2026-09-10T09:00:00.000Z',
+    });
+    const row = db.prepare('SELECT reflection_text FROM reviews WHERE id = ?').get(reviewId) as {
+      reflection_text: string | null;
+    };
+    expect(row.reflection_text).toBeNull();
+  });
+
+  it('getLastReviewAt returns null with no reviews, then the most recent created_at', () => {
+    const { repo } = freshRepository();
+    expect(repo.getLastReviewAt()).toBeNull();
+
+    repo.createReview({
+      periodStart: '2026-08-27T00:00:00.000Z',
+      periodEnd: '2026-09-03T00:00:00.000Z',
+      sessionIds: [],
+      metaStemText: META_STEMS[0],
+      reflectionText: null,
+      createdAt: '2026-09-03T09:00:00.000Z',
+    });
+    repo.createReview({
+      periodStart: '2026-09-03T00:00:00.000Z',
+      periodEnd: '2026-09-10T00:00:00.000Z',
+      sessionIds: [],
+      metaStemText: META_STEMS[1],
+      reflectionText: null,
+      createdAt: '2026-09-10T09:00:00.000Z',
+    });
+
+    expect(repo.getLastReviewAt()).toBe('2026-09-10T09:00:00.000Z');
+  });
+
+  it('getLastReviewAt excludes soft-deleted reviews', () => {
+    const { db, repo } = freshRepository();
+    const id = repo.createReview({
+      periodStart: '2026-09-03T00:00:00.000Z',
+      periodEnd: '2026-09-10T00:00:00.000Z',
+      sessionIds: [],
+      metaStemText: META_STEMS[0],
+      reflectionText: null,
+      createdAt: '2026-09-10T09:00:00.000Z',
+    });
+    db.prepare('UPDATE reviews SET deleted_at = ? WHERE id = ?').run('2026-09-11T00:00:00.000Z', id);
+
+    expect(repo.getLastReviewAt()).toBeNull();
+  });
+});

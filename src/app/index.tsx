@@ -55,6 +55,9 @@ export default function HomeScreen() {
         <Link href="/history">
           <ThemedText type="default">History</ThemedText>
         </Link>
+        <Link href="/review">
+          <ThemedText type="default">Review</ThemedText>
+        </Link>
         {__DEV__ && (
           <Link href="/debug">
             <ThemedText type="small" themeColor="textSecondary">

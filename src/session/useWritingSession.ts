@@ -22,11 +22,19 @@ const AUTOSAVE_DEBOUNCE_MS = 400;
 export interface StemForSession {
   id: string;
   text: string; // without terminator
-  /** Defaults to 'manual'. 'notification' when opened via a notification tap (§6.4, ticket 10). */
+  /** Defaults to 'manual'. 'notification' when opened via a notification tap (§6.4, ticket 10); 'review' for a meta-stem session (§6.5, ticket 13). */
   origin?: SessionOrigin;
   /** Set alongside origin='notification': the `notification_schedule` row this session was opened from. */
   notificationId?: string;
   notifiedAt?: string;
+  /**
+   * Overrides the configured settings for this one session. Review mode
+   * (§6.5) uses this for its single meta-stem: `targetEndings: 1`,
+   * `timerSeconds: settings.review_timer_seconds` (default 180s, longer
+   * than a normal session's) — everything else about the session (creation,
+   * autosave, uncensored-mode gating) is identical to a normal one.
+   */
+  configOverrides?: Partial<{ targetEndings: number; timerSeconds: number }>;
 }
 
 export type WritingPhase = 'idle' | 'active' | 'done';
@@ -186,8 +194,8 @@ export function useWritingSession(): WritingSessionView {
     (stem: StemForSession) => {
       const { at } = nowEventTime();
       const config = {
-        targetEndings: settings.endings_per_session,
-        timerSeconds: settings.timer_seconds,
+        targetEndings: stem.configOverrides?.targetEndings ?? settings.endings_per_session,
+        timerSeconds: stem.configOverrides?.timerSeconds ?? settings.timer_seconds,
         uncensoredMode: settings.uncensored_mode,
       };
       const id = repo.createSession({
