@@ -9,6 +9,7 @@ export type {
   NotificationScheduleRow,
   HistorySessionRow,
   HistoryFilters,
+  EndingSearchResult,
 } from './repository';
 export { newId } from './id';
 export { CURRENT_SCHEMA_VERSION } from './migrations';

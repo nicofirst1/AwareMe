@@ -80,6 +80,34 @@ export interface HistoryFilters {
   dateTo?: string;
 }
 
+/** One matching ending from `Repository.searchEndings`, with enough session context to display and to jump to the session it came from. */
+export interface EndingSearchResult {
+  endingId: string;
+  sessionId: string;
+  ordinal: number;
+  text: string;
+  startedAt: string;
+  stemTextSnapshot: string;
+  sessionStartedAt: string;
+}
+
+/**
+ * Turns free text into an FTS5 `MATCH` query: each whitespace-separated
+ * term, double-quoted so FTS5's own query syntax (`*`, `-`, `NEAR`, `"`,
+ * column filters, …) in the user's search text is treated as literal
+ * content rather than a syntax error or an unintended operator, ANDed
+ * together (FTS5's implicit default) so a multi-word search narrows, not
+ * widens. Empty/whitespace-only input yields `null` (nothing to search).
+ */
+function toFtsMatchQuery(raw: string): string | null {
+  const terms = raw
+    .trim()
+    .split(/\s+/)
+    .filter((t) => t.length > 0)
+    .map((t) => `"${t.replace(/"/g, '""')}"`);
+  return terms.length > 0 ? terms.join(' AND ') : null;
+}
+
 export type NotificationScheduleState = 'pending' | 'fired' | 'cancelled' | 'superseded';
 
 export interface NotificationScheduleRow {
@@ -459,6 +487,40 @@ export class Repository {
   /** Soft-deletes a session (§6.7: "option to soft-delete the session"). The row and its endings stay in the DB and in export. */
   softDeleteSession(id: string, at: string): void {
     this.db.runSync('UPDATE sessions SET deleted_at = ? WHERE id = ?', [at, id]);
+  }
+
+  /**
+   * Full-text search across everything the user has written (§6.7, ticket
+   * 12), via the `endings_fts` FTS5 index (migration 0002). Soft-deleted
+   * endings and endings belonging to a soft-deleted session are excluded at
+   * query time, the same place every other read excludes them — the FTS
+   * index itself mirrors `endings.text` unconditionally (see the migration's
+   * own comment for why).
+   */
+  searchEndings(query: string): EndingSearchResult[] {
+    const match = toFtsMatchQuery(query);
+    if (!match) return [];
+
+    return this.db.getAllSync<EndingSearchResult>(
+      `SELECT e.id as endingId, e.session_id as sessionId, e.ordinal, e.text, e.started_at as startedAt,
+              s.stem_text_snapshot as stemTextSnapshot, s.started_at as sessionStartedAt
+       FROM endings_fts f
+       JOIN endings e ON e.rowid = f.rowid
+       JOIN sessions s ON s.id = e.session_id
+       WHERE endings_fts MATCH ? AND e.deleted_at IS NULL AND s.deleted_at IS NULL
+       ORDER BY e.started_at DESC`,
+      [match],
+    );
+  }
+
+  /**
+   * Rebuilds `endings_fts` from `endings` from scratch. The triggers
+   * (migration 0002) keep the index in sync on every write this app makes;
+   * this is the escape hatch for anything that writes to `endings` outside
+   * them — import/restore (ticket 15) is the intended caller.
+   */
+  rebuildEndingsFts(): void {
+    this.db.runSync("INSERT INTO endings_fts(endings_fts) VALUES ('rebuild')", []);
   }
 
   /** Rows still `pending` — the OS scheduler's own notion of "not yet fired or cancelled" (§6.4). */

@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { migrate } from '../migrate';
@@ -72,7 +73,13 @@ describe('migrate', () => {
   });
 
   it.each(MIGRATIONS.map((m) => m.version))('upgrades the committed v%i fixture cleanly to current', (version) => {
-    const raw = new DatabaseSync(fixturePath(version));
+    // Migrate a scratch copy, never the committed fixture file itself —
+    // `migrate()` runs real DDL in place, and the committed file must stay
+    // byte-for-byte what ships in the repo so it keeps proving "upgrades
+    // real prior-version data" on every run, not just the first one.
+    const scratch = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'six-endings-migrate-')), 'copy.db');
+    fs.copyFileSync(fixturePath(version), scratch);
+    const raw = new DatabaseSync(scratch);
     const db = nodeSqliteExecutor(raw);
 
     migrate(db, '9.9.9');
@@ -80,12 +87,16 @@ describe('migrate', () => {
     const meta = db.getFirstSync<{ schema_version: number }>('SELECT schema_version FROM schema_meta WHERE id = 1', []);
     expect(meta?.schema_version).toBe(CURRENT_SCHEMA_VERSION);
     raw.close();
+    fs.rmSync(path.dirname(scratch), { recursive: true, force: true });
   });
 
   it('the current-version fixture has every table from the schema', () => {
     const raw = new DatabaseSync(fixturePath(CURRENT_SCHEMA_VERSION));
-    expect(tableNames(raw).sort()).toEqual(
-      ['schema_meta', 'stems', 'sessions', 'endings', 'reviews', 'settings', 'notification_schedule'].sort(),
+    // FTS5's own shadow tables (endings_fts_*) come along with the virtual
+    // table (migration 0002) — real SQLite bookkeeping, not app schema.
+    const appTables = tableNames(raw).filter((n) => !n.startsWith('endings_fts_'));
+    expect(appTables.sort()).toEqual(
+      ['schema_meta', 'stems', 'sessions', 'endings', 'endings_fts', 'reviews', 'settings', 'notification_schedule'].sort(),
     );
     raw.close();
   });
