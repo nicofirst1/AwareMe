@@ -2,8 +2,10 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments }
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { LockScreen } from '@/app/lock-screen';
 import { getRepository } from '@/db';
 import { useNotificationScheduler, useNotificationTapRouting } from '@/notifications/useNotifications';
+import { useAppLock } from '@/session/useAppLock';
 
 /**
  * Gates every route behind onboarding (§6.1, ticket 17: "shown once")
@@ -29,12 +31,15 @@ function useOnboardingGate(): void {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const theme = colorScheme === 'dark' ? DarkTheme : DefaultTheme;
   useNotificationScheduler();
   useNotificationTapRouting();
   useOnboardingGate();
+  const lock = useAppLock();
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }} />
+    <ThemeProvider value={theme}>
+      {lock.checking ? null : lock.locked ? <LockScreen onUnlock={lock.authenticate} /> : <Stack screenOptions={{ headerShown: false }} />}
     </ThemeProvider>
   );
 }
