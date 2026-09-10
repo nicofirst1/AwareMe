@@ -184,6 +184,35 @@ describe('Repository.setSetting', () => {
   });
 });
 
+describe('Repository.isOnboardingComplete / setOnboardingComplete', () => {
+  it('defaults to false on a fresh database', () => {
+    const { repo } = freshRepository();
+    repo.seedIfEmpty();
+    expect(repo.isOnboardingComplete()).toBe(false);
+  });
+
+  it('becomes true after setOnboardingComplete, and stays out of getSettings', () => {
+    const { repo } = freshRepository();
+    repo.seedIfEmpty();
+
+    repo.setOnboardingComplete();
+
+    expect(repo.isOnboardingComplete()).toBe(true);
+    // Not one of §7's tunables — must not leak into the typed Settings object.
+    expect(repo.getSettings()).not.toHaveProperty('onboarding_completed');
+  });
+
+  it('is false again after deleteAllData (a factory reset shows onboarding again)', () => {
+    const { repo } = freshRepository();
+    repo.seedIfEmpty();
+    repo.setOnboardingComplete();
+
+    repo.deleteAllData();
+
+    expect(repo.isOnboardingComplete()).toBe(false);
+  });
+});
+
 describe('Repository.deleteAllData', () => {
   it('wipes stems, sessions, endings, reviews, notification_schedule, and re-seeds to factory defaults', () => {
     const { db, repo } = freshRepository();

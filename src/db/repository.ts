@@ -189,9 +189,18 @@ export class Repository {
     return result;
   }
 
-  /** All settings, decoded, falling back to spec defaults for any key not yet seeded. */
+  /**
+   * All §7 settings, decoded, falling back to spec defaults for any key not
+   * yet seeded. Excludes `onboarding_completed` — that key lives in the same
+   * table (see `isOnboardingComplete`) but is app-internal state, not one of
+   * §7's user-facing tunables, so it must never appear on the typed
+   * `Settings` object callers destructure.
+   */
   getSettings(): Settings {
-    const rows = this.db.getAllSync<{ key: string; value: string }>('SELECT key, value FROM settings', []);
+    const rows = this.db.getAllSync<{ key: string; value: string }>(
+      "SELECT key, value FROM settings WHERE key != 'onboarding_completed'",
+      [],
+    );
     const values = Object.fromEntries(rows.map((r) => [r.key, JSON.parse(r.value)]));
     return { ...DEFAULT_SETTINGS, ...values };
   }
@@ -208,6 +217,28 @@ export class Repository {
       `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
       [key, JSON.stringify(value), at],
+    );
+  }
+
+  /**
+   * Whether onboarding (§6.1) has already been shown. Stored as a plain
+   * `settings` row (`onboarding_completed`) — deliberately not part of the
+   * `Settings` interface/`DEFAULT_SETTINGS`, since it isn't one of §7's
+   * user-facing tunables, just app-internal "has this run once" state. The
+   * `settings` table is a free-form key/value store; this reuses it rather
+   * than adding a schema column or table for one boolean.
+   */
+  isOnboardingComplete(): boolean {
+    const row = this.db.getFirstSync<{ value: string }>("SELECT value FROM settings WHERE key = 'onboarding_completed'", []);
+    return row ? JSON.parse(row.value) === true : false;
+  }
+
+  setOnboardingComplete(): void {
+    const { at } = nowEventTime();
+    this.db.runSync(
+      `INSERT INTO settings (key, value, updated_at) VALUES ('onboarding_completed', 'true', ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      [at],
     );
   }
 
