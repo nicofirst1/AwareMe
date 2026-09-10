@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -16,13 +16,22 @@ type CategoryFilter = 'all' | string;
 /**
  * The stem library (§6.6): every stem, filterable and searchable, with a
  * "write on this now" entry point that bypasses weighted selection
- * (`origin='manual'`, Q2 in DECISIONS.md). Authoring actions (add/edit/
- * archive/reweight/import) are ticket 08.
+ * (`origin='manual'`, Q2 in DECISIONS.md), plus authoring (ticket 08): add,
+ * edit, archive, delete, reweight (all on `/stem-edit`), and bulk import
+ * (`/stem-import`).
  */
 export default function StemsScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const stems = useMemo(() => getRepository().listAllStems(), []);
+  const [stems, setStems] = useState<LibraryStemRow[]>([]);
+
+  // Re-reads on every focus, not just mount, so returning from add/edit/
+  // import (which write via the repository, not local state) shows the result.
+  useFocusEffect(
+    useCallback(() => {
+      setStems(getRepository().listAllStems());
+    }, []),
+  );
 
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('active');
@@ -47,9 +56,19 @@ export default function StemsScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ThemedText type="title" style={styles.title}>
-          Stems
-        </ThemedText>
+        <ThemedView style={styles.headerRow}>
+          <ThemedText type="title" style={styles.title}>
+            Stems
+          </ThemedText>
+          <ThemedView style={styles.headerActions}>
+            <Pressable onPress={() => router.push('/stem-import')} accessibilityRole="button">
+              <ThemedText type="default">Import</ThemedText>
+            </Pressable>
+            <Pressable onPress={() => router.push('/stem-edit')} accessibilityRole="button">
+              <ThemedText type="default">Add</ThemedText>
+            </Pressable>
+          </ThemedView>
+        </ThemedView>
 
         <TextInput
           value={query}
@@ -104,21 +123,35 @@ export default function StemsScreen() {
           renderItem={({ item }) => {
             const isDeleted = item.deleted_at !== null;
             return (
-              <Pressable
-                onPress={() => writeNow(item)}
-                disabled={isDeleted}
-                style={[styles.row, { backgroundColor: theme.backgroundElement, opacity: isDeleted ? 0.5 : 1 }]}
-                accessibilityRole="button"
-                accessibilityLabel={isDeleted ? item.text : `Write on: ${item.text}`}
-                accessibilityState={{ disabled: isDeleted }}
-              >
-                <ThemedText type="default">{item.text}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {[item.category, item.origin, isDeleted ? 'deleted' : !item.active ? 'archived' : null]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </ThemedText>
-              </Pressable>
+              <ThemedView style={[styles.row, { backgroundColor: theme.backgroundElement, opacity: isDeleted ? 0.5 : 1 }]}>
+                <Pressable
+                  onPress={() => writeNow(item)}
+                  disabled={isDeleted}
+                  accessibilityRole="button"
+                  accessibilityLabel={isDeleted ? item.text : `Write on: ${item.text}`}
+                  accessibilityState={{ disabled: isDeleted }}
+                  style={styles.rowMain}
+                >
+                  <ThemedText type="default">{item.text}</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {[item.category, item.origin, isDeleted ? 'deleted' : !item.active ? 'archived' : null]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </ThemedText>
+                </Pressable>
+                {!isDeleted && (
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/stem-edit', params: { id: item.id } })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit: ${item.text}`}
+                    style={styles.editLink}
+                  >
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Edit
+                    </ThemedText>
+                  </Pressable>
+                )}
+              </ThemedView>
             );
           }}
         />
@@ -174,9 +207,19 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  title: {
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.three,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+  },
+  title: {
+    paddingTop: 0,
   },
   search: {
     marginHorizontal: Spacing.four,
@@ -207,8 +250,19 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: Spacing.three,
     borderRadius: Spacing.two,
+    gap: Spacing.two,
+  },
+  rowMain: {
+    flex: 1,
     gap: Spacing.half,
+  },
+  editLink: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
   },
 });

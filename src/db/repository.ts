@@ -155,6 +155,69 @@ export class Repository {
     );
   }
 
+  /** Every non-deleted stem's text, for the "not a verbatim duplicate" check (§6.6). */
+  listStemTexts(): string[] {
+    return this.db
+      .getAllSync<{ text: string }>('SELECT text FROM stems WHERE deleted_at IS NULL', [])
+      .map((r) => r.text);
+  }
+
+  /**
+   * Adds a stem the user wrote or pasted (§6.6). Caller validates first
+   * (`validateStemText`) — this just persists. `origin` is `'user'` for a
+   * single add, `'imported'` for bulk import.
+   */
+  addStem(input: { text: string; category: string | null; origin: 'user' | 'imported' }): string {
+    const id = newId();
+    const { at, tz, offsetMin } = nowEventTime();
+    this.db.runSync(
+      `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min)
+       VALUES (?, ?, ?, ?, 'en', 1.0, 1, ?, ?, ?)`,
+      [id, input.text, input.origin, input.category, at, tz, offsetMin],
+    );
+    return id;
+  }
+
+  /**
+   * Bulk import (§6.6): one `addStem` per line, all `origin='imported'`.
+   * The caller is responsible for showing a preview + count before calling
+   * this — it commits unconditionally.
+   */
+  bulkImportStems(lines: readonly string[], category: string | null): number {
+    let count = 0;
+    this.db.withTransactionSync(() => {
+      for (const text of lines) {
+        this.addStem({ text, category, origin: 'imported' });
+        count++;
+      }
+    });
+    return count;
+  }
+
+  /**
+   * Edits a stem's text/category in place. Sessions keep their
+   * `stem_text_snapshot` (§4.4) — this never touches `sessions`, so past
+   * sessions stay attributed to the wording shown at the time.
+   */
+  updateStem(id: string, input: { text: string; category: string | null }): void {
+    this.db.runSync('UPDATE stems SET text = ?, category = ? WHERE id = ?', [input.text, input.category, id]);
+  }
+
+  /** Archive/unarchive (§6.6's primary destructive action — reversible, unlike delete). */
+  setStemActive(id: string, active: boolean): void {
+    this.db.runSync('UPDATE stems SET active = ? WHERE id = ?', [active ? 1 : 0, id]);
+  }
+
+  /** Soft-delete: past sessions keep their snapshot and remain in history/export. */
+  softDeleteStem(id: string, at: string): void {
+    this.db.runSync('UPDATE stems SET deleted_at = ? WHERE id = ?', [at, id]);
+  }
+
+  /** Three-way weight control (§6.6) — callers pass one of WEIGHT_BY_SETTING's values, never a raw float. */
+  setStemWeight(id: string, weight: number): void {
+    this.db.runSync('UPDATE stems SET weight = ? WHERE id = ?', [weight, id]);
+  }
+
   /**
    * Inserts the `sessions` row at Start (spec §6.3.1 — nothing is timed
    * before this). `started_at` is provided by the caller so the pure
