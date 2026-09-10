@@ -1,8 +1,9 @@
 import { newId } from './id';
 import { SqlExecutor } from './executor';
 import { SEED_STEMS } from './seed/stems';
-import { DEFAULT_SETTINGS } from './seed/settings';
+import { DEFAULT_SETTINGS, Settings } from './seed/settings';
 import { nowEventTime } from './time';
+import { EndReason, SessionOrigin } from '@/session/sessionMachine';
 
 /** Every user-facing table, in the order the debug dump shows them. */
 export const ALL_TABLES = [
@@ -15,6 +16,42 @@ export const ALL_TABLES = [
   'schema_meta',
 ] as const;
 export type TableName = (typeof ALL_TABLES)[number];
+
+export interface StemRow {
+  id: string;
+  text: string;
+  origin: 'seed' | 'user' | 'imported';
+  category: string | null;
+  weight: number;
+}
+
+export interface SessionRow {
+  id: string;
+  stem_id: string;
+  stem_text_snapshot: string;
+  origin: SessionOrigin;
+  target_endings: number;
+  timer_seconds: number;
+  uncensored_mode: number;
+  started_at: string;
+  first_keypress_at: string | null;
+  ended_at: string | null;
+  end_reason: EndReason | null;
+  last_activity_at: string | null;
+  tz: string;
+  offset_min: number;
+  device_locale: string;
+}
+
+export interface EndingRow {
+  id: string;
+  session_id: string;
+  ordinal: number;
+  text: string;
+  started_at: string;
+  submitted_at: string | null;
+  backspace_count: number;
+}
 
 /**
  * Reads and writes shared by first-launch seeding and the debug dump
@@ -66,5 +103,145 @@ export class Repository {
       result[table] = this.db.getAllSync<Record<string, unknown>>(`SELECT * FROM ${table}`, []);
     }
     return result;
+  }
+
+  /** All settings, decoded, falling back to spec defaults for any key not yet seeded. */
+  getSettings(): Settings {
+    const rows = this.db.getAllSync<{ key: string; value: string }>('SELECT key, value FROM settings', []);
+    const values = Object.fromEntries(rows.map((r) => [r.key, JSON.parse(r.value)]));
+    return { ...DEFAULT_SETTINGS, ...values };
+  }
+
+  /** Active, non-deleted stems, for the (temporary) session-start picker. */
+  listActiveStems(): StemRow[] {
+    return this.db.getAllSync<StemRow>(
+      "SELECT id, text, origin, category, weight FROM stems WHERE active = 1 AND deleted_at IS NULL ORDER BY created_at",
+      [],
+    );
+  }
+
+  /**
+   * Inserts the `sessions` row at Start (spec §6.3.1 — nothing is timed
+   * before this). `started_at` is provided by the caller so the pure
+   * session machine and the persisted row share exactly one clock reading.
+   */
+  createSession(input: {
+    stemId: string;
+    stemTextSnapshot: string;
+    origin: SessionOrigin;
+    targetEndings: number;
+    timerSeconds: number;
+    uncensoredMode: boolean;
+    startedAt: string;
+    deviceLocale: string;
+  }): string {
+    const id = newId();
+    const { tz, offsetMin } = nowEventTime(new Date(input.startedAt));
+    this.db.runSync(
+      `INSERT INTO sessions
+         (id, stem_id, stem_text_snapshot, origin, target_endings, timer_seconds, uncensored_mode,
+          started_at, last_activity_at, tz, offset_min, device_locale)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        input.stemId,
+        input.stemTextSnapshot,
+        input.origin,
+        input.targetEndings,
+        input.timerSeconds,
+        input.uncensoredMode ? 1 : 0,
+        input.startedAt,
+        input.startedAt,
+        tz,
+        offsetMin,
+        input.deviceLocale,
+      ],
+    );
+    return id;
+  }
+
+  /**
+   * First keystroke into a field (ADR-0003): creates its `endings` row and,
+   * if this is the session's first keypress at all, stamps
+   * `sessions.first_keypress_at`. A no-op if the row already exists.
+   */
+  recordFirstKeypress(sessionId: string, ordinal: number, at: string): void {
+    const existing = this.db.getFirstSync<{ id: string }>(
+      'SELECT id FROM endings WHERE session_id = ? AND ordinal = ?',
+      [sessionId, ordinal],
+    );
+    if (existing) return;
+
+    this.db.withTransactionSync(() => {
+      this.db.runSync(
+        `INSERT INTO endings (id, session_id, ordinal, text, started_at, submitted_at, backspace_count)
+         VALUES (?, ?, ?, '', ?, NULL, 0)`,
+        [newId(), sessionId, ordinal, at],
+      );
+      this.db.runSync(
+        `UPDATE sessions SET last_activity_at = ?,
+           first_keypress_at = COALESCE(first_keypress_at, ?)
+         WHERE id = ?`,
+        [at, at, sessionId],
+      );
+    });
+  }
+
+  /** Debounced autosave of the active field's text (ADR-0003) and its backspace count. */
+  autosaveEndingText(sessionId: string, ordinal: number, text: string, backspaceDelta: number, at: string): void {
+    this.db.withTransactionSync(() => {
+      this.db.runSync(
+        'UPDATE endings SET text = ?, backspace_count = backspace_count + ? WHERE session_id = ? AND ordinal = ?',
+        [text, backspaceDelta, sessionId, ordinal],
+      );
+      this.db.runSync('UPDATE sessions SET last_activity_at = ? WHERE id = ?', [at, sessionId]);
+    });
+  }
+
+  /** Submits a field (return key / Next), stamping `submitted_at` (§6.3.4). */
+  submitEnding(sessionId: string, ordinal: number, at: string): void {
+    this.db.withTransactionSync(() => {
+      this.db.runSync('UPDATE endings SET submitted_at = ? WHERE session_id = ? AND ordinal = ?', [
+        at,
+        sessionId,
+        ordinal,
+      ]);
+      this.db.runSync('UPDATE sessions SET last_activity_at = ? WHERE id = ?', [at, sessionId]);
+    });
+  }
+
+  /**
+   * Ends the session. Any open ending (submitted_at IS NULL) is closed with
+   * `submitted_at = at` without touching its text — nothing is discarded,
+   * ever (§6.3.8), including a half-typed final ending.
+   */
+  finalizeSession(sessionId: string, reason: EndReason, at: string): void {
+    this.db.withTransactionSync(() => {
+      this.db.runSync('UPDATE endings SET submitted_at = ? WHERE session_id = ? AND submitted_at IS NULL', [
+        at,
+        sessionId,
+      ]);
+      this.db.runSync('UPDATE sessions SET ended_at = ?, end_reason = ?, last_activity_at = ? WHERE id = ?', [
+        at,
+        reason,
+        at,
+        sessionId,
+      ]);
+    });
+  }
+
+  /**
+   * The one session still open (`ended_at IS NULL`), if any — there is
+   * never more than one, since starting a session requires finishing or
+   * finalizing the last. Used on app launch/foreground to apply ADR-0001.
+   */
+  getOpenSession(): { session: SessionRow; endings: EndingRow[] } | null {
+    const session = this.db.getFirstSync<SessionRow>('SELECT * FROM sessions WHERE ended_at IS NULL LIMIT 1', []);
+    if (!session) return null;
+
+    const endings = this.db.getAllSync<EndingRow>('SELECT * FROM endings WHERE session_id = ? ORDER BY ordinal', [
+      session.id,
+    ]);
+    return { session, endings };
   }
 }

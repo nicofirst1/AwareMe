@@ -16,3 +16,8 @@ export function nowEventTime(now: Date = new Date()): EventTime {
     offsetMin: -now.getTimezoneOffset(),
   };
 }
+
+/** The device's current locale (e.g. "en-US"), for `sessions.device_locale`. */
+export function getDeviceLocale(): string {
+  return Intl.DateTimeFormat().resolvedOptions().locale;
+}

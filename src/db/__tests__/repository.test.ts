@@ -59,7 +59,7 @@ describe('Repository.seedIfEmpty', () => {
     const rows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
     expect(rows).toHaveLength(Object.keys(DEFAULT_SETTINGS).length);
     for (const row of rows) {
-      expect(JSON.parse(row.value)).toEqual(DEFAULT_SETTINGS[row.key]);
+      expect(JSON.parse(row.value)).toEqual(DEFAULT_SETTINGS[row.key as keyof typeof DEFAULT_SETTINGS]);
     }
   });
 

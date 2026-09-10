@@ -14,6 +14,9 @@ export default function HomeScreen() {
         <ThemedText type="default" themeColor="textSecondary">
           A quiet place to finish a sentence.
         </ThemedText>
+        <Link href="/pick-stem">
+          <ThemedText type="subtitle">Start writing</ThemedText>
+        </Link>
         {__DEV__ && (
           <Link href="/debug">
             <ThemedText type="small" themeColor="textSecondary">

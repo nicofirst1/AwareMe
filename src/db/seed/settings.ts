@@ -1,5 +1,19 @@
+/** The shape of every settings row, decoded. Keys match spec.md §7. */
+export interface Settings {
+  endings_per_session: number;
+  timer_seconds: number;
+  review_timer_seconds: number;
+  uncensored_mode: boolean;
+  sessions_per_day: number;
+  windows: { start: string; end: string }[];
+  stem_terminator: string;
+  app_lock_enabled: boolean;
+  weekly_review_prompt: boolean;
+  theme: string;
+}
+
 /** Default settings, per spec.md §7. Values are JSON-encoded in the settings table. */
-export const DEFAULT_SETTINGS: Readonly<Record<string, unknown>> = {
+export const DEFAULT_SETTINGS: Readonly<Settings> = {
   endings_per_session: 6,
   timer_seconds: 90,
   review_timer_seconds: 180,
