@@ -1,0 +1,3 @@
+# Sessions keep momentum sacred: no manual resume
+
+A writing session's active ingredient is time pressure, so a session is never pausable or resumable on demand — letting the user leave and return once the internal editor has caught up would defeat the exercise. On any app return (background _or_ cold start) we compute `absence = now − last_activity` and `elapsed = now − started_at`: if `absence > 5 min` the session is finalized `abandoned`; else if `elapsed ≥ timer_seconds` it is finalized `timeout`; otherwise it auto-resumes with `timer_seconds − elapsed` remaining. There is no UI to reopen a finalized session, and everything typed is always saved on finalize.
