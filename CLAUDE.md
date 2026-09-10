@@ -2,23 +2,26 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: spec-only, not yet scaffolded
+## Status: M1 in progress — project scaffolded
 
-This repo currently contains exactly one file: `spec.md`. There is no code, no `package.json`, no build system, and no git history yet. `spec.md` is a complete v1 implementation specification for a **sentence-completion journaling app** (an Expo/React Native mobile app) that has not been built.
+The project is scaffolded (ticket 01): Expo managed workflow, SDK 57, TypeScript `strict: true`, `expo-router` file-based routing rooted at `src/app`. `spec.md` remains the contract.
 
 **`spec.md` is the contract.** Read it before doing anything. It uses RFC-2119 language: `MUST` is a hard constraint, `SHOULD` needs a justification in `DECISIONS.md` (create it) if you deviate. Do not add features it lists as out of scope (section 2) — no backend, accounts, sync, social, AI, analytics, or monetisation, and no stubs/toggles for them.
 
-## Intended stack (from spec §3 — nothing is installed yet)
+## Stack (from spec §3 — installed)
 
-Expo managed workflow (latest stable SDK) · TypeScript `strict: true`, no `any` in committed code · `expo-router` (file-based) · `expo-sqlite` · local-only `expo-notifications` · Zustand (or Context — **not** Redux) · `expo-file-system`
+Expo managed workflow, SDK 57 · TypeScript `strict: true`, no `any` in committed code · `expo-router` (file-based, rooted at `src/app`) · `expo-sqlite` · local-only `expo-notifications` · Zustand (not Redux) · `expo-file-system` · `expo-sharing` for export · `expo-local-authentication` for the optional lock · Jest (`jest-expo` preset) + `@testing-library/react-native`.
 
-- `expo-sharing` for export · `expo-local-authentication` for the optional lock · Jest + `@testing-library/react-native`.
+`expo-linking` is also installed: not in spec §3's list, but it's a hard runtime peer of `expo-router` (app crashes on boot without it), not a discretionary addition.
 
-The app **MUST function fully in airplane mode.** No network calls. If any dependency pulls in network capability, record it in `DECISIONS.md`.
+The app **MUST function fully in airplane mode.** No network calls. No dependency here pulls in network capability.
 
-### When you scaffold (M1)
+### Real commands (package.json)
 
-No commands work until the project is initialised. Bootstrap with `create-expo-app` (TypeScript template), then the usual Expo/Jest commands apply: `npx expo start`, `npx jest`, `npx jest path/to/file.test.ts`, `npx tsc --noEmit`. Keep this section updated with the real scripts once `package.json` exists.
+- `npm start` / `npm run ios` / `npm run android` — `expo start` variants
+- `npm test` — `jest` (preset `jest-expo`); `npx jest path/to/file.test.ts` for a single file
+- `npm run typecheck` — `tsc --noEmit`
+- `npm run lint` — `expo lint`
 
 ## Architecture: the data model is the load-bearing decision
 
@@ -51,7 +54,7 @@ M1 data foundation → M2 the writing session (the whole product in embryo; over
 
 ## Before starting M2
 
-Spec §14 has four open questions (resumable sessions, on-demand stem repeat, per-stem notes, review-period length) the spec says to resolve with the user rather than guess. Surface them.
+Spec §14's four open questions (resumable sessions, on-demand stem repeat, per-stem notes, review-period length) are already resolved — see `DECISIONS.md` and `docs/adr/0001`–`0003`.
 
 ## Agent skills
 
