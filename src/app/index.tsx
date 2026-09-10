@@ -64,6 +64,9 @@ export default function HomeScreen() {
         <Link href="/import">
           <ThemedText type="default">Import</ThemedText>
         </Link>
+        <Link href="/settings">
+          <ThemedText type="default">Settings</ThemedText>
+        </Link>
         {__DEV__ && (
           <Link href="/debug">
             <ThemedText type="small" themeColor="textSecondary">

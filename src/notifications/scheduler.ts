@@ -46,6 +46,17 @@ export async function hasNotificationPermission(): Promise<boolean> {
 }
 
 /**
+ * Cancels every OS-scheduled notification outright — the "delete all data"
+ * escape hatch (§9) needs this alongside `Repository.deleteAllData()` so a
+ * wiped database doesn't leave notifications pending for rows that no
+ * longer exist. Distinct from the reconcile-and-diff behaviour in
+ * `rescheduleNotifications`: this is an unconditional stop, not a resync.
+ */
+export async function cancelAllPendingNotifications(): Promise<void> {
+  await Notifications.cancelAllScheduledNotificationsAsync();
+}
+
+/**
  * The full reschedule: recomputes the desired rolling schedule from current
  * settings, diffs it against what's actually still pending, cancels what's
  * superseded, and schedules what's missing — each newly scheduled fire time

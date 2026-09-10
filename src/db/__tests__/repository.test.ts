@@ -147,3 +147,77 @@ describe('Repository.dumpAllTables', () => {
     expect(dump.settings).toHaveLength(Object.keys(DEFAULT_SETTINGS).length);
   });
 });
+
+describe('Repository.setSetting', () => {
+  it('updates a single key without touching the others', () => {
+    const { repo } = freshRepository();
+    repo.seedIfEmpty();
+
+    repo.setSetting('timer_seconds', 120);
+
+    const settings = repo.getSettings();
+    expect(settings.timer_seconds).toBe(120);
+    expect(settings.endings_per_session).toBe(DEFAULT_SETTINGS.endings_per_session);
+  });
+
+  it('stamps updated_at on the row it touches', () => {
+    const { db, repo } = freshRepository();
+    repo.seedIfEmpty();
+
+    repo.setSetting('app_lock_enabled', true);
+
+    const row = db.prepare('SELECT value, updated_at FROM settings WHERE key = ?').get('app_lock_enabled') as {
+      value: string;
+      updated_at: string;
+    };
+    expect(JSON.parse(row.value)).toBe(true);
+    expect(() => new Date(row.updated_at).toISOString()).not.toThrow();
+  });
+
+  it('works even if the key was never seeded (upsert)', () => {
+    const { repo } = freshRepository();
+    // no seedIfEmpty() — settings table is empty
+
+    repo.setSetting('theme', 'dark');
+
+    expect(repo.getSettings().theme).toBe('dark');
+  });
+});
+
+describe('Repository.deleteAllData', () => {
+  it('wipes stems, sessions, endings, reviews, notification_schedule, and re-seeds to factory defaults', () => {
+    const { db, repo } = freshRepository();
+    repo.seedIfEmpty();
+
+    const stem = repo.listActiveStems()[0];
+    repo.createSession({
+      stemId: stem.id,
+      stemTextSnapshot: stem.text,
+      origin: 'manual',
+      targetEndings: 6,
+      timerSeconds: 90,
+      uncensoredMode: true,
+      startedAt: new Date().toISOString(),
+      deviceLocale: 'en-US',
+    });
+    repo.setSetting('theme', 'dark');
+    repo.insertScheduledNotification({ scheduledFor: new Date().toISOString(), stemId: stem.id, osIdentifier: 'x' });
+
+    repo.deleteAllData();
+
+    expect((db.prepare('SELECT COUNT(*) as c FROM sessions').get() as { c: number }).c).toBe(0);
+    expect((db.prepare('SELECT COUNT(*) as c FROM endings').get() as { c: number }).c).toBe(0);
+    expect((db.prepare('SELECT COUNT(*) as c FROM notification_schedule').get() as { c: number }).c).toBe(0);
+    // Re-seeded: stems and settings are back to factory state.
+    expect(repo.listActiveStems().length).toBeGreaterThan(0);
+    expect(repo.getSettings().theme).toBe(DEFAULT_SETTINGS.theme);
+    // schema_meta is bookkeeping, not user data — untouched by the wipe.
+    expect((db.prepare('SELECT COUNT(*) as c FROM schema_meta').get() as { c: number }).c).toBe(1);
+  });
+
+  it('is safe to call on an empty (unseeded) database', () => {
+    const { repo } = freshRepository();
+    expect(() => repo.deleteAllData()).not.toThrow();
+    expect(repo.hasStems()).toBe(true); // re-seeded
+  });
+});

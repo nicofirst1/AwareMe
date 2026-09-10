@@ -196,6 +196,40 @@ export class Repository {
     return { ...DEFAULT_SETTINGS, ...values };
   }
 
+  /**
+   * Upserts one settings key (§7), JSON-encoded, stamping `updated_at`.
+   * `INSERT ... ON CONFLICT` rather than update-then-maybe-insert because
+   * `seedIfEmpty` always writes every key up front, but this stays correct
+   * even if that invariant ever changes.
+   */
+  setSetting(key: keyof Settings, value: Settings[keyof Settings]): void {
+    const { at } = nowEventTime();
+    this.db.runSync(
+      `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      [key, JSON.stringify(value), at],
+    );
+  }
+
+  /**
+   * The one legitimate hard wipe (spec §9, §13.5): deletes every row of
+   * every user-data table — children before parents so this is correct
+   * whether or not the connection enforces foreign keys, same ordering
+   * `applyImport`'s replace mode uses — then re-seeds to factory state.
+   * `schema_meta` is left alone: it's migration bookkeeping, not user data,
+   * and wiping it would make the app think it needs to migrate from
+   * scratch on next open. Cancelling pending OS notifications is the
+   * caller's job (`src/notifications/scheduler.ts` owns that side effect).
+   */
+  deleteAllData(): void {
+    this.db.withTransactionSync(() => {
+      for (const table of ['endings', 'notification_schedule', 'reviews', 'sessions', 'stems', 'settings'] as const) {
+        this.db.execSync(`DELETE FROM ${table}`);
+      }
+    });
+    this.seedIfEmpty();
+  }
+
   /** Active, non-deleted stems, for session start and the stem library. */
   listActiveStems(): StemRow[] {
     return this.db.getAllSync<StemRow>(
