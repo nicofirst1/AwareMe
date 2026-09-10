@@ -49,6 +49,9 @@ export default function HomeScreen() {
         >
           <ThemedText type="subtitle">Start now</ThemedText>
         </Pressable>
+        <Link href="/stems">
+          <ThemedText type="default">Browse stems</ThemedText>
+        </Link>
         {__DEV__ && (
           <Link href="/debug">
             <ThemedText type="small" themeColor="textSecondary">

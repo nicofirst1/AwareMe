@@ -40,6 +40,25 @@ describe('Repository.listActiveStems', () => {
   });
 });
 
+describe('Repository.listAllStems', () => {
+  it('includes archived and soft-deleted stems, unlike listActiveStems', () => {
+    const { db, repo } = freshRepository();
+    const someId = firstStemId(repo);
+    db.prepare('UPDATE stems SET active = 0 WHERE id = ?').run(someId);
+    const otherId = repo.listActiveStems()[0].id;
+    db.prepare("UPDATE stems SET deleted_at = '2026-09-06T00:00:00.000Z' WHERE id = ?").run(otherId);
+
+    const all = repo.listAllStems();
+    expect(all).toHaveLength(26);
+    expect(repo.listActiveStems().length).toBe(24);
+
+    const archived = all.find((s) => s.id === someId)!;
+    expect(archived.active).toBe(0);
+    const deleted = all.find((s) => s.id === otherId)!;
+    expect(deleted.deleted_at).toBe('2026-09-06T00:00:00.000Z');
+  });
+});
+
 describe('Repository.getRecentStemUsage', () => {
   it('returns sessions from the last 14 days with the stem category, most recent first', () => {
     const { db, repo } = freshRepository();

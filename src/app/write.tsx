@@ -30,7 +30,10 @@ export default function WriteScreen() {
     const repo = getRepository();
     setTerminator(repo.getSettings().stem_terminator);
     if (stemId) {
-      const stem = repo.listActiveStems().find((s) => s.id === stemId);
+      // listAllStems, not listActiveStems: the library (ticket 07) allows
+      // writing on an archived stem deliberately, outside the weighted
+      // rotation that `active` gates. A soft-deleted stem is excluded.
+      const stem = repo.listAllStems().find((s) => s.id === stemId && s.deleted_at === null);
       if (stem) setPendingStem({ id: stem.id, text: stem.text });
     }
   }, [stemId]);

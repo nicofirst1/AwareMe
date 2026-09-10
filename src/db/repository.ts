@@ -25,6 +25,12 @@ export interface StemRow {
   weight: number;
 }
 
+export interface LibraryStemRow extends StemRow {
+  active: number; // 0/1
+  deleted_at: string | null;
+  created_at: string;
+}
+
 export interface SessionRow {
   id: string;
   stem_id: string;
@@ -116,6 +122,18 @@ export class Repository {
   listActiveStems(): StemRow[] {
     return this.db.getAllSync<StemRow>(
       "SELECT id, text, origin, category, weight FROM stems WHERE active = 1 AND deleted_at IS NULL ORDER BY created_at",
+      [],
+    );
+  }
+
+  /**
+   * Every stem, including archived and soft-deleted ones, for the stem
+   * library (§6.6) — the library filters/searches client-side over this,
+   * unlike `listActiveStems`'s narrow session-start use.
+   */
+  listAllStems(): LibraryStemRow[] {
+    return this.db.getAllSync<LibraryStemRow>(
+      'SELECT id, text, origin, category, weight, active, deleted_at, created_at FROM stems ORDER BY created_at DESC',
       [],
     );
   }
