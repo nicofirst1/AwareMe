@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { migrate } from '../migrate';
 import { Repository } from '../repository';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
+import { computeReturnAction } from '@/session/sessionMachine';
 
 function freshRepository(): { db: DatabaseSync; repo: Repository } {
   const raw = new DatabaseSync(':memory:');
@@ -247,5 +248,79 @@ describe('Repository session lifecycle', () => {
 
     repo.finalizeSession(sessionId, 'abandoned', '2026-09-10T08:10:00.000Z');
     expect(repo.getOpenSession()).toBeNull();
+  });
+
+  it('cold-start reconciliation (ADR-0001): a session left open by a killed app is found and finalized abandoned using last_activity_at, not started_at', () => {
+    const { db, repo } = freshRepository();
+    const sessionId = repo.createSession({
+      stemId: firstStemId(repo),
+      stemTextSnapshot: 'snap',
+      origin: 'manual',
+      targetEndings: 3,
+      timerSeconds: 90,
+      uncensoredMode: true,
+      startedAt: '2026-09-10T08:00:00.000Z',
+      deviceLocale: 'en-US',
+    });
+    repo.recordFirstKeypress(sessionId, 1, '2026-09-10T08:00:05.000Z');
+    repo.autosaveEndingText(sessionId, 1, 'half-written', 0, '2026-09-10T08:00:10.000Z');
+    // Simulate a hard kill: nothing more is written. "App relaunch" reads
+    // the row back from disk fresh, the way a real cold start would.
+
+    const open = repo.getOpenSession();
+    expect(open).not.toBeNull();
+
+    // Relaunch happens 6 minutes after last_activity_at (past the 5-minute
+    // grace), even though elapsed-from-start alone would still be well
+    // inside the 90s timer if last_activity_at were ignored.
+    const relaunchAt = '2026-09-10T08:06:11.000Z';
+    const action = computeReturnAction(
+      {
+        startedAt: open!.session.started_at,
+        lastActivityAt: open!.session.last_activity_at!,
+        config: { timerSeconds: open!.session.timer_seconds, targetEndings: open!.session.target_endings, uncensoredMode: true },
+      },
+      relaunchAt,
+    );
+    expect(action).toEqual({ kind: 'finalize', reason: 'abandoned' });
+
+    repo.finalizeSession(sessionId, 'abandoned', relaunchAt);
+
+    // Nothing discarded: the half-written text survives the abandonment.
+    const ending = db.prepare('SELECT text, submitted_at FROM endings WHERE session_id = ? AND ordinal = 1').get(
+      sessionId,
+    ) as { text: string; submitted_at: string };
+    expect(ending.text).toBe('half-written');
+    expect(ending.submitted_at).toBe(relaunchAt);
+    expect(repo.getOpenSession()).toBeNull();
+  });
+
+  it('cold-start reconciliation resumes (does not finalize) when the relaunch is within both the timer and the grace period', () => {
+    const { repo } = freshRepository();
+    const sessionId = repo.createSession({
+      stemId: firstStemId(repo),
+      stemTextSnapshot: 'snap',
+      origin: 'manual',
+      targetEndings: 3,
+      timerSeconds: 90,
+      uncensoredMode: true,
+      startedAt: '2026-09-10T08:00:00.000Z',
+      deviceLocale: 'en-US',
+    });
+    repo.recordFirstKeypress(sessionId, 1, '2026-09-10T08:00:05.000Z');
+
+    const open = repo.getOpenSession()!;
+    const relaunchAt = '2026-09-10T08:00:20.000Z';
+    const action = computeReturnAction(
+      {
+        startedAt: open.session.started_at,
+        lastActivityAt: open.session.last_activity_at!,
+        config: { timerSeconds: open.session.timer_seconds, targetEndings: open.session.target_endings, uncensoredMode: true },
+      },
+      relaunchAt,
+    );
+    expect(action).toEqual({ kind: 'resume', remainingSeconds: 70 });
+    // Resuming does not itself write anything — the session is still open.
+    expect(repo.getOpenSession()?.session.id).toBe(sessionId);
   });
 });

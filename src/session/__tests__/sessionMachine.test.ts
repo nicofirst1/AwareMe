@@ -1,4 +1,5 @@
 import {
+  computeReturnAction,
   finalizeSession,
   isComplete,
   recordFirstKeypress,
@@ -145,5 +146,45 @@ describe('finalizeSession', () => {
     const s = finalizeSession(startSession(CONFIG, T0), 'abandoned', '2026-09-10T08:10:00.000Z');
     expect(s.endings).toHaveLength(0);
     expect(s.endReason).toBe('abandoned');
+  });
+});
+
+describe('computeReturnAction (ADR-0001)', () => {
+  const base = { startedAt: T0, lastActivityAt: T0, config: CONFIG };
+
+  it('resumes with the remaining seconds when within the timer and absence grace', () => {
+    const action = computeReturnAction(base, '2026-09-10T08:00:30.000Z');
+    expect(action).toEqual({ kind: 'resume', remainingSeconds: 60 });
+  });
+
+  it('finalizes as timeout once elapsed >= timer_seconds, even with recent activity', () => {
+    const recentActivity = { ...base, lastActivityAt: '2026-09-10T08:01:29.000Z' };
+    const action = computeReturnAction(recentActivity, '2026-09-10T08:01:30.000Z');
+    expect(action).toEqual({ kind: 'finalize', reason: 'timeout' });
+  });
+
+  it('finalizes as abandoned when absence exceeds 5 minutes, even mid-timer', () => {
+    // last_activity_at 6 minutes before "now", well inside the 90s timer
+    // window if measured from startedAt alone.
+    const action = computeReturnAction(base, '2026-09-10T08:06:01.000Z');
+    expect(action).toEqual({ kind: 'finalize', reason: 'abandoned' });
+  });
+
+  it('abandoned takes priority over timeout when both thresholds are crossed', () => {
+    const staleActivity = { ...base, lastActivityAt: '2026-09-10T08:00:00.000Z' };
+    const action = computeReturnAction(staleActivity, '2026-09-10T08:10:00.000Z');
+    expect(action).toEqual({ kind: 'finalize', reason: 'abandoned' });
+  });
+
+  it('is exactly at the 5-minute grace boundary: not yet abandoned at precisely 5:00', () => {
+    const action = computeReturnAction(base, '2026-09-10T08:05:00.000Z');
+    expect(action.kind).toBe('finalize'); // elapsed (5:00) >= timer (1:30) -> timeout, not abandoned
+    expect(action).toEqual({ kind: 'finalize', reason: 'timeout' });
+  });
+
+  it('a long timer with absence just past grace is abandoned even though elapsed < timer', () => {
+    const longTimer = { ...base, config: { ...CONFIG, timerSeconds: 3600 } };
+    const action = computeReturnAction(longTimer, '2026-09-10T08:05:00.001Z');
+    expect(action).toEqual({ kind: 'finalize', reason: 'abandoned' });
   });
 });

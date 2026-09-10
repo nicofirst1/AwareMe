@@ -150,3 +150,33 @@ export function finalizeSession(state: SessionState, reason: EndReason, at: stri
   };
 }
 
+export type ReturnAction =
+  | { kind: 'resume'; remainingSeconds: number }
+  | { kind: 'finalize'; reason: 'timeout' | 'abandoned' };
+
+const ABSENCE_GRACE_MS = 5 * 60 * 1000;
+
+/**
+ * ADR-0001: on any return to a session in progress (foreground or cold
+ * start), decide what happens next from wall-clock time alone —
+ * `last_activity_at` and `started_at` are both persisted, so this is
+ * computable even after a hard kill.
+ *
+ *   absence > 5min           -> abandoned
+ *   elapsed >= timer_seconds -> timeout
+ *   otherwise                -> resume with the remaining time
+ */
+export function computeReturnAction(
+  state: Pick<SessionState, 'startedAt' | 'lastActivityAt' | 'config'>,
+  now: string,
+): ReturnAction {
+  const nowMs = Date.parse(now);
+  const absenceMs = nowMs - Date.parse(state.lastActivityAt);
+  const elapsedMs = nowMs - Date.parse(state.startedAt);
+  const timerMs = state.config.timerSeconds * 1000;
+
+  if (absenceMs > ABSENCE_GRACE_MS) return { kind: 'finalize', reason: 'abandoned' };
+  if (elapsedMs >= timerMs) return { kind: 'finalize', reason: 'timeout' };
+
+  return { kind: 'resume', remainingSeconds: Math.ceil((timerMs - elapsedMs) / 1000) };
+}

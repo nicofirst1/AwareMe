@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
 import { getRepository } from '@/db';
 import { getDeviceLocale, nowEventTime } from '@/db/time';
+import { applyEdit } from './uncensoredEdit';
 import {
+  computeReturnAction,
   finalizeSession,
   isComplete,
   recordFirstKeypress,
@@ -35,10 +38,15 @@ export interface WritingSessionView {
 }
 
 /**
- * Wires the pure session machine (`sessionMachine.ts`) to the repository
- * and a local countdown. Deliberately a plain hook, not a Zustand store: a
- * session is scoped to one screen's lifetime, nothing else in the app reads
- * it mid-session.
+ * Wires the pure session machine (`sessionMachine.ts`) and the uncensored
+ * edit gate (`uncensoredEdit.ts`) to the repository and the app lifecycle.
+ * Deliberately a plain hook, not a Zustand store: a session is scoped to
+ * one screen's lifetime, nothing else in the app reads it mid-session.
+ *
+ * On mount, resolves any session left open by a previous app run per
+ * ADR-0001 (resume / timeout / abandoned) before anything else can happen —
+ * this is what makes the rule hold across a cold start, not just
+ * backgrounding within the same process.
  */
 export function useWritingSession(): WritingSessionView {
   const repo = getRepository();
@@ -53,6 +61,7 @@ export function useWritingSession(): WritingSessionView {
   const stateRef = useRef<SessionState | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingBackspaceDelta = useRef(0);
 
   useEffect(() => {
     stateRef.current = state;
@@ -75,6 +84,82 @@ export function useWritingSession(): WritingSessionView {
     },
     [repo],
   );
+
+  // ADR-0001: resolve any session left open by a previous run (cold start)
+  // before the user can start a new one.
+  useEffect(() => {
+    const open = repo.getOpenSession();
+    if (!open) return;
+
+    const { at } = nowEventTime();
+    const lastActivityAt = open.session.last_activity_at ?? open.session.started_at;
+    const action = computeReturnAction(
+      {
+        startedAt: open.session.started_at,
+        lastActivityAt,
+        config: {
+          timerSeconds: open.session.timer_seconds,
+          targetEndings: open.session.target_endings,
+          uncensoredMode: !!open.session.uncensored_mode,
+        },
+      },
+      at,
+    );
+
+    if (action.kind === 'finalize') {
+      repo.finalizeSession(open.session.id, action.reason, at);
+      return;
+    }
+
+    // Resume: rebuild in-memory state from the persisted rows and continue.
+    const rebuilt: SessionState = {
+      config: {
+        targetEndings: open.session.target_endings,
+        timerSeconds: open.session.timer_seconds,
+        uncensoredMode: !!open.session.uncensored_mode,
+      },
+      startedAt: open.session.started_at,
+      firstKeypressAt: open.session.first_keypress_at,
+      lastActivityAt,
+      endedAt: null,
+      endReason: null,
+      activeOrdinal: open.endings.filter((e) => e.submitted_at !== null).length + 1,
+      endings: open.endings.map((e) => ({
+        ordinal: e.ordinal,
+        text: e.text,
+        startedAt: e.started_at,
+        submittedAt: e.submitted_at,
+        backspaceCount: e.backspace_count,
+      })),
+    };
+
+    setSessionId(open.session.id);
+    setState(rebuilt);
+    setStemText(open.session.stem_text_snapshot);
+    setPhase('active');
+    setRemainingSeconds(action.remainingSeconds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Foreground/background transitions: the same ADR-0001 rule, re-evaluated
+  // every time the app returns to the foreground.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') return;
+      const current = stateRef.current;
+      const id = sessionIdRef.current;
+      if (!current || !id || current.endedAt) return;
+
+      const { at } = nowEventTime();
+      const action = computeReturnAction(current, at);
+      if (action.kind === 'finalize') {
+        finalize(action.reason);
+      } else {
+        setRemainingSeconds(action.remainingSeconds);
+      }
+    });
+    return () => sub.remove();
+  }, [finalize]);
 
   // Local countdown, ticking once a second while a session is active.
   useEffect(() => {
@@ -120,11 +205,11 @@ export function useWritingSession(): WritingSessionView {
   );
 
   const flushAutosave = useCallback(
-    (ordinal: number, text: string) => {
+    (ordinal: number, text: string, backspaceDelta: number) => {
       const id = sessionIdRef.current;
       if (!id) return;
       const { at } = nowEventTime();
-      repo.autosaveEndingText(id, ordinal, text, 0, at);
+      repo.autosaveEndingText(id, ordinal, text, backspaceDelta, at);
     },
     [repo],
   );
@@ -137,6 +222,7 @@ export function useWritingSession(): WritingSessionView {
 
       const activeOrdinal = current.activeOrdinal;
       const activeEnding = current.endings.find((e) => e.ordinal === activeOrdinal);
+      const previousText = activeEnding?.text ?? '';
       const { at } = nowEventTime();
 
       let afterFirstKeypress = current;
@@ -145,11 +231,21 @@ export function useWritingSession(): WritingSessionView {
         afterFirstKeypress = recordFirstKeypress(current, at);
       }
 
-      const next = updateActiveEndingText(afterFirstKeypress, nextText, at);
+      // Uncensored mode (§6.3.6): backspace limited to the current word,
+      // no cut/select (also enforced at the TextInput via
+      // `contextMenuHidden` in write.tsx). backspace_count increments
+      // regardless of mode.
+      const edit = applyEdit(previousText, nextText, afterFirstKeypress.config.uncensoredMode);
+      const next = updateActiveEndingText(afterFirstKeypress, edit.text, at, edit.backspaces);
       setState(next);
 
+      pendingBackspaceDelta.current += edit.backspaces;
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-      autosaveTimer.current = setTimeout(() => flushAutosave(activeOrdinal, nextText), AUTOSAVE_DEBOUNCE_MS);
+      autosaveTimer.current = setTimeout(() => {
+        const delta = pendingBackspaceDelta.current;
+        pendingBackspaceDelta.current = 0;
+        flushAutosave(activeOrdinal, edit.text, delta);
+      }, AUTOSAVE_DEBOUNCE_MS);
     },
     [flushAutosave, repo],
   );
@@ -166,7 +262,9 @@ export function useWritingSession(): WritingSessionView {
     if (autosaveTimer.current) {
       clearTimeout(autosaveTimer.current);
       autosaveTimer.current = null;
-      flushAutosave(current.activeOrdinal, activeEnding.text);
+      const delta = pendingBackspaceDelta.current;
+      pendingBackspaceDelta.current = 0;
+      flushAutosave(current.activeOrdinal, activeEnding.text, delta);
     }
 
     const { at } = nowEventTime();

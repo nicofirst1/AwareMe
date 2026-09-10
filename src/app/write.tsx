@@ -92,6 +92,10 @@ export default function WriteScreen() {
             </ThemedView>
           )}
 
+          {/*
+            Read-only text, not inputs: there is no control that lets the
+            user navigate back into an earlier ending (§6.3.6).
+          */}
           {submittedEndings.map((e) => (
             <ThemedText key={e.ordinal} type="stem" themeColor="textSecondary" style={styles.pastEnding}>
               {e.text}
@@ -118,6 +122,8 @@ export default function WriteScreen() {
                 onSubmitEditing={session.submitActive}
                 multiline
                 blurOnSubmit={false}
+                contextMenuHidden
+                autoCorrect={false}
                 accessibilityLabel="Your ending"
                 placeholder="Keep the pen moving."
                 placeholderTextColor={theme.textSecondary}
