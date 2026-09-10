@@ -1,3 +1,4 @@
+import { Link } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,6 +14,13 @@ export default function HomeScreen() {
         <ThemedText type="default" themeColor="textSecondary">
           A quiet place to finish a sentence.
         </ThemedText>
+        {__DEV__ && (
+          <Link href="/debug">
+            <ThemedText type="small" themeColor="textSecondary">
+              Debug: dump all tables
+            </ThemedText>
+          </Link>
+        )}
       </SafeAreaView>
     </ThemedView>
   );

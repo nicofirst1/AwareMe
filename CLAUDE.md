@@ -2,9 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: M1 in progress — project scaffolded
+## Status: M1 complete — data foundation, no writing UI yet
 
-The project is scaffolded (ticket 01): Expo managed workflow, SDK 57, TypeScript `strict: true`, `expo-router` file-based routing rooted at `src/app`. `spec.md` remains the contract.
+Scaffolded (ticket 01), schema + migrations (ticket 02), and seed content + repository + debug dump (ticket 03) are done: an installable, data-only build per spec §12's M1 exit criteria. `spec.md` remains the contract. M2 (the writing session) is next.
 
 **`spec.md` is the contract.** Read it before doing anything. It uses RFC-2119 language: `MUST` is a hard constraint, `SHOULD` needs a justification in `DECISIONS.md` (create it) if you deviate. Do not add features it lists as out of scope (section 2) — no backend, accounts, sync, social, AI, analytics, or monetisation, and no stubs/toggles for them.
 
@@ -32,6 +32,11 @@ The app **MUST function fully in airplane mode.** No network calls. No dependenc
 - `uuidv7.ts` / `id.ts` — pure UUIDv7 generator + the one call site binding it to `expo-crypto`.
 - `fixtures/schema-vN.db` — a committed, real SQLite file per shipped version; `__tests__/migrate.test.ts` regenerates any missing one and asserts every fixture upgrades cleanly to current. Add a new fixture when you add a migration (see `fixtures/README.md`).
 - `testSupport/nodeSqliteExecutor.ts` — adapts Node's builtin `node:sqlite` to `SqlExecutor` so migration tests run against real SQLite without a device/simulator.
+- `repository.ts` — `Repository`: currently just `seedIfEmpty()` (first-launch seed insertion, idempotent) and `dumpAllTables()` (the debug screen's read). Add session/ending/review read-write methods here as M2+ tickets need them — don't pre-build them now.
+- `seed/stems.ts`, `seed/settings.ts` — the 26 seed stems + 3 meta-stems (verbatim from spec §5.3–5.4, checked byte-for-byte against spec.md — don't retype from memory if you ever touch this file) and the spec §7 default settings.
+- `time.ts` — `nowEventTime()`: the UTC ISO-8601-ms + IANA tz + offset-minutes triple every user-event row needs (spec §4.1.3), via `Intl.DateTimeFormat` (no dependency).
+- `index.ts` — the module's public surface; import from `@/db`, not individual files, outside the `db/` directory itself.
+- `src/app/debug.tsx` — dev-only (`__DEV__`), dumps every row of every table via `Repository.dumpAllTables()`. Not part of the product surface; spec §10's restraint doesn't apply to it.
 
 ## Architecture: the data model is the load-bearing decision
 
