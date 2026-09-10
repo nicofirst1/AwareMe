@@ -52,6 +52,9 @@ export default function HomeScreen() {
         <Link href="/stems">
           <ThemedText type="default">Browse stems</ThemedText>
         </Link>
+        <Link href="/history">
+          <ThemedText type="default">History</ThemedText>
+        </Link>
         {__DEV__ && (
           <Link href="/debug">
             <ThemedText type="small" themeColor="textSecondary">

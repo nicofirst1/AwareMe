@@ -1,5 +1,5 @@
 import { newId } from './id';
-import { SqlExecutor } from './executor';
+import { SqlBindValue, SqlExecutor } from './executor';
 import { SEED_STEMS } from './seed/stems';
 import { DEFAULT_SETTINGS, Settings } from './seed/settings';
 import { nowEventTime } from './time';
@@ -57,6 +57,27 @@ export interface EndingRow {
   started_at: string;
   submitted_at: string | null;
   backspace_count: number;
+}
+
+/** One row of the reverse-chronological history list (§6.7): a session plus enough stem context to display and filter without a second query per row. */
+export interface HistorySessionRow {
+  id: string;
+  stem_id: string;
+  stem_text_snapshot: string;
+  category: string | null;
+  origin: SessionOrigin;
+  started_at: string;
+  ended_at: string | null;
+  end_reason: EndReason | null;
+}
+
+/** §6.7 filters for the history list. Any field omitted/undefined is not applied. */
+export interface HistoryFilters {
+  stemId?: string;
+  category?: string;
+  /** Inclusive UTC ISO-8601 bounds on `sessions.started_at`. */
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export type NotificationScheduleState = 'pending' | 'fired' | 'cancelled' | 'superseded';
@@ -358,6 +379,86 @@ export class Repository {
       session.id,
     ]);
     return { session, endings };
+  }
+
+  /**
+   * Reverse-chronological session list for history (§6.7), filtered by stem,
+   * category, and/or a date range on `started_at`. Soft-deleted sessions are
+   * never returned — deletion hides from the UI, it does not remove the row
+   * (§4.1.5); export and the DB itself still see them.
+   */
+  listSessionsForHistory(filters: HistoryFilters = {}): HistorySessionRow[] {
+    const clauses = ['s.deleted_at IS NULL'];
+    const params: SqlBindValue[] = [];
+
+    if (filters.stemId) {
+      clauses.push('s.stem_id = ?');
+      params.push(filters.stemId);
+    }
+    if (filters.category) {
+      clauses.push('st.category = ?');
+      params.push(filters.category);
+    }
+    if (filters.dateFrom) {
+      clauses.push('s.started_at >= ?');
+      params.push(filters.dateFrom);
+    }
+    if (filters.dateTo) {
+      clauses.push('s.started_at <= ?');
+      params.push(filters.dateTo);
+    }
+
+    return this.db.getAllSync<HistorySessionRow>(
+      `SELECT s.id, s.stem_id, s.stem_text_snapshot, st.category, s.origin, s.started_at, s.ended_at, s.end_reason
+       FROM sessions s
+       JOIN stems st ON st.id = s.stem_id
+       WHERE ${clauses.join(' AND ')}
+       ORDER BY s.started_at DESC`,
+      params,
+    );
+  }
+
+  /** One session (for the detail screen) and all its endings, chronological. Null if soft-deleted or missing. */
+  getSessionDetail(sessionId: string): { session: SessionRow; endings: EndingRow[] } | null {
+    const session = this.db.getFirstSync<SessionRow>('SELECT * FROM sessions WHERE id = ? AND deleted_at IS NULL', [
+      sessionId,
+    ]);
+    if (!session) return null;
+
+    const endings = this.db.getAllSync<EndingRow>(
+      'SELECT * FROM endings WHERE session_id = ? AND deleted_at IS NULL ORDER BY ordinal',
+      [sessionId],
+    );
+    return { session, endings };
+  }
+
+  /** Every distinct, non-null stem category that has at least one non-deleted session — for the history category filter. */
+  listHistoryCategories(): string[] {
+    return this.db
+      .getAllSync<{ category: string }>(
+        `SELECT DISTINCT st.category as category
+         FROM sessions s JOIN stems st ON st.id = s.stem_id
+         WHERE s.deleted_at IS NULL AND st.category IS NOT NULL
+         ORDER BY st.category`,
+        [],
+      )
+      .map((r) => r.category);
+  }
+
+  /** Every distinct stem that has at least one non-deleted session — for the history stem filter. Uses the current stem text, not any one session's snapshot. */
+  listHistoryStems(): { id: string; text: string }[] {
+    return this.db.getAllSync<{ id: string; text: string }>(
+      `SELECT DISTINCT st.id as id, st.text as text
+       FROM sessions s JOIN stems st ON st.id = s.stem_id
+       WHERE s.deleted_at IS NULL
+       ORDER BY st.text`,
+      [],
+    );
+  }
+
+  /** Soft-deletes a session (§6.7: "option to soft-delete the session"). The row and its endings stay in the DB and in export. */
+  softDeleteSession(id: string, at: string): void {
+    this.db.runSync('UPDATE sessions SET deleted_at = ? WHERE id = ?', [at, id]);
   }
 
   /** Rows still `pending` — the OS scheduler's own notion of "not yet fired or cancelled" (§6.4). */
