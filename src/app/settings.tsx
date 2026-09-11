@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BackHeader } from '@/components/back-header';
 import { FilterChip } from '@/components/filter-chip';
-import { SectionHeader } from '@/components/section-header';
+import { hexToRgba, SectionHeader } from '@/components/section-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
@@ -239,7 +239,7 @@ export default function SettingsScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <ThemedText type="title">Settings</ThemedText>
 
-          <ThemedView style={[styles.group, { borderTopColor: theme.border }]}>
+          <ThemedView style={[styles.group, { borderTopColor: hexToRgba(theme.accent, 0.3) }]}>
             <SectionHeader label="Session" />
 
             <NumberStepper
@@ -284,7 +284,7 @@ export default function SettingsScreen() {
             </ThemedView>
           </ThemedView>
 
-          <ThemedView style={[styles.group, { borderTopColor: theme.border }]}>
+          <ThemedView style={[styles.group, { borderTopColor: hexToRgba(theme.accent, 0.3) }]}>
             <SectionHeader label="Notifications" />
 
             <NumberStepper
@@ -391,7 +391,7 @@ export default function SettingsScreen() {
             <Hint>Offer a review of the past week&apos;s writing once a week, in-app.</Hint>
           </ThemedView>
 
-          <ThemedView style={[styles.group, { borderTopColor: theme.border }]}>
+          <ThemedView style={[styles.group, { borderTopColor: hexToRgba(theme.accent, 0.3) }]}>
             <SectionHeader label="Writing" />
 
             <ChipToggle
@@ -409,7 +409,7 @@ export default function SettingsScreen() {
             <Hint>The punctuation shown at the end of each stem.</Hint>
           </ThemedView>
 
-          <ThemedView style={[styles.group, { borderTopColor: theme.border }]}>
+          <ThemedView style={[styles.group, { borderTopColor: hexToRgba(theme.accent, 0.3) }]}>
             <SectionHeader label="App" />
 
             <ChipToggle

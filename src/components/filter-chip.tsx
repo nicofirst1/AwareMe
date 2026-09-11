@@ -53,7 +53,7 @@ export function FilterChip({
   return (
     <Pressable onPress={onPress} style={[styles.chip, style]} accessibilityRole="button" accessibilityState={{ selected }}>
       <ThemedText type="small" style={chipColors ? { color: chipColors.text } : undefined}>
-        {label}
+        {label.replace(/_/g, ' ')}
       </ThemedText>
     </Pressable>
   );

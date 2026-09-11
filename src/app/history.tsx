@@ -125,7 +125,7 @@ export default function HistoryScreen() {
             {categories.length > 0 && (
               <FilterRow
                 label="Category"
-                options={[{ value: 'all', label: 'All' }, ...categories.map((c) => ({ value: c, label: c }))]}
+                options={[{ value: 'all', label: 'All' }, ...categories.map((c) => ({ value: c, label: c, category: isCategoryName(c) ? c : undefined }))]}
                 value={categoryFilter}
                 onChange={setCategoryFilter}
               />
@@ -235,7 +235,7 @@ function FilterRow<T extends string>({
   onChange,
 }: {
   label: string;
-  options: { value: T; label: string }[];
+  options: { value: T; label: string; category?: CategoryName }[];
   value: T;
   onChange: (v: T) => void;
 }) {
@@ -246,7 +246,13 @@ function FilterRow<T extends string>({
       </ThemedText>
       <ThemedView style={styles.filterOptions}>
         {options.map((opt) => (
-          <FilterChip key={opt.value} label={opt.label} selected={opt.value === value} onPress={() => onChange(opt.value)} />
+          <FilterChip
+            key={opt.value}
+            label={opt.label}
+            selected={opt.value === value}
+            onPress={() => onChange(opt.value)}
+            category={opt.category}
+          />
         ))}
       </ThemedView>
     </ThemedView>
