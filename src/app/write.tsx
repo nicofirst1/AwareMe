@@ -1,8 +1,9 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { AccessibilityInfo, Animated, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BadgeCard } from '@/components/badge-card';
 import { Button } from '@/components/button';
 import { ProgressBar } from '@/components/progress-bar';
 import { ThemedText } from '@/components/themed-text';
@@ -10,6 +11,8 @@ import { ThemedView } from '@/components/themed-view';
 import { Fonts, MaxContentWidth, MinTouchTarget, PressureColors, Radius, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
+import type { BadgeDef } from '@/session/badges';
+import { assembleNewlyEarnedBadges } from '@/session/badgeReveal';
 import { formatMMSS, sessionDurationLabel } from '@/session/sessionMachine';
 import type { StemForSession } from '@/session/useWritingSession';
 import { useWritingSession } from '@/session/useWritingSession';
@@ -44,6 +47,66 @@ export default function WriteScreen() {
   // tracks the per-stem timer when it's on, else the session timer — an
   // urgency cue only, never a numeral or shame copy.
   const buttonPressure = useRef(new Animated.Value(0)).current;
+
+  // Completion celebration (gamification proposal §1.A/§2, cycle 2): a
+  // single calm settle on "Saved." — scale 0.92->1 + opacity 0->1, ~400ms,
+  // friction-tuned to land without overshoot ("settle, don't bounce").
+  const settleAnim = useRef(new Animated.Value(0)).current;
+  // Badge reveal: fade + 8px upward slide, shared by every stacked badge
+  // card (proposal §2) — they appear together, sequenced only against the
+  // settle animation above, not staggered against each other.
+  const badgeRevealAnim = useRef(new Animated.Value(0)).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [newlyEarnedBadges, setNewlyEarnedBadges] = useState<BadgeDef[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (!cancelled) setReduceMotion(enabled);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Assembles the badge reveal once, when this session lands on 'done' —
+  // see badgeReveal.ts for why "before" is derived by excluding this
+  // session's id rather than reading before the save (the save already
+  // happened by the time this phase renders).
+  useEffect(() => {
+    if (session.phase !== 'done' || !session.sessionId) return;
+    setNewlyEarnedBadges(assembleNewlyEarnedBadges(getRepository(), session.sessionId));
+  }, [session.phase, session.sessionId]);
+
+  // Drives the settle animation and, sequenced ~300ms later, the badge
+  // reveal's fade+slide. Reduced motion: skip straight to the final state,
+  // no animation at all.
+  useEffect(() => {
+    if (session.phase !== 'done') return;
+    if (reduceMotion) {
+      settleAnim.setValue(1);
+      badgeRevealAnim.setValue(1);
+      return;
+    }
+    settleAnim.setValue(0);
+    badgeRevealAnim.setValue(0);
+    Animated.spring(settleAnim, {
+      toValue: 1,
+      friction: 10,
+      tension: 60,
+      useNativeDriver: true,
+    }).start();
+    // Badge reveal starts ~300ms after the settle animation begins
+    // (sequenced, not simultaneous — proposal §2).
+    const badgeTimer = setTimeout(() => {
+      Animated.timing(badgeRevealAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    }, 300);
+    return () => clearTimeout(badgeTimer);
+  }, [session.phase, reduceMotion, settleAnim, badgeRevealAnim]);
 
   useEffect(() => {
     const repo = getRepository();
@@ -227,17 +290,50 @@ export default function WriteScreen() {
 
           {session.phase === 'done' && (
             <ThemedView style={styles.doneBlock}>
-              <ThemedText type="default" themeColor="textSecondary">
-                Saved.
-              </ThemedText>
-              {session.state?.endedAt && (
-                // Computed at read time from the session's own timestamps
-                // (§13.7 — never store a derived value); quiet, descriptive,
-                // no praise (§13.4).
-                <ThemedText type="small" themeColor="textSecondary">
-                  {sessionDurationLabel(session.state.startedAt, session.state.endedAt, submittedEndings.length)}
+              <Animated.View
+                style={{
+                  opacity: settleAnim,
+                  transform: [{ scale: settleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }],
+                }}
+              >
+                <ThemedText type="default" themeColor="textSecondary">
+                  Saved.
                 </ThemedText>
+                {session.state?.endedAt && (
+                  // Computed at read time from the session's own timestamps
+                  // (§13.7 — never store a derived value); quiet, descriptive,
+                  // no praise (§13.4).
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {sessionDurationLabel(session.state.startedAt, session.state.endedAt, submittedEndings.length)}
+                  </ThemedText>
+                )}
+              </Animated.View>
+
+              {/*
+                Badge reveal (gamification proposal §1.A/§1.B): only the
+                badges newly crossed by *this* completion, computed fresh
+                each render (§13.7) — reopening the app later shows nothing
+                here, which is correct, not a bug. Multiple new badges stack
+                vertically.
+              */}
+              {newlyEarnedBadges.length > 0 && (
+                <Animated.View
+                  style={[
+                    styles.badgeReveal,
+                    {
+                      opacity: badgeRevealAnim,
+                      transform: [
+                        { translateY: badgeRevealAnim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) },
+                      ],
+                    },
+                  ]}
+                >
+                  {newlyEarnedBadges.map((badge) => (
+                    <BadgeCard key={badge.id} badge={badge} earned />
+                  ))}
+                </Animated.View>
               )}
+
               <Button label="Close" onPress={() => router.back()} />
             </ThemedView>
           )}
@@ -305,5 +401,8 @@ const styles = StyleSheet.create({
   },
   doneBlock: {
     gap: Spacing.three,
+  },
+  badgeReveal: {
+    gap: Spacing.two,
   },
 });

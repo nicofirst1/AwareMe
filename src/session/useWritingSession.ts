@@ -42,6 +42,8 @@ export type WritingPhase = 'idle' | 'active' | 'done';
 
 export interface WritingSessionView {
   phase: WritingPhase;
+  /** The persisted `sessions.id` for the current/just-finished session; null until `start()` creates the row. */
+  sessionId: string | null;
   stemText: string | null;
   state: SessionState | null;
   activeText: string;
@@ -411,6 +413,7 @@ export function useWritingSession(): WritingSessionView {
 
   return {
     phase,
+    sessionId,
     stemText,
     state,
     activeText: activeEnding?.text ?? '',
