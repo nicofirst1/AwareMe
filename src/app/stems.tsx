@@ -384,6 +384,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.three,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   headerActions: {
     flexDirection: 'row',
@@ -398,6 +400,8 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.four,
     marginTop: Spacing.two,
     gap: Spacing.two,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   search: {
     flex: 1,
@@ -411,10 +415,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: Radius.small,
   },
+  // Fixed `height` (not `minHeight`): an unbounded horizontal ScrollView
+  // beside a flex:1 FlatList sibling collapses to zero height (2026-09-11
+  // regression, commit 375f6b3). Height is FilterChip's own `minHeight:
+  // MinTouchTarget` (44) — this row has no vertical content taller than
+  // its chips, so that's the exact bound, not a guess.
   categoryScrollContainer: {
+    height: MinTouchTarget,
     marginTop: Spacing.two,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   categoryScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: Spacing.four,
     gap: Spacing.one,
   },
@@ -422,6 +436,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.one,
     gap: Spacing.one,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   filterRow: {
     gap: Spacing.one,
@@ -442,6 +458,9 @@ const styles = StyleSheet.create({
     marginTop: Spacing.two,
     padding: Spacing.two,
     borderRadius: Radius.medium,
+    minHeight: MinTouchTarget,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   actionBarLabel: {
     paddingLeft: Spacing.two,
@@ -501,5 +520,7 @@ const styles = StyleSheet.create({
   notice: {
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.two,
+    flexGrow: 0,
+    flexShrink: 0,
   },
 });
