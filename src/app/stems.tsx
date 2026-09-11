@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
@@ -13,7 +13,7 @@ import { CategoryColors, MinTouchTarget, Radius, Spacing, type CategoryName } fr
 import { getRepository, LibraryStemRow } from '@/db';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
-import { canDeactivateStem, matchesStemFilters, type ActiveFilter } from '@/session/stemLibraryFilter';
+import { canDeactivateStems, matchesStemFilters, type ActiveFilter } from '@/session/stemLibraryFilter';
 
 function isCategoryName(c: string | null): c is CategoryName {
   return c !== null && c in CategoryColors;
@@ -61,6 +61,7 @@ export default function StemsScreen() {
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('active');
   const [originFilter, setOriginFilter] = useState<OriginFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
 
   const categories = useMemo(
     () => Array.from(new Set(stems.map((s) => s.category).filter((c): c is string => c !== null))).sort(),
@@ -72,6 +73,13 @@ export default function StemsScreen() {
     [stems, query, activeFilter, originFilter, categoryFilter],
   );
 
+  // Selection mode (2026-09-11, replaces long-press-instant-toggle — see
+  // DECISIONS.md): long-press enters it and selects that row; while active,
+  // tap toggles membership instead of opening write/edit.
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const selectionMode = selectedIds.size > 0;
+  const [bulkNotice, setBulkNotice] = useState(false);
+
   const writeNow = useCallback(
     (stem: LibraryStemRow) => {
       if (stem.deleted_at) return; // deleted stems are visible for context, not writable
@@ -80,30 +88,55 @@ export default function StemsScreen() {
     [router],
   );
 
-  const [lastActiveNotice, setLastActiveNotice] = useState(false);
+  const toggleSelected = useCallback((stem: LibraryStemRow) => {
+    if (stem.deleted_at) return;
+    setBulkNotice(false);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(stem.id)) next.delete(stem.id);
+      else next.add(stem.id);
+      return next;
+    });
+  }, []);
 
-  // Long-press toggles `active` (§6.6). Refuses to deactivate the last
-  // active stem (see canDeactivateStem) with a quiet inline message rather
-  // than a dead "start now" button.
-  const toggleActive = useCallback(
-    (stem: LibraryStemRow) => {
-      if (stem.deleted_at) return;
-      if (!canDeactivateStem(stems, stem)) {
-        setLastActiveNotice(true);
+  const onRowPress = useCallback(
+    (stem: LibraryStemRow) => (selectionMode ? toggleSelected(stem) : writeNow(stem)),
+    [selectionMode, toggleSelected, writeNow],
+  );
+
+  const cancelSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setBulkNotice(false);
+  }, []);
+
+  const bulkSetActive = useCallback(
+    (active: boolean) => {
+      const ids = Array.from(selectedIds);
+      if (!active && !canDeactivateStems(ids, stems)) {
+        setBulkNotice(true);
         return;
       }
-      setLastActiveNotice(false);
-      getRepository().setStemActive(stem.id, !stem.active);
-      setStems(getRepository().listAllStems());
+      const repo = getRepository();
+      for (const id of ids) repo.setStemActive(id, active);
+      setStems(repo.listAllStems());
+      cancelSelection();
     },
-    [stems],
+    [selectedIds, stems, cancelSelection],
   );
 
   const renderStemRow = useCallback(
     ({ item }: { item: LibraryStemRow }) => (
-      <StemRow item={item} theme={theme} router={router} onWriteNow={writeNow} onToggleActive={toggleActive} />
+      <StemRow
+        item={item}
+        theme={theme}
+        router={router}
+        selectionMode={selectionMode}
+        selected={selectedIds.has(item.id)}
+        onPress={onRowPress}
+        onLongPress={toggleSelected}
+      />
     ),
-    [theme, router, writeNow, toggleActive],
+    [theme, router, selectionMode, selectedIds, onRowPress, toggleSelected],
   );
 
   return (
@@ -119,49 +152,87 @@ export default function StemsScreen() {
           </ThemedView>
         </ThemedView>
 
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search"
-          placeholderTextColor={theme.textSecondary}
-          style={[styles.search, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-          accessibilityLabel="Search stems"
-        />
-
-        <FilterRow
-          label="State"
-          options={[
-            { value: 'active', label: 'Active' },
-            { value: 'archived', label: 'Archived' },
-            { value: 'all', label: 'All' },
-          ]}
-          value={activeFilter}
-          onChange={(v) => setActiveFilter(v as ActiveFilter)}
-        />
-
-        <FilterRow
-          label="Origin"
-          options={[
-            { value: 'all', label: 'All' },
-            { value: 'seed', label: 'Seed' },
-            { value: 'user', label: 'Mine' },
-            { value: 'imported', label: 'Imported' },
-          ]}
-          value={originFilter}
-          onChange={(v) => setOriginFilter(v as OriginFilter)}
-        />
+        <ThemedView style={styles.controlsRow}>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search"
+            placeholderTextColor={theme.textSecondary}
+            style={[styles.search, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+            accessibilityLabel="Search stems"
+          />
+          <Pressable
+            onPress={() => setMoreFiltersOpen((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel="More filters"
+            accessibilityState={{ expanded: moreFiltersOpen }}
+            style={[styles.moreFiltersButton, { backgroundColor: theme.backgroundElement }]}
+          >
+            <Ionicons name="options-outline" size={20} color={theme.text} />
+          </Pressable>
+        </ThemedView>
 
         {categories.length > 0 && (
-          <FilterRow
-            label="Category"
-            options={[{ value: 'all', label: 'All' }, ...categories.map((c) => ({ value: c, label: c }))]}
-            value={categoryFilter}
-            onChange={setCategoryFilter}
-            colorByCategory
-          />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryScroll}
+            style={styles.categoryScrollContainer}
+          >
+            <FilterChip label="All" selected={categoryFilter === 'all'} onPress={() => setCategoryFilter('all')} />
+            {categories.map((c) => (
+              <FilterChip
+                key={c}
+                label={c}
+                selected={categoryFilter === c}
+                onPress={() => setCategoryFilter(c)}
+                category={isCategoryName(c) ? c : undefined}
+              />
+            ))}
+          </ScrollView>
         )}
 
-        {lastActiveNotice && (
+        {moreFiltersOpen && (
+          <ThemedView style={styles.moreFilters}>
+            <FilterRow
+              label="State"
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'archived', label: 'Archived' },
+                { value: 'all', label: 'All' },
+              ]}
+              value={activeFilter}
+              onChange={(v) => setActiveFilter(v as ActiveFilter)}
+            />
+
+            <FilterRow
+              label="Origin"
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'seed', label: 'Seed' },
+                { value: 'user', label: 'Mine' },
+                { value: 'imported', label: 'Imported' },
+              ]}
+              value={originFilter}
+              onChange={(v) => setOriginFilter(v as OriginFilter)}
+            />
+          </ThemedView>
+        )}
+
+        {selectionMode && (
+          <ThemedView style={[styles.actionBar, { backgroundColor: theme.backgroundElement }]}>
+            <ThemedText type="default" style={styles.actionBarLabel}>
+              {selectedIds.size} selected
+            </ThemedText>
+            <ThemedView style={styles.actionBarButtons}>
+              <Button label="Activate" onPress={() => bulkSetActive(true)} variant="secondary" style={styles.actionBarButton} />
+              <Button label="Deactivate" onPress={() => bulkSetActive(false)} variant="secondary" style={styles.actionBarButton} />
+              <Button label="Cancel" onPress={cancelSelection} variant="text" style={styles.actionBarButton} />
+            </ThemedView>
+          </ThemedView>
+        )}
+
+        {bulkNotice && (
           <ThemedText type="small" themeColor="textSecondary" style={styles.notice}>
             At least one stem must stay active.
           </ThemedText>
@@ -170,9 +241,10 @@ export default function StemsScreen() {
         <FlatList<LibraryStemRow>
           data={filtered}
           keyExtractor={(s) => s.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={styles.listContent}
           ListEmptyComponent={<EmptyState message="No stems match." />}
           renderItem={renderStemRow}
+          style={styles.list}
         />
       </SafeAreaView>
     </ThemedView>
@@ -189,34 +261,48 @@ const StemRow = memo(function StemRow({
   item,
   theme,
   router,
-  onWriteNow,
-  onToggleActive,
+  selectionMode,
+  selected,
+  onPress,
+  onLongPress,
 }: {
   item: LibraryStemRow;
   theme: Theme;
   router: Router;
-  onWriteNow: (stem: LibraryStemRow) => void;
-  onToggleActive: (stem: LibraryStemRow) => void;
+  selectionMode: boolean;
+  selected: boolean;
+  onPress: (stem: LibraryStemRow) => void;
+  onLongPress: (stem: LibraryStemRow) => void;
 }) {
   const scheme = useColorScheme();
   const isDeleted = item.deleted_at !== null;
   const edgeColor = isDeleted ? 'transparent' : (item.active ? ACTIVE_EDGE : INACTIVE_EDGE)[scheme === 'dark' ? 'dark' : 'light'];
   const categoryColors = isCategoryName(item.category) ? CategoryColors[item.category][scheme === 'dark' ? 'dark' : 'light'] : null;
 
+  const label = isDeleted
+    ? item.text
+    : selectionMode
+      ? `${item.text}. ${selected ? 'Selected' : 'Not selected'}.`
+      : `Write on: ${item.text}. Long-press to select.`;
+
   return (
     <ThemedView
       style={[
         styles.row,
-        { backgroundColor: theme.backgroundElement, opacity: isDeleted ? 0.5 : 1, borderLeftColor: edgeColor },
+        {
+          backgroundColor: selected ? theme.accentMuted : theme.backgroundElement,
+          opacity: isDeleted ? 0.5 : 1,
+          borderLeftColor: edgeColor,
+        },
       ]}
     >
       <Pressable
-        onPress={() => onWriteNow(item)}
-        onLongPress={() => onToggleActive(item)}
+        onPress={() => onPress(item)}
+        onLongPress={() => onLongPress(item)}
         disabled={isDeleted}
         accessibilityRole="button"
-        accessibilityLabel={isDeleted ? item.text : `Write on: ${item.text}. Long-press to ${item.active ? 'deactivate' : 'activate'}.`}
-        accessibilityState={{ disabled: isDeleted }}
+        accessibilityLabel={label}
+        accessibilityState={{ disabled: isDeleted, selected }}
         style={styles.rowMain}
       >
         <ThemedText type="default">{item.text}</ThemedText>
@@ -240,17 +326,21 @@ const StemRow = memo(function StemRow({
           </ThemedText>
         </ThemedView>
       </Pressable>
-      {!isDeleted && (
-        <Pressable
-          onPress={() => router.push({ pathname: '/stem-edit', params: { id: item.id } })}
-          accessibilityRole="button"
-          accessibilityLabel={`Edit: ${item.text}`}
-          style={styles.editLink}
-        >
-          <ThemedText type="small" themeColor="textSecondary">
-            Edit
-          </ThemedText>
-        </Pressable>
+      {selectionMode ? (
+        selected && <Ionicons name="checkmark-circle" size={22} color={theme.accent} />
+      ) : (
+        !isDeleted && (
+          <Pressable
+            onPress={() => router.push({ pathname: '/stem-edit', params: { id: item.id } })}
+            accessibilityRole="button"
+            accessibilityLabel={`Edit: ${item.text}`}
+            style={styles.editLink}
+          >
+            <ThemedText type="small" themeColor="textSecondary">
+              Edit
+            </ThemedText>
+          </Pressable>
+        )
       )}
     </ThemedView>
   );
@@ -261,13 +351,11 @@ function FilterRow<T extends string>({
   options,
   value,
   onChange,
-  colorByCategory,
 }: {
   label: string;
   options: { value: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
-  colorByCategory?: boolean;
 }) {
   return (
     <ThemedView style={styles.filterRow}>
@@ -276,13 +364,7 @@ function FilterRow<T extends string>({
       </ThemedText>
       <ThemedView style={styles.filterOptions}>
         {options.map((opt) => (
-          <FilterChip
-            key={opt.value}
-            label={opt.label}
-            selected={opt.value === value}
-            onPress={() => onChange(opt.value)}
-            category={colorByCategory && isCategoryName(opt.value) ? opt.value : undefined}
-          />
+          <FilterChip key={opt.value} label={opt.label} selected={opt.value === value} onPress={() => onChange(opt.value)} />
         ))}
       </ThemedView>
     </ThemedView>
@@ -310,15 +392,38 @@ const styles = StyleSheet.create({
   title: {
     paddingTop: 0,
   },
-  search: {
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginHorizontal: Spacing.four,
-    marginTop: Spacing.three,
-    padding: Spacing.three,
+    marginTop: Spacing.two,
+    gap: Spacing.two,
+  },
+  search: {
+    flex: 1,
+    padding: Spacing.two,
     borderRadius: Radius.small,
   },
-  filterRow: {
+  moreFiltersButton: {
+    minHeight: MinTouchTarget,
+    minWidth: MinTouchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.small,
+  },
+  categoryScrollContainer: {
+    marginTop: Spacing.two,
+  },
+  categoryScroll: {
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
+    gap: Spacing.one,
+  },
+  moreFilters: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.one,
+    gap: Spacing.one,
+  },
+  filterRow: {
     gap: Spacing.one,
   },
   filterLabel: {
@@ -329,7 +434,30 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.one,
   },
+  actionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginHorizontal: Spacing.four,
+    marginTop: Spacing.two,
+    padding: Spacing.two,
+    borderRadius: Radius.medium,
+  },
+  actionBarLabel: {
+    paddingLeft: Spacing.two,
+  },
+  actionBarButtons: {
+    flexDirection: 'row',
+    gap: Spacing.one,
+  },
+  actionBarButton: {
+    minHeight: MinTouchTarget,
+    paddingHorizontal: Spacing.two,
+  },
   list: {
+    flex: 1,
+  },
+  listContent: {
     padding: Spacing.four,
     gap: Spacing.two,
   },

@@ -1,9 +1,13 @@
-import { canDeactivateStem, matchesStemFilters, type FilterableStem, type StemLibraryFilters } from '../stemLibraryFilter';
+import { canDeactivateStem, canDeactivateStems, matchesStemFilters, type FilterableStem, type StemLibraryFilters } from '../stemLibraryFilter';
 
 const BASE: StemLibraryFilters = { query: '', activeFilter: 'active', originFilter: 'all', categoryFilter: 'all' };
 
 function stem(overrides: Partial<FilterableStem> = {}): FilterableStem {
   return { text: 'If I brought more awareness', origin: 'seed', category: 'awareness', active: 1, deleted_at: null, ...overrides };
+}
+
+function idStem(id: string, overrides: Partial<FilterableStem> = {}): FilterableStem & { id: string } {
+  return { id, ...stem(overrides) };
 }
 
 describe('matchesStemFilters', () => {
@@ -76,5 +80,31 @@ describe('canDeactivateStem', () => {
   it('always allows activating (target is already inactive)', () => {
     const stems = [stem({ active: 0 })];
     expect(canDeactivateStem(stems, stems[0])).toBe(true);
+  });
+});
+
+describe('canDeactivateStems', () => {
+  it('allows bulk deactivate when an active stem remains outside the selection', () => {
+    const stems = [idStem('a', { active: 1 }), idStem('b', { active: 1 }), idStem('c', { active: 1 })];
+    expect(canDeactivateStems(['a', 'b'], stems)).toBe(true);
+  });
+
+  it('refuses bulk deactivate that would leave zero active stems', () => {
+    const stems = [idStem('a', { active: 1 }), idStem('b', { active: 1 })];
+    expect(canDeactivateStems(['a', 'b'], stems)).toBe(false);
+  });
+
+  it('refuses when the only other active stems are also selected, even mixed with inactive/deleted', () => {
+    const stems = [
+      idStem('a', { active: 1 }),
+      idStem('b', { active: 0 }),
+      idStem('c', { active: 1, deleted_at: '2026-09-01T00:00:00.000Z' }),
+    ];
+    expect(canDeactivateStems(['a'], stems)).toBe(false);
+  });
+
+  it('allows an empty selection (no-op)', () => {
+    const stems = [idStem('a', { active: 1 })];
+    expect(canDeactivateStems([], stems)).toBe(true);
   });
 });

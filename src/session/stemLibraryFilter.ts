@@ -47,3 +47,15 @@ export function canDeactivateStem(stems: readonly FilterableStem[], target: Filt
   const activeCount = stems.filter((s) => s.active && s.deleted_at === null).length;
   return activeCount > 1;
 }
+
+/**
+ * Same guard, generalized for the multi-select action bar's bulk
+ * Deactivate (2026-09-11, selection mode): would deactivating every
+ * `selectedIds` stem leave zero active, non-deleted stems? Bulk Activate
+ * never needs this — activating can't reduce the active count.
+ */
+export function canDeactivateStems(selectedIds: readonly string[], stems: readonly (FilterableStem & { id: string })[]): boolean {
+  const selected = new Set(selectedIds);
+  const remainingActive = stems.filter((s) => s.active && s.deleted_at === null && !selected.has(s.id)).length;
+  return remainingActive > 0;
+}
