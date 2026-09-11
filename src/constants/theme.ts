@@ -15,6 +15,31 @@ export const Colors = {
     textSecondary: '#60646C',
     // 6.5:1 against `background` (WCAG AA requires 4.5:1).
     error: '#B3261E',
+    // 2026-09-11 design-system foundation (ui-audit-2026-09-11.md, cycle 1).
+    // One warm accent hue, used sparingly (Home's primary CTA, section
+    // headers) — not a second brand color, not per-category. 4.94:1 as text
+    // on `background`, and — since the identical measurement is symmetric —
+    // also 4.94:1 for white label text on an `accent`-filled surface
+    // (`Button` variant="primary"). A single hex cannot clear 4.5:1 as text
+    // against both pure white and pure black, so `accent` (like `error`) is
+    // deliberately per-theme, not shared with `PressureColors`'s
+    // theme-invariant approach.
+    accent: '#B5541A',
+    // Accent blended ~12% into `background`, for card/section fills that
+    // want a warm tint without accent-strength saturation (§10). Not
+    // intended to host accent-colored text (measures 4.00:1, under AA);
+    // `text`/`textSecondary` sit on it at 17.81:1 / 5.04:1 respectively.
+    accentMuted: '#F6EAE4',
+    // Hairline divider, ~12% of `text` mixed into `background` — decorative
+    // only (card/row edges), not a text pairing, so WCAG's 4.5:1 text
+    // ratio doesn't apply; matches the existing ACTIVE_EDGE/INACTIVE_EDGE
+    // precedent in stems.tsx ("decorative, not text").
+    border: '#E0E0E0',
+    // Same hue family as `PressureColors.calm`, reused verbatim here since
+    // it already clears AA on white (5.13:1) — kept identical rather than
+    // re-derived so the "calm" signal reads the same in the pressure
+    // gradient and any status use of `success`.
+    success: '#2E7D32',
   },
   dark: {
     text: '#ffffff',
@@ -24,6 +49,21 @@ export const Colors = {
     textSecondary: '#B0B4BA',
     // 7.3:1 against `background` — the light theme's red fails AA (3.2:1) on black.
     error: '#FF6659',
+    // 7.97:1 as text on `background`; the same measurement is symmetric, so
+    // black label text on an `accent`-filled surface (`Button`
+    // variant="primary") also measures 7.97:1. See the light theme's
+    // comment above for why this is per-theme, not one shared hex.
+    accent: '#E8873F',
+    // Accent blended ~16% into `background`. `text`/`textSecondary` sit on
+    // it at 17.53:1 / 8.42:1; not intended to host accent-colored text.
+    accentMuted: '#25160A',
+    // Hairline divider, ~15% of `text` mixed into `background` — decorative
+    // only, same reasoning as the light theme's `border`.
+    border: '#262626',
+    // `PressureColors.calm` fails AA on black (4.10:1), so this is a
+    // lighter derivation of the same green family: 10.85:1 against
+    // `background`.
+    success: '#6FCF73',
   },
 } as const;
 
@@ -106,6 +146,22 @@ export const Spacing = {
 } as const;
 
 export const MaxContentWidth = 800;
+
+/**
+ * Border radius scale (2026-09-11 design-system foundation, ui-audit-
+ * 2026-09-11.md cycle 1) — names what was previously an unnamed convention
+ * (`borderRadius: Spacing.two` copy-pasted at every card/button call site).
+ * `chip` = pill; `small` = the existing de-facto default (buttons, inputs,
+ * numerically identical to the old `Spacing.two` so adopting it in a later
+ * cycle is a mechanical rename, not a visual change); `medium` = cards;
+ * `large` = the primary CTA / sheets.
+ */
+export const Radius = {
+  chip: 999,
+  small: 8,
+  medium: 12,
+  large: 20,
+} as const;
 
 /**
  * Minimum touch target side (Apple HIG and Material Design both call for

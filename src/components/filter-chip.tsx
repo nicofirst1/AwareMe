@@ -16,31 +16,41 @@ import { useTheme } from '@/hooks/use-theme';
  * selected chips are filled with the category color, unselected chips are
  * outlined in it, so the selected/unselected distinction survives per-
  * category coloring (used by the stems screen's category filter row).
+ *
+ * `color` (2026-09-11 design-system foundation, ui-audit-2026-09-11.md
+ * cycle 1) generalizes the same `{ bg, text }` shape `category` already
+ * resolves internally, for a chip that wants a specific hex pair not tied
+ * to a stem category (e.g. an accent-colored filter chip). Backward
+ * compatible: omitting both `category` and `color` keeps today's plain
+ * grey selected/unselected behavior; passing both is not meaningful and
+ * `category` wins.
  */
 export function FilterChip({
   label,
   selected,
   onPress,
   category,
+  color,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
   category?: CategoryName;
+  color?: { bg: string; text: string };
 }) {
   const theme = useTheme();
   const scheme = useColorScheme();
-  const categoryColors = category ? CategoryColors[category][scheme === 'dark' ? 'dark' : 'light'] : null;
+  const chipColors = category ? CategoryColors[category][scheme === 'dark' ? 'dark' : 'light'] : (color ?? null);
 
-  const style = categoryColors
+  const style = chipColors
     ? selected
-      ? { backgroundColor: categoryColors.bg, borderWidth: 1, borderColor: categoryColors.text }
-      : { backgroundColor: theme.backgroundElement, borderWidth: 1, borderColor: categoryColors.bg }
+      ? { backgroundColor: chipColors.bg, borderWidth: 1, borderColor: chipColors.text }
+      : { backgroundColor: theme.backgroundElement, borderWidth: 1, borderColor: chipColors.bg }
     : { backgroundColor: selected ? theme.backgroundSelected : theme.backgroundElement };
 
   return (
     <Pressable onPress={onPress} style={[styles.chip, style]} accessibilityRole="button" accessibilityState={{ selected }}>
-      <ThemedText type="small" style={categoryColors && selected ? { color: categoryColors.text } : undefined}>
+      <ThemedText type="small" style={chipColors && selected ? { color: chipColors.text } : undefined}>
         {label}
       </ThemedText>
     </Pressable>
