@@ -1,6 +1,14 @@
 import { Link, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, TextInput } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import {
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  useWindowDimensions,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -20,6 +28,11 @@ const STEP_COUNT = 4;
  * exits it entirely, which a `step` counter expresses more simply than
  * inter-route navigation params would.
  *
+ * Steps page horizontally (swipe) in addition to the Next/CTA button — both
+ * drive the same `step` state, so whichever the user uses, the other stays
+ * in sync. Paging is a plain `ScrollView` (`pagingEnabled` + snap-to-width);
+ * no pager dependency needed for four fixed-size pages.
+ *
  * "Shown once" is `Repository.isOnboardingComplete()`
  * (`settings.onboarding_completed`) — checked by `_layout.tsx` before this
  * route is ever reached, not by this screen itself.
@@ -28,6 +41,8 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const theme = useTheme();
   const repo = useMemo(() => getRepository(), []);
+  const { width } = useWindowDimensions();
+  const scrollRef = useRef<ScrollView>(null);
 
   const [step, setStep] = useState(0);
   const [sessionsPerDay, setSessionsPerDay] = useState(1);
@@ -58,16 +73,28 @@ export default function OnboardingScreen() {
     router.replace('/');
   };
 
+  // Drives both the button and the swipe gesture into the same state, so
+  // whichever the user uses, the other stays in sync.
+  const goToStep = (next: number) => {
+    setStep(next);
+    scrollRef.current?.scrollTo({ x: next * width, animated: true });
+  };
+
+  const onScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const next = Math.round(event.nativeEvent.contentOffset.x / width);
+    setStep(next);
+  };
+
   const askForNotifications = async () => {
     const granted = await requestNotificationPermission();
     setNotificationsEnabled(granted);
-    setStep(3);
+    goToStep(3);
   };
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.content}>
+        <ThemedView style={styles.header}>
           <ThemedText
             type="small"
             themeColor="textSecondary"
@@ -75,121 +102,135 @@ export default function OnboardingScreen() {
           >
             {step + 1} of {STEP_COUNT}
           </ThemedText>
+        </ThemedView>
 
-          {step === 0 && (
-            <>
-              <ThemedText type="title">Finish the sentence</ThemedText>
-              <ThemedText type="default">
-                You&apos;ll be given the start of a sentence and asked to finish it, several times, quickly. Write
-                the first thing that comes, without stopping to judge it. Repeating yourself or writing something
-                that makes no sense is completely fine — that&apos;s part of how this works, not a mistake.
-              </ThemedText>
-            </>
-          )}
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={onScrollEnd}
+          style={styles.pager}
+        >
+          <ThemedView style={[styles.page, { width }]}>
+            <ThemedText type="title">Finish the sentence</ThemedText>
+            <ThemedText type="default">
+              You&apos;ll get the start of a sentence and finish it, several times, quickly. Write the first
+              thing that comes — don&apos;t judge it. Repetition or nonsense is fine; that&apos;s part of how it
+              works.
+            </ThemedText>
+          </ThemedView>
 
-          {step === 1 && (
-            <>
-              <ThemedText type="title">About the method</ThemedText>
-              <ThemedText type="default">
-                This app is built around sentence completion, a technique developed by the psychologist Nathaniel
-                Branden. Nothing here scores, interprets, or comments on what you write — it just gives you a quiet
-                place to write it.
-              </ThemedText>
-              <Link href="/about-method" style={styles.navLink}>
-                <ThemedText type="default" themeColor="textSecondary">
-                  Read more about the method
-                </ThemedText>
-              </Link>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <ThemedText type="title">Reminders</ThemedText>
-              <ThemedText type="default">
-                If you&apos;d like, this app can nudge you at a random time within a window you choose each day — a
-                fixed daily time would let you plan an answer in advance, which defeats the point. The notification
-                itself never shows the sentence or anything you&apos;ve written, even on your lock screen.
-              </ThemedText>
+          <ThemedView style={[styles.page, { width }]}>
+            <ThemedText type="title">About the method</ThemedText>
+            <ThemedText type="default">
+              This app is built on sentence completion, a technique from psychologist Nathaniel Branden. Nothing
+              here scores or interprets what you write — it just holds space for it.
+            </ThemedText>
+            <Link href="/about-method" style={styles.navLink}>
               <ThemedText type="default" themeColor="textSecondary">
-                If you say no, the app stays fully usable — you can always start a session yourself, and this will
-                never ask again.
+                Read more about the method
               </ThemedText>
-              <ThemedView style={styles.buttonRow}>
-                <Pressable
-                  onPress={askForNotifications}
-                  style={[styles.button, { backgroundColor: theme.backgroundElement }]}
-                  accessibilityRole="button"
-                >
-                  <ThemedText type="subtitle">Allow reminders</ThemedText>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    setNotificationsEnabled(false);
-                    setStep(3);
-                  }}
-                  style={styles.textButton}
-                  accessibilityRole="button"
-                >
-                  <ThemedText type="default">Not now</ThemedText>
-                </Pressable>
-              </ThemedView>
-            </>
-          )}
+            </Link>
+          </ThemedView>
 
-          {step === 3 && (
-            <>
-              <ThemedText type="title">A few defaults</ThemedText>
-              <ThemedText type="default" themeColor="textSecondary">
-                You can change any of this later in Settings.
-              </ThemedText>
-
-              <PrefRow
-                label="Sessions per day"
-                value={sessionsPerDay}
-                rangeKey="sessions_per_day"
-                onChange={setSessionsPerDay}
-              />
-              <PrefRow
-                label="Endings per session"
-                value={endingsPerSession}
-                rangeKey="endings_per_session"
-                onChange={setEndingsPerSession}
-              />
-              <PrefRow label="Timer (seconds)" value={timerSeconds} rangeKey="timer_seconds" step={10} onChange={setTimerSeconds} />
-
-              {notificationsEnabled && (
-                <ThemedView style={styles.windowRow}>
-                  <ThemedText type="default">Window</ThemedText>
-                  <TextInput
-                    value={windowStart}
-                    onChangeText={setWindowStart}
-                    placeholder="08:00"
-                    placeholderTextColor={theme.textSecondary}
-                    style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-                    accessibilityLabel="Window start time"
-                  />
-                  <ThemedText type="default">to</ThemedText>
-                  <TextInput
-                    value={windowEnd}
-                    onChangeText={setWindowEnd}
-                    placeholder="21:00"
-                    placeholderTextColor={theme.textSecondary}
-                    style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-                    accessibilityLabel="Window end time"
-                  />
-                </ThemedView>
-              )}
-
-              <Pressable onPress={finish} style={[styles.button, { backgroundColor: theme.backgroundElement }]} accessibilityRole="button">
-                <ThemedText type="subtitle">Done</ThemedText>
+          <ThemedView style={[styles.page, { width }]}>
+            <ThemedText type="title">Reminders</ThemedText>
+            <ThemedText type="default">
+              This app can nudge you at a random time in a window you choose — a fixed time would let you plan
+              an answer, which defeats the point. Notifications never show the sentence or your writing, even on
+              the lock screen.
+            </ThemedText>
+            <ThemedText type="default" themeColor="textSecondary">
+              Say no and the app stays fully usable — you can always start a session yourself, and it won&apos;t
+              ask again.
+            </ThemedText>
+            <ThemedView style={styles.buttonRow}>
+              <Pressable
+                onPress={askForNotifications}
+                style={[styles.button, { backgroundColor: theme.backgroundElement }]}
+                accessibilityRole="button"
+              >
+                <ThemedText type="subtitle">Allow reminders</ThemedText>
               </Pressable>
-            </>
-          )}
+              <Pressable
+                onPress={() => {
+                  setNotificationsEnabled(false);
+                  goToStep(3);
+                }}
+                style={styles.textButton}
+                accessibilityRole="button"
+              >
+                <ThemedText type="default">Not now</ThemedText>
+              </Pressable>
+            </ThemedView>
+          </ThemedView>
 
-          <ThemedView style={styles.footer}>
+          <ThemedView style={[styles.page, { width }]}>
+            <ThemedText type="title">A few defaults</ThemedText>
+            <ThemedText type="default" themeColor="textSecondary">
+              You can change any of this later in Settings.
+            </ThemedText>
+
+            <PrefRow
+              label="Sessions per day"
+              value={sessionsPerDay}
+              rangeKey="sessions_per_day"
+              onChange={setSessionsPerDay}
+            />
+            <PrefRow
+              label="Endings per session"
+              value={endingsPerSession}
+              rangeKey="endings_per_session"
+              onChange={setEndingsPerSession}
+            />
+            <PrefRow label="Timer (seconds)" value={timerSeconds} rangeKey="timer_seconds" step={10} onChange={setTimerSeconds} />
+
+            {notificationsEnabled && (
+              <ThemedView style={styles.windowRow}>
+                <ThemedText type="default">Window</ThemedText>
+                <TextInput
+                  value={windowStart}
+                  onChangeText={setWindowStart}
+                  placeholder="08:00"
+                  placeholderTextColor={theme.textSecondary}
+                  style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+                  accessibilityLabel="Window start time"
+                />
+                <ThemedText type="default">to</ThemedText>
+                <TextInput
+                  value={windowEnd}
+                  onChangeText={setWindowEnd}
+                  placeholder="21:00"
+                  placeholderTextColor={theme.textSecondary}
+                  style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+                  accessibilityLabel="Window end time"
+                />
+              </ThemedView>
+            )}
+
+            <Pressable onPress={finish} style={[styles.button, { backgroundColor: theme.backgroundElement }]} accessibilityRole="button">
+              <ThemedText type="subtitle">Done</ThemedText>
+            </Pressable>
+          </ThemedView>
+        </ScrollView>
+
+        <ThemedView style={styles.footer}>
+          <ThemedView style={styles.dots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            {Array.from({ length: STEP_COUNT }).map((_, i) => (
+              <ThemedView
+                key={i}
+                style={[
+                  styles.dot,
+                  { backgroundColor: i === step ? theme.text : theme.backgroundElement },
+                ]}
+              />
+            ))}
+          </ThemedView>
+
+          <ThemedView style={styles.footerButtons}>
             {step < STEP_COUNT - 1 && (
-              <Pressable onPress={() => setStep(step + 1)} style={styles.textButton} accessibilityRole="button">
+              <Pressable onPress={() => goToStep(step + 1)} style={styles.textButton} accessibilityRole="button">
                 <ThemedText type="default">Next</ThemedText>
               </Pressable>
             )}
@@ -250,14 +291,36 @@ function PrefRow({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  content: {
+  header: {
+    paddingTop: Spacing.three,
+    paddingHorizontal: Spacing.four,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  pager: {
+    flex: 1,
+  },
+  page: {
     flex: 1,
     justifyContent: 'center',
     gap: Spacing.three,
     padding: Spacing.four,
-    maxWidth: MaxContentWidth,
-    width: '100%',
-    alignSelf: 'center',
+  },
+  dots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    paddingBottom: Spacing.three,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  footerButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   buttonRow: {
     gap: Spacing.two,
@@ -313,8 +376,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: Spacing.four,
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.three,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
   },
 });
