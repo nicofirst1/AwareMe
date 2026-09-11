@@ -7,11 +7,10 @@
  * (in `useNotifications.ts`) is the hook that calls this at the right times.
  */
 
-import * as Notifications from 'expo-notifications';
-
 import { getRepository } from '@/db';
 import { nowEventTime } from '@/db/time';
 import { selectStem } from '@/session/stemSelection';
+import { getNotifications } from './notificationsModule';
 import { diffSchedule, generateFireTimes, type PendingNotification } from './scheduling';
 
 /**
@@ -32,8 +31,13 @@ export const NOTIFICATION_DATA_KIND = 'six-endings/writing-prompt';
  * leaves everything else in the app working normally (§6.4): this function
  * only ever returns whether it's now allowed, it never nags or re-prompts
  * beyond what iOS/Android themselves allow.
+ *
+ * Resolves `false` where the native module isn't available at all (Expo
+ * Go) — same as "not granted" from this function's point of view.
  */
 export async function requestNotificationPermission(): Promise<boolean> {
+  const Notifications = getNotifications();
+  if (!Notifications) return false;
   const current = await Notifications.getPermissionsAsync();
   if (current.granted) return true;
   const requested = await Notifications.requestPermissionsAsync();
@@ -41,6 +45,8 @@ export async function requestNotificationPermission(): Promise<boolean> {
 }
 
 export async function hasNotificationPermission(): Promise<boolean> {
+  const Notifications = getNotifications();
+  if (!Notifications) return false;
   const status = await Notifications.getPermissionsAsync();
   return status.granted;
 }
@@ -53,6 +59,8 @@ export async function hasNotificationPermission(): Promise<boolean> {
  * `rescheduleNotifications`: this is an unconditional stop, not a resync.
  */
 export async function cancelAllPendingNotifications(): Promise<void> {
+  const Notifications = getNotifications();
+  if (!Notifications) return;
   await Notifications.cancelAllScheduledNotificationsAsync();
 }
 
@@ -71,6 +79,9 @@ export async function cancelAllPendingNotifications(): Promise<void> {
  * grant (§6.4) — `useNotificationScheduler` wires those triggers.
  */
 export async function rescheduleNotifications(seed: number = Date.now()): Promise<void> {
+  const Notifications = getNotifications();
+  if (!Notifications) return;
+
   const repo = getRepository();
   const granted = await hasNotificationPermission();
 

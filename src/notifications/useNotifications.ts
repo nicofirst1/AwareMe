@@ -1,17 +1,18 @@
-import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 
 import { getRepository } from '@/db';
+import { getNotifications } from './notificationsModule';
 import { rescheduleNotifications, NOTIFICATION_DATA_KIND } from './scheduler';
 
 /**
  * Foreground presentation: notification content is already neutral (§6.4),
  * so there's nothing to hide by suppressing the banner while the app is
- * open — showing it is just an honest reflection of "yes, one fired".
+ * open — showing it is just an honest reflection of "yes, one fired". A
+ * no-op where the native module isn't available (Expo Go, SDK 53+).
  */
-Notifications.setNotificationHandler({
+getNotifications()?.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
     shouldShowList: true,
@@ -53,12 +54,17 @@ export function useNotificationScheduler(): void {
  * `notification_schedule` by the OS identifier the tap response carries,
  * never re-drawn at tap time. `origin='notification'` on the resulting
  * session comes from the `/write` route params this pushes.
+ *
+ * Installs nothing where the native module isn't available (Expo Go).
  */
 export function useNotificationTapRouting(): void {
   const router = useRouter();
   const handledIds = useRef(new Set<string>());
 
   useEffect(() => {
+    const Notifications = getNotifications();
+    if (!Notifications) return;
+
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data;
       if (data?.kind !== NOTIFICATION_DATA_KIND) return;
