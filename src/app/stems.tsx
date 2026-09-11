@@ -6,10 +6,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FilterChip } from '@/components/filter-chip';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MinTouchTarget, Spacing } from '@/constants/theme';
+import { CategoryColors, MinTouchTarget, Spacing, type CategoryName } from '@/constants/theme';
 import { getRepository, LibraryStemRow } from '@/db';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
-import { matchesStemFilters, type ActiveFilter } from '@/session/stemLibraryFilter';
+import { canDeactivateStem, matchesStemFilters, type ActiveFilter } from '@/session/stemLibraryFilter';
+
+function isCategoryName(c: string | null): c is CategoryName {
+  return c !== null && c in CategoryColors;
+}
 
 type OriginFilter = 'all' | LibraryStemRow['origin'];
 type CategoryFilter = 'all' | string;
@@ -59,9 +64,30 @@ export default function StemsScreen() {
     [router],
   );
 
+  const [lastActiveNotice, setLastActiveNotice] = useState(false);
+
+  // Long-press toggles `active` (§6.6). Refuses to deactivate the last
+  // active stem (see canDeactivateStem) with a quiet inline message rather
+  // than a dead "start now" button.
+  const toggleActive = useCallback(
+    (stem: LibraryStemRow) => {
+      if (stem.deleted_at) return;
+      if (!canDeactivateStem(stems, stem)) {
+        setLastActiveNotice(true);
+        return;
+      }
+      setLastActiveNotice(false);
+      getRepository().setStemActive(stem.id, !stem.active);
+      setStems(getRepository().listAllStems());
+    },
+    [stems],
+  );
+
   const renderStemRow = useCallback(
-    ({ item }: { item: LibraryStemRow }) => <StemRow item={item} theme={theme} router={router} onWriteNow={writeNow} />,
-    [theme, router, writeNow],
+    ({ item }: { item: LibraryStemRow }) => (
+      <StemRow item={item} theme={theme} router={router} onWriteNow={writeNow} onToggleActive={toggleActive} />
+    ),
+    [theme, router, writeNow, toggleActive],
   );
 
   return (
@@ -119,7 +145,14 @@ export default function StemsScreen() {
             options={[{ value: 'all', label: 'All' }, ...categories.map((c) => ({ value: c, label: c }))]}
             value={categoryFilter}
             onChange={setCategoryFilter}
+            colorByCategory
           />
+        )}
+
+        {lastActiveNotice && (
+          <ThemedText type="small" themeColor="textSecondary" style={styles.notice}>
+            At least one stem must stay active.
+          </ThemedText>
         )}
 
         <FlatList<LibraryStemRow>
@@ -138,32 +171,65 @@ export default function StemsScreen() {
   );
 }
 
+// Calm active/inactive edge accent (§10: tint, not traffic-light
+// saturation) — a left border only, body text color is untouched so
+// readability never depends on this contrast (it's decorative, not text).
+const ACTIVE_EDGE = { light: '#8FBF93', dark: '#4A7A4E' };
+const INACTIVE_EDGE = { light: '#D9A3A0', dark: '#7A4A48' };
+
 const StemRow = memo(function StemRow({
   item,
   theme,
   router,
   onWriteNow,
+  onToggleActive,
 }: {
   item: LibraryStemRow;
   theme: Theme;
   router: Router;
   onWriteNow: (stem: LibraryStemRow) => void;
+  onToggleActive: (stem: LibraryStemRow) => void;
 }) {
+  const scheme = useColorScheme();
   const isDeleted = item.deleted_at !== null;
+  const edgeColor = isDeleted ? 'transparent' : (item.active ? ACTIVE_EDGE : INACTIVE_EDGE)[scheme === 'dark' ? 'dark' : 'light'];
+  const categoryColors = isCategoryName(item.category) ? CategoryColors[item.category][scheme === 'dark' ? 'dark' : 'light'] : null;
+
   return (
-    <ThemedView style={[styles.row, { backgroundColor: theme.backgroundElement, opacity: isDeleted ? 0.5 : 1 }]}>
+    <ThemedView
+      style={[
+        styles.row,
+        { backgroundColor: theme.backgroundElement, opacity: isDeleted ? 0.5 : 1, borderLeftColor: edgeColor },
+      ]}
+    >
       <Pressable
         onPress={() => onWriteNow(item)}
+        onLongPress={() => onToggleActive(item)}
         disabled={isDeleted}
         accessibilityRole="button"
-        accessibilityLabel={isDeleted ? item.text : `Write on: ${item.text}`}
+        accessibilityLabel={isDeleted ? item.text : `Write on: ${item.text}. Long-press to ${item.active ? 'deactivate' : 'activate'}.`}
         accessibilityState={{ disabled: isDeleted }}
         style={styles.rowMain}
       >
         <ThemedText type="default">{item.text}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {[item.category, item.origin, isDeleted ? 'deleted' : !item.active ? 'archived' : null].filter(Boolean).join(' · ')}
-        </ThemedText>
+        <ThemedView style={styles.rowMeta}>
+          {categoryColors && (
+            <ThemedView style={[styles.categoryChip, { backgroundColor: categoryColors.bg }]}>
+              <ThemedText type="small" style={{ color: categoryColors.text }}>
+                {item.category}
+              </ThemedText>
+            </ThemedView>
+          )}
+          <ThemedText type="small" themeColor="textSecondary">
+            {[
+              categoryColors ? null : item.category, // shown as a colored chip instead, when we have one
+              item.origin,
+              isDeleted ? 'deleted' : !item.active ? 'archived' : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </ThemedText>
+        </ThemedView>
       </Pressable>
       {!isDeleted && (
         <Pressable
@@ -186,11 +252,13 @@ function FilterRow<T extends string>({
   options,
   value,
   onChange,
+  colorByCategory,
 }: {
   label: string;
   options: { value: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
+  colorByCategory?: boolean;
 }) {
   return (
     <ThemedView style={styles.filterRow}>
@@ -199,7 +267,13 @@ function FilterRow<T extends string>({
       </ThemedText>
       <ThemedView style={styles.filterOptions}>
         {options.map((opt) => (
-          <FilterChip key={opt.value} label={opt.label} selected={opt.value === value} onPress={() => onChange(opt.value)} />
+          <FilterChip
+            key={opt.value}
+            label={opt.label}
+            selected={opt.value === value}
+            onPress={() => onChange(opt.value)}
+            category={colorByCategory && isCategoryName(opt.value) ? opt.value : undefined}
+          />
         ))}
       </ThemedView>
     </ThemedView>
@@ -260,15 +334,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Spacing.three,
     borderRadius: Spacing.two,
+    borderLeftWidth: 3,
     gap: Spacing.two,
   },
   rowMain: {
     flex: 1,
     gap: Spacing.half,
   },
+  rowMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.one,
+  },
+  categoryChip: {
+    paddingHorizontal: Spacing.one,
+    paddingVertical: 1,
+    borderRadius: Spacing.one,
+  },
   editLink: {
     minHeight: MinTouchTarget,
     paddingHorizontal: Spacing.two,
     justifyContent: 'center',
+  },
+  notice: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.two,
   },
 });

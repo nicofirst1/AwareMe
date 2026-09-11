@@ -1,4 +1,4 @@
-import { matchesStemFilters, type FilterableStem, type StemLibraryFilters } from '../stemLibraryFilter';
+import { canDeactivateStem, matchesStemFilters, type FilterableStem, type StemLibraryFilters } from '../stemLibraryFilter';
 
 const BASE: StemLibraryFilters = { query: '', activeFilter: 'active', originFilter: 'all', categoryFilter: 'all' };
 
@@ -54,5 +54,27 @@ describe('matchesStemFilters', () => {
     expect(
       matchesStemFilters(stem({ text: 'A promise I made', origin: 'seed', category: 'integrity', active: 0 }), filters),
     ).toBe(false);
+  });
+});
+
+describe('canDeactivateStem', () => {
+  it('allows deactivating when more than one active stem remains', () => {
+    const stems = [stem({ active: 1 }), stem({ active: 1 })];
+    expect(canDeactivateStem(stems, stems[0])).toBe(true);
+  });
+
+  it('refuses to deactivate the last active stem', () => {
+    const stems = [stem({ active: 1 }), stem({ active: 0 })];
+    expect(canDeactivateStem(stems, stems[0])).toBe(false);
+  });
+
+  it('deleted stems do not count toward the active total', () => {
+    const stems = [stem({ active: 1 }), stem({ active: 1, deleted_at: '2026-09-01T00:00:00.000Z' })];
+    expect(canDeactivateStem(stems, stems[0])).toBe(false);
+  });
+
+  it('always allows activating (target is already inactive)', () => {
+    const stems = [stem({ active: 0 })];
+    expect(canDeactivateStem(stems, stems[0])).toBe(true);
   });
 });

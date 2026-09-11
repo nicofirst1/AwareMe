@@ -30,6 +30,44 @@ export const Colors = {
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 /**
+ * One calm hue per stem category (2026-09-11 addition, stems library), used
+ * for the category chip on each stem row and the category filter chips.
+ * Each `bg`/`text` pair is checked ≥4.5:1 WCAG AA (measured, not eyeballed):
+ * awareness 9.00:1 / 8.59:1, self_acceptance 9.58:1 / 9.21:1, responsibility
+ * 8.61:1 / 9.27:1, assertiveness 7.55:1 / 8.95:1, purpose 9.53:1 / 8.63:1,
+ * integrity 9.65:1 / 9.27:1 (light / dark respectively) — all well clear of
+ * the 4.5:1 floor while staying muted, not traffic-light saturated (§10).
+ */
+export const CategoryColors = {
+  awareness: {
+    light: { bg: '#D6E6F5', text: '#0B3C61' },
+    dark: { bg: '#173B52', text: '#BFE0FF' },
+  },
+  self_acceptance: {
+    light: { bg: '#EBDCF5', text: '#4A1D6B' },
+    dark: { bg: '#33253F', text: '#E3C4FF' },
+  },
+  responsibility: {
+    light: { bg: '#DCEAD9', text: '#1E4620' },
+    dark: { bg: '#213823', text: '#B9E8BD' },
+  },
+  assertiveness: {
+    light: { bg: '#F7DCC9', text: '#6B3410' },
+    dark: { bg: '#3D2A1D', text: '#FFC793' },
+  },
+  purpose: {
+    light: { bg: '#F9E1E8', text: '#6B1533' },
+    dark: { bg: '#3D2530', text: '#FFB8CE' },
+  },
+  integrity: {
+    light: { bg: '#DDEAF0', text: '#0E3D45' },
+    dark: { bg: '#1E3538', text: '#A9E4EF' },
+  },
+} as const;
+
+export type CategoryName = keyof typeof CategoryColors;
+
+/**
  * Save/Next button pressure gradient (2026-09-11 addition, §6.3.4/13.4): an
  * urgency *cue*, not a countdown numeral or shame copy — interpolated by
  * `Animated` between these two endpoints as time depletes. Deliberately the

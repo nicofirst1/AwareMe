@@ -35,3 +35,15 @@ export function matchesStemFilters(stem: FilterableStem, filters: StemLibraryFil
 
   return true;
 }
+
+/**
+ * `selectStem` (§6.2) returns null on zero active candidates, and "start
+ * now" then silently does nothing — so the library refuses to deactivate
+ * the last active stem rather than let the app go dead-ended. Deleted stems
+ * don't count as active candidates either way.
+ */
+export function canDeactivateStem(stems: readonly FilterableStem[], target: FilterableStem): boolean {
+  if (!target.active) return true; // already inactive; activating is always fine
+  const activeCount = stems.filter((s) => s.active && s.deleted_at === null).length;
+  return activeCount > 1;
+}
