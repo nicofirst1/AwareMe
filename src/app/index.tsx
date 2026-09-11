@@ -137,8 +137,15 @@ export default function HomeScreen() {
 
           <ThemedView style={styles.grid}>
             {SECONDARY_LINKS.map(({ href, label, icon }) => (
-              <Link key={href} href={href} style={[styles.tile, { backgroundColor: theme.backgroundElement }]}>
-                <Ionicons name={icon} size={20} color={theme.textSecondary} />
+              <Link
+                key={href}
+                href={href}
+                style={[
+                  styles.tile,
+                  { backgroundColor: label === 'Progress' ? theme.accentMuted : theme.backgroundElement },
+                ]}
+              >
+                <Ionicons name={icon} size={20} color={theme.accent} />
                 <ThemedText type="default">{label}</ThemedText>
               </Link>
             ))}
