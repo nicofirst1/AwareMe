@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-nat
 
 import { ThemedText } from '@/components/themed-text';
 import { MinTouchTarget, Radius, Spacing } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 
 /**
@@ -35,6 +36,7 @@ export function Button({
   accessibilityLabel?: string;
 }) {
   const theme = useTheme();
+  const scheme = useColorScheme();
 
   const fill =
     variant === 'primary' ? theme.accent : variant === 'secondary' ? theme.backgroundElement : 'transparent';
@@ -56,7 +58,7 @@ export function Button({
       {/* Symmetric with theme.ts's accent-as-text measurement: white passes
           on light's accent fill (4.94:1), black passes on dark's accent
           fill (7.97:1) — see the `accent` comment in constants/theme.ts. */}
-      <ThemedText type="default" style={variant === 'primary' ? { color: primaryLabelColor(theme) } : undefined}>
+      <ThemedText type="default" style={variant === 'primary' ? { color: primaryLabelColor(scheme) } : undefined}>
         {label}
       </ThemedText>
     </Pressable>
@@ -66,12 +68,13 @@ export function Button({
 /**
  * `accent` is per-theme (light: terracotta, dark: amber) precisely so a
  * *single* label color can't serve both — light needs white on its accent,
- * dark needs black on its (lighter) accent. `theme.background` at index 0
- * is `#ffffff` in light / `#000000` in dark, which is exactly the inverse
- * of what's needed, so this picks the opposite of `theme.text`.
+ * dark needs black on its (lighter) accent. Reads the actual color scheme
+ * rather than pattern-matching `theme.text`'s hex (fragile: broke the
+ * moment any theme's `text` stopped being a pure black/white literal).
+ * `unspecified` falls back to light, matching `useTheme`'s own fallback.
  */
-function primaryLabelColor(theme: { text: string }): string {
-  return theme.text === '#000000' ? '#ffffff' : '#000000';
+function primaryLabelColor(scheme: ReturnType<typeof useColorScheme>): string {
+  return scheme === 'dark' ? '#000000' : '#ffffff';
 }
 
 const styles = StyleSheet.create({

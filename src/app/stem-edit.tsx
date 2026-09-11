@@ -1,18 +1,22 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { Alert, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/button';
 import { FilterChip } from '@/components/filter-chip';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Fonts, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
+import { CategoryColors, Fonts, MaxContentWidth, Radius, Spacing, type CategoryName } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { nowEventTime } from '@/db/time';
 import { useTheme } from '@/hooks/use-theme';
 import { validateStemText, WEIGHT_BY_SETTING, type WeightSetting } from '@/session/stemValidation';
 
-const CATEGORIES = ['awareness', 'self_acceptance', 'responsibility', 'assertiveness', 'purpose', 'integrity'] as const;
+// Reads the category picker off the palette itself (ui-audit-2026-09-11.md
+// §2) rather than a hand-maintained list, so this can never drift out of
+// sync with `CategoryColors` or the same list in stem-import.tsx.
+const CATEGORIES = Object.keys(CategoryColors) as CategoryName[];
 
 function weightToSetting(weight: number): WeightSetting {
   if (weight <= WEIGHT_BY_SETTING.less) return 'less';
@@ -139,7 +143,7 @@ export default function StemEditScreen() {
           <ThemedView style={styles.chipRow}>
             <FilterChip label="None" selected={category === null} onPress={() => setCategory(null)} />
             {CATEGORIES.map((c) => (
-              <FilterChip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} />
+              <FilterChip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} category={c} />
             ))}
           </ThemedView>
 
@@ -157,20 +161,12 @@ export default function StemEditScreen() {
             ))}
           </ThemedView>
 
-          <Pressable onPress={save} style={[styles.button, { backgroundColor: theme.backgroundElement }]} accessibilityRole="button">
-            <ThemedText type="subtitle">Save</ThemedText>
-          </Pressable>
+          <Button label="Save" onPress={save} variant="primary" />
 
           {existing && (
             <ThemedView style={styles.destructiveBlock}>
-              <Pressable onPress={toggleArchive} style={styles.destructiveRow} accessibilityRole="button">
-                <ThemedText type="default">{existing.active ? 'Archive' : 'Unarchive'}</ThemedText>
-              </Pressable>
-              {!existing.deleted_at && (
-                <Pressable onPress={softDelete} style={styles.destructiveRow} accessibilityRole="button">
-                  <ThemedText type="default">Delete</ThemedText>
-                </Pressable>
-              )}
+              <Button label={existing.active ? 'Archive' : 'Unarchive'} onPress={toggleArchive} variant="text" />
+              {!existing.deleted_at && <Button label="Delete" onPress={softDelete} variant="text" />}
             </ThemedView>
           )}
         </ScrollView>
@@ -199,25 +195,15 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     minHeight: 80,
     padding: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.small,
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.one,
   },
-  button: {
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.four,
-    borderRadius: Spacing.two,
-    alignItems: 'center',
-  },
   destructiveBlock: {
     gap: Spacing.two,
     paddingTop: Spacing.three,
-  },
-  destructiveRow: {
-    minHeight: MinTouchTarget,
-    justifyContent: 'center',
   },
 });

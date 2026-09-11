@@ -1,12 +1,15 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/button';
+import { EmptyState } from '@/components/empty-state';
 import { FilterChip } from '@/components/filter-chip';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { CategoryColors, MinTouchTarget, Spacing, type CategoryName } from '@/constants/theme';
+import { CategoryColors, MinTouchTarget, Radius, Spacing, type CategoryName } from '@/constants/theme';
 import { getRepository, LibraryStemRow } from '@/db';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
@@ -15,6 +18,19 @@ import { canDeactivateStem, matchesStemFilters, type ActiveFilter } from '@/sess
 function isCategoryName(c: string | null): c is CategoryName {
   return c !== null && c in CategoryColors;
 }
+
+// A distinct glyph per category (2026-09-11, ui-audit-2026-09-11.md cycle 2)
+// alongside `CategoryColors`' hue, so category is legible without relying on
+// color alone (colorblind users). Decorative: the chip's text label is the
+// accessible name, this is a redundant visual cue, not the only one.
+const CATEGORY_ICON: Record<CategoryName, keyof typeof Ionicons.glyphMap> = {
+  awareness: 'eye-outline',
+  self_acceptance: 'heart-outline',
+  responsibility: 'shield-checkmark-outline',
+  assertiveness: 'megaphone-outline',
+  purpose: 'compass-outline',
+  integrity: 'ribbon-outline',
+};
 
 type OriginFilter = 'all' | LibraryStemRow['origin'];
 type CategoryFilter = 'all' | string;
@@ -98,12 +114,8 @@ export default function StemsScreen() {
             Stems
           </ThemedText>
           <ThemedView style={styles.headerActions}>
-            <Pressable onPress={() => router.push('/stem-import')} style={styles.headerAction} accessibilityRole="button">
-              <ThemedText type="default">Import</ThemedText>
-            </Pressable>
-            <Pressable onPress={() => router.push('/stem-edit')} style={styles.headerAction} accessibilityRole="button">
-              <ThemedText type="default">Add</ThemedText>
-            </Pressable>
+            <Button label="Import" onPress={() => router.push('/stem-import')} variant="text" />
+            <Button label="Add" onPress={() => router.push('/stem-edit')} variant="text" />
           </ThemedView>
         </ThemedView>
 
@@ -159,11 +171,7 @@ export default function StemsScreen() {
           data={filtered}
           keyExtractor={(s) => s.id}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            <ThemedText type="default" themeColor="textSecondary">
-              No stems match.
-            </ThemedText>
-          }
+          ListEmptyComponent={<EmptyState message="No stems match." />}
           renderItem={renderStemRow}
         />
       </SafeAreaView>
@@ -213,8 +221,9 @@ const StemRow = memo(function StemRow({
       >
         <ThemedText type="default">{item.text}</ThemedText>
         <ThemedView style={styles.rowMeta}>
-          {categoryColors && (
+          {categoryColors && isCategoryName(item.category) && (
             <ThemedView style={[styles.categoryChip, { backgroundColor: categoryColors.bg }]}>
+              <Ionicons name={CATEGORY_ICON[item.category]} size={12} color={categoryColors.text} />
               <ThemedText type="small" style={{ color: categoryColors.text }}>
                 {item.category}
               </ThemedText>
@@ -298,10 +307,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.three,
   },
-  headerAction: {
-    minHeight: MinTouchTarget,
-    justifyContent: 'center',
-  },
   title: {
     paddingTop: 0,
   },
@@ -309,7 +314,7 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.four,
     marginTop: Spacing.three,
     padding: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.small,
   },
   filterRow: {
     paddingHorizontal: Spacing.four,
@@ -328,12 +333,17 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     gap: Spacing.two,
   },
+  // Same shape as `Card` (backgroundElement fill, `Spacing.three` padding)
+  // plus the active/inactive edge tint `Card` has no slot for, so this stays
+  // a hand-styled `ThemedView` rather than wrapping `Card` (ui-audit-2026-
+  // 09-11.md cycle 2 done-criteria: bespoke is fine when a shared component
+  // doesn't fit, don't force it).
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.medium,
     borderLeftWidth: 3,
     gap: Spacing.two,
   },
@@ -348,9 +358,12 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
   },
   categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     paddingHorizontal: Spacing.one,
     paddingVertical: 1,
-    borderRadius: Spacing.one,
+    borderRadius: Radius.small,
   },
   editLink: {
     minHeight: MinTouchTarget,

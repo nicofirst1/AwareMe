@@ -1,17 +1,20 @@
 import { File } from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { Alert, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/button';
 import { FilterChip } from '@/components/filter-chip';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
+import { CategoryColors, Fonts, MaxContentWidth, Radius, Spacing, type CategoryName } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
 
-const CATEGORIES = ['awareness', 'self_acceptance', 'responsibility', 'assertiveness', 'purpose', 'integrity'] as const;
+// See stem-edit.tsx's identical comment: derived from the palette so the
+// two category pickers can never drift apart (ui-audit-2026-09-11.md §2).
+const CATEGORIES = Object.keys(CategoryColors) as CategoryName[];
 
 /** One stem per non-blank line (§6.6). Trimmed; blank lines dropped. */
 function linesToStems(raw: string): string[] {
@@ -64,9 +67,7 @@ export default function StemImportScreen() {
             One stem per line.
           </ThemedText>
 
-          <Pressable onPress={openFile} style={[styles.button, { backgroundColor: theme.backgroundElement }]} accessibilityRole="button">
-            <ThemedText type="default">Open a .txt file</ThemedText>
-          </Pressable>
+          <Button label="Open a .txt file" onPress={openFile} />
 
           <TextInput
             value={raw}
@@ -84,7 +85,7 @@ export default function StemImportScreen() {
           <ThemedView style={styles.chipRow}>
             <FilterChip label="None" selected={category === null} onPress={() => setCategory(null)} />
             {CATEGORIES.map((c) => (
-              <FilterChip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} />
+              <FilterChip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} category={c} />
             ))}
           </ThemedView>
 
@@ -102,15 +103,7 @@ export default function StemImportScreen() {
             </ThemedView>
           )}
 
-          <Pressable
-            onPress={commit}
-            disabled={lines.length === 0}
-            style={[styles.button, { backgroundColor: theme.backgroundElement, opacity: lines.length === 0 ? 0.5 : 1 }]}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: lines.length === 0 }}
-          >
-            <ThemedText type="subtitle">Import</ThemedText>
-          </Pressable>
+          <Button label="Import" onPress={commit} disabled={lines.length === 0} variant="primary" />
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
@@ -137,7 +130,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     minHeight: 140,
     padding: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.small,
   },
   chipRow: {
     flexDirection: 'row',
@@ -146,13 +139,7 @@ const styles = StyleSheet.create({
   },
   preview: {
     padding: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.medium,
     gap: Spacing.one,
-  },
-  button: {
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.four,
-    borderRadius: Spacing.two,
-    alignItems: 'center',
   },
 });

@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Fonts, MaxContentWidth, MinTouchTarget, PressureColors, Spacing } from '@/constants/theme';
+import { Fonts, MaxContentWidth, MinTouchTarget, PressureColors, Radius, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
 import { formatMMSS, sessionDurationLabel } from '@/session/sessionMachine';
@@ -186,13 +187,7 @@ export default function WriteScreen() {
           ))}
 
           {session.phase === 'idle' && pendingStem && (
-            <Pressable
-              onPress={() => session.start(pendingStem)}
-              style={[styles.button, { backgroundColor: theme.backgroundElement }]}
-              accessibilityRole="button"
-            >
-              <ThemedText type="subtitle">Start</ThemedText>
-            </Pressable>
+            <Button label="Start" onPress={() => session.start(pendingStem)} />
           )}
 
           {session.phase === 'active' && (
@@ -262,9 +257,7 @@ export default function WriteScreen() {
                   {sessionDurationLabel(session.state.startedAt, session.state.endedAt, submittedEndings.length)}
                 </ThemedText>
               )}
-              <Pressable onPress={() => router.back()} style={[styles.button, { backgroundColor: theme.backgroundElement }]} accessibilityRole="button">
-                <ThemedText type="subtitle">Close</ThemedText>
-              </Pressable>
+              <Button label="Close" onPress={() => router.back()} />
             </ThemedView>
           )}
 
@@ -320,11 +313,16 @@ const styles = StyleSheet.create({
     lineHeight: 34,
     minHeight: 80,
   },
+  // Only the bespoke pressure-animated save button uses this now (Start/
+  // Close moved to the shared `Button`) — `Radius.small` matches `Button`'s
+  // own secondary/countdown radius so the two read as the same button family.
   button: {
+    minHeight: MinTouchTarget,
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.four,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.small,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   // Fixed white, not theme-driven: the pressure gradient (constants/theme.ts
   // `PressureColors`) is itself fixed in both themes, and white stays

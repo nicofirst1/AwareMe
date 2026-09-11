@@ -1,11 +1,13 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Link } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
+import { MaxContentWidth, MinTouchTarget, Radius, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
 import { isWeeklyReviewDue } from '@/session/reviewPeriod';
@@ -44,14 +46,18 @@ function loadHomeStatus(): HomeStatus {
   return { weekCount: recent.length, reviewAvailable: wasDue && recent.length > 0 };
 }
 
+// Ionicons outline glyphs (2026-09-11, ui-audit-2026-09-11.md cycle 2) — a
+// small scan anchor per tile so the six destinations aren't an undifferentiated
+// wall of text (audit's index.tsx finding). Decorative only: each tile's
+// accessible name still comes from its label text, not the icon.
 const SECONDARY_LINKS = [
-  { href: '/stems', label: 'Stems' },
-  { href: '/history', label: 'History' },
-  { href: '/review', label: 'Review' },
-  { href: '/settings', label: 'Settings' },
-  { href: '/export', label: 'Export' },
-  { href: '/import', label: 'Import' },
-] as const;
+  { href: '/stems', label: 'Stems', icon: 'leaf-outline' },
+  { href: '/history', label: 'History', icon: 'time-outline' },
+  { href: '/review', label: 'Review', icon: 'glasses-outline' },
+  { href: '/settings', label: 'Settings', icon: 'options-outline' },
+  { href: '/export', label: 'Export', icon: 'share-outline' },
+  { href: '/import', label: 'Import', icon: 'download-outline' },
+] as const satisfies readonly { href: `/${string}`; label: string; icon: keyof typeof Ionicons.glyphMap }[];
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -86,13 +92,7 @@ export default function HomeScreen() {
             </ThemedText>
           </ThemedView>
 
-          <Pressable
-            onPress={startNow}
-            style={[styles.primaryButton, { backgroundColor: theme.backgroundElement }]}
-            accessibilityRole="button"
-          >
-            <ThemedText type="subtitle">Start writing</ThemedText>
-          </Pressable>
+          <Button label="Start writing" onPress={startNow} variant="primary" style={styles.primaryButton} />
 
           {status && (status.weekCount > 0 || status.reviewAvailable) && (
             <ThemedView style={styles.statusBlock}>
@@ -112,12 +112,9 @@ export default function HomeScreen() {
           )}
 
           <ThemedView style={styles.grid}>
-            {SECONDARY_LINKS.map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                style={[styles.tile, { backgroundColor: theme.backgroundElement }]}
-              >
+            {SECONDARY_LINKS.map(({ href, label, icon }) => (
+              <Link key={href} href={href} style={[styles.tile, { backgroundColor: theme.backgroundElement }]}>
+                <Ionicons name={icon} size={20} color={theme.textSecondary} />
                 <ThemedText type="default">{label}</ThemedText>
               </Link>
             ))}
@@ -159,11 +156,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     minHeight: MinTouchTarget * 1.3,
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.four,
-    borderRadius: Spacing.two,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: '100%',
   },
   statusBlock: {
     gap: Spacing.half,
@@ -185,9 +178,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.two,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.medium,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.half,
   },
   navLink: {
     minHeight: MinTouchTarget,
