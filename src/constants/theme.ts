@@ -125,6 +125,28 @@ export const PressureColors = {
 } as const;
 
 /**
+ * Badge "earned" accent (2026-09-11 gamification proposal §2,
+ * `docs/design/gamification-proposal-2026-09-11.md`) — theme-invariant like
+ * `PressureColors`: a celebratory glow should read identically regardless
+ * of light/dark, not a text/background pairing subject to per-theme AA math.
+ *
+ * `glow` is decorative-only (icon tint, thin card edge) — never text. It
+ * measures 1.91:1 against white and 10.98:1 against black, so it does not
+ * clear 4.5:1 universally and MUST NOT be used as a text color.
+ *
+ * `glowSoft` is the earned-badge `Card` fill. It's translucent, so the only
+ * meaningful check is the *composite* it forms with each theme's
+ * `background` — the existing `text`/`textSecondary` tokens sit on top of
+ * that composite, not on `glowSoft` alone: light composite `#fbf3e2` gives
+ * text 19.02:1 / textSecondary 5.38:1; dark composite `#251d0c` gives text
+ * 16.67:1 / textSecondary 8.00:1 (all measured, all clear AA).
+ */
+export const CelebrationColors = {
+  glow: '#E8B34A', // decorative only — icon tint / card edge, never text
+  glowSoft: 'rgba(232,179,74,0.16)', // badge card fill, both themes
+} as const;
+
+/**
  * `serif` is for stems and endings (the user's writing and the prompt).
  * `sans` is for everything else: buttons, labels, chrome.
  */

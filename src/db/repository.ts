@@ -4,6 +4,7 @@ import { META_STEMS, SEED_STEMS } from './seed/stems';
 import { DEFAULT_SETTINGS, Settings } from './seed/settings';
 import { nowEventTime } from './time';
 import { EndReason, SessionOrigin } from '@/session/sessionMachine';
+import { BadgeSession } from '@/session/badges';
 
 /** Every user-facing table, in the order the debug dump shows them. */
 export const ALL_TABLES = [
@@ -734,6 +735,60 @@ export class Repository {
     this.db.runSync("UPDATE notification_schedule SET state = 'fired' WHERE state = 'pending' AND scheduled_for <= ?", [
       now,
     ]);
+  }
+
+  /**
+   * Every completed, non-deleted session with its category, uncensored/
+   * target/tz fields, and its non-deleted endings — the one shape both
+   * `badges.ts` and `progressStats.ts` derive from (gamification proposal
+   * §4/§5 cycle 1). "Completed" means `ended_at IS NOT NULL`: an open
+   * session in progress never counts toward a badge or a streak. Endings
+   * are unfiltered by `submitted_at` — `finalizeSession` always closes any
+   * open ending before setting `ended_at` (nothing discarded, §6.3.8), so
+   * every endings row on a completed session is already final.
+   */
+  listSessionsForStats(): BadgeSession[] {
+    const sessions = this.db.getAllSync<{
+      id: string;
+      stem_id: string;
+      category: string | null;
+      origin: SessionOrigin;
+      target_endings: number;
+      uncensored_mode: number;
+      started_at: string;
+      ended_at: string;
+      end_reason: EndReason;
+      tz: string;
+      offset_min: number;
+    }>(
+      `SELECT s.id, s.stem_id, st.category, s.origin, s.target_endings, s.uncensored_mode,
+              s.started_at, s.ended_at, s.end_reason, s.tz, s.offset_min
+       FROM sessions s
+       JOIN stems st ON st.id = s.stem_id
+       WHERE s.deleted_at IS NULL AND s.ended_at IS NOT NULL
+       ORDER BY s.started_at`,
+      [],
+    );
+
+    return sessions.map((s) => ({
+      id: s.id,
+      stemId: s.stem_id,
+      category: s.category,
+      origin: s.origin,
+      targetEndings: s.target_endings,
+      uncensoredMode: s.uncensored_mode === 1,
+      startedAt: s.started_at,
+      endedAt: s.ended_at,
+      endReason: s.end_reason,
+      tz: s.tz,
+      offsetMin: s.offset_min,
+      endings: this.db
+        .getAllSync<{ text: string }>(
+          'SELECT text FROM endings WHERE session_id = ? AND deleted_at IS NULL ORDER BY ordinal',
+          [s.id],
+        )
+        .map((e) => ({ text: e.text })),
+    }));
   }
 
   /** One notification row by its `expo-notifications` identifier — used to resolve a tapped notification's stem. */
