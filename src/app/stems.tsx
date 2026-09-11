@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,6 +13,8 @@ import { matchesStemFilters, type ActiveFilter } from '@/session/stemLibraryFilt
 
 type OriginFilter = 'all' | LibraryStemRow['origin'];
 type CategoryFilter = 'all' | string;
+type Theme = ReturnType<typeof useTheme>;
+type Router = ReturnType<typeof useRouter>;
 
 /**
  * The stem library (§6.6): every stem, filterable and searchable, with a
@@ -49,10 +51,18 @@ export default function StemsScreen() {
     [stems, query, activeFilter, originFilter, categoryFilter],
   );
 
-  const writeNow = (stem: LibraryStemRow) => {
-    if (stem.deleted_at) return; // deleted stems are visible for context, not writable
-    router.push({ pathname: '/write', params: { stemId: stem.id } });
-  };
+  const writeNow = useCallback(
+    (stem: LibraryStemRow) => {
+      if (stem.deleted_at) return; // deleted stems are visible for context, not writable
+      router.push({ pathname: '/write', params: { stemId: stem.id } });
+    },
+    [router],
+  );
+
+  const renderStemRow = useCallback(
+    ({ item }: { item: LibraryStemRow }) => <StemRow item={item} theme={theme} router={router} onWriteNow={writeNow} />,
+    [theme, router, writeNow],
+  );
 
   return (
     <ThemedView style={styles.container}>
@@ -121,45 +131,55 @@ export default function StemsScreen() {
               No stems match.
             </ThemedText>
           }
-          renderItem={({ item }) => {
-            const isDeleted = item.deleted_at !== null;
-            return (
-              <ThemedView style={[styles.row, { backgroundColor: theme.backgroundElement, opacity: isDeleted ? 0.5 : 1 }]}>
-                <Pressable
-                  onPress={() => writeNow(item)}
-                  disabled={isDeleted}
-                  accessibilityRole="button"
-                  accessibilityLabel={isDeleted ? item.text : `Write on: ${item.text}`}
-                  accessibilityState={{ disabled: isDeleted }}
-                  style={styles.rowMain}
-                >
-                  <ThemedText type="default">{item.text}</ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {[item.category, item.origin, isDeleted ? 'deleted' : !item.active ? 'archived' : null]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </ThemedText>
-                </Pressable>
-                {!isDeleted && (
-                  <Pressable
-                    onPress={() => router.push({ pathname: '/stem-edit', params: { id: item.id } })}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Edit: ${item.text}`}
-                    style={styles.editLink}
-                  >
-                    <ThemedText type="small" themeColor="textSecondary">
-                      Edit
-                    </ThemedText>
-                  </Pressable>
-                )}
-              </ThemedView>
-            );
-          }}
+          renderItem={renderStemRow}
         />
       </SafeAreaView>
     </ThemedView>
   );
 }
+
+const StemRow = memo(function StemRow({
+  item,
+  theme,
+  router,
+  onWriteNow,
+}: {
+  item: LibraryStemRow;
+  theme: Theme;
+  router: Router;
+  onWriteNow: (stem: LibraryStemRow) => void;
+}) {
+  const isDeleted = item.deleted_at !== null;
+  return (
+    <ThemedView style={[styles.row, { backgroundColor: theme.backgroundElement, opacity: isDeleted ? 0.5 : 1 }]}>
+      <Pressable
+        onPress={() => onWriteNow(item)}
+        disabled={isDeleted}
+        accessibilityRole="button"
+        accessibilityLabel={isDeleted ? item.text : `Write on: ${item.text}`}
+        accessibilityState={{ disabled: isDeleted }}
+        style={styles.rowMain}
+      >
+        <ThemedText type="default">{item.text}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {[item.category, item.origin, isDeleted ? 'deleted' : !item.active ? 'archived' : null].filter(Boolean).join(' · ')}
+        </ThemedText>
+      </Pressable>
+      {!isDeleted && (
+        <Pressable
+          onPress={() => router.push({ pathname: '/stem-edit', params: { id: item.id } })}
+          accessibilityRole="button"
+          accessibilityLabel={`Edit: ${item.text}`}
+          style={styles.editLink}
+        >
+          <ThemedText type="small" themeColor="textSecondary">
+            Edit
+          </ThemedText>
+        </Pressable>
+      )}
+    </ThemedView>
+  );
+});
 
 function FilterRow<T extends string>({
   label,

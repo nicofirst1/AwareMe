@@ -2,7 +2,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments }
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
-import { LockScreen } from '@/app/lock-screen';
+import { LockScreen } from '@/components/lock-screen';
 import { getRepository } from '@/db';
 import { useNotificationScheduler, useNotificationTapRouting } from '@/notifications/useNotifications';
 import { useAppLock } from '@/session/useAppLock';

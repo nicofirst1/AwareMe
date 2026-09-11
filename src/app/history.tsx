@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,6 +9,8 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { EndingSearchResult, getRepository, HistorySessionRow } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
+
+type Theme = ReturnType<typeof useTheme>;
 
 type DateRangePreset = 'all' | '7d' | '30d' | '90d';
 
@@ -65,6 +67,19 @@ export default function HistoryScreen() {
   const searchResults = useMemo<EndingSearchResult[]>(
     () => (trimmedQuery ? getRepository().searchEndings(trimmedQuery) : []),
     [trimmedQuery],
+  );
+
+  const openSearchResult = useCallback(
+    (id: string) => router.push({ pathname: '/session-detail', params: { id } }),
+    [router],
+  );
+  const renderSearchResultRow = useCallback(
+    ({ item }: { item: EndingSearchResult }) => <SearchResultRow item={item} theme={theme} onPress={openSearchResult} />,
+    [theme, openSearchResult],
+  );
+  const renderSessionRow = useCallback(
+    ({ item }: { item: HistorySessionRow }) => <SessionRow item={item} theme={theme} onPress={openSearchResult} />,
+    [theme, openSearchResult],
   );
 
   return (
@@ -128,22 +143,7 @@ export default function HistoryScreen() {
                 No matches.
               </ThemedText>
             }
-            renderItem={({ item }) => (
-              <Pressable
-                onPress={() => router.push({ pathname: '/session-detail', params: { id: item.sessionId } })}
-                style={[styles.row, { backgroundColor: theme.backgroundElement }]}
-                accessibilityRole="button"
-                accessibilityLabel={`Open session: ${item.stemTextSnapshot}`}
-              >
-                <ThemedText type="small" themeColor="textSecondary">
-                  {item.stemTextSnapshot}
-                </ThemedText>
-                <ThemedText type="stem">{item.text}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {formatDate(item.startedAt)}
-                </ThemedText>
-              </Pressable>
-            )}
+            renderItem={renderSearchResultRow}
           />
         ) : (
           <FlatList<HistorySessionRow>
@@ -155,25 +155,64 @@ export default function HistoryScreen() {
                 Nothing here yet.
               </ThemedText>
             }
-            renderItem={({ item }) => (
-              <Pressable
-                onPress={() => router.push({ pathname: '/session-detail', params: { id: item.id } })}
-                style={[styles.row, { backgroundColor: theme.backgroundElement }]}
-                accessibilityRole="button"
-                accessibilityLabel={`Open session: ${item.stem_text_snapshot}`}
-              >
-                <ThemedText type="stem">{item.stem_text_snapshot}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {[formatDate(item.started_at), item.category].filter(Boolean).join(' · ')}
-                </ThemedText>
-              </Pressable>
-            )}
+            renderItem={renderSessionRow}
           />
         )}
       </SafeAreaView>
     </ThemedView>
   );
 }
+
+const SearchResultRow = memo(function SearchResultRow({
+  item,
+  theme,
+  onPress,
+}: {
+  item: EndingSearchResult;
+  theme: Theme;
+  onPress: (id: string) => void;
+}) {
+  return (
+    <Pressable
+      onPress={() => onPress(item.sessionId)}
+      style={[styles.row, { backgroundColor: theme.backgroundElement }]}
+      accessibilityRole="button"
+      accessibilityLabel={`Open session: ${item.stemTextSnapshot}`}
+    >
+      <ThemedText type="small" themeColor="textSecondary">
+        {item.stemTextSnapshot}
+      </ThemedText>
+      <ThemedText type="stem">{item.text}</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        {formatDate(item.startedAt)}
+      </ThemedText>
+    </Pressable>
+  );
+});
+
+const SessionRow = memo(function SessionRow({
+  item,
+  theme,
+  onPress,
+}: {
+  item: HistorySessionRow;
+  theme: Theme;
+  onPress: (id: string) => void;
+}) {
+  return (
+    <Pressable
+      onPress={() => onPress(item.id)}
+      style={[styles.row, { backgroundColor: theme.backgroundElement }]}
+      accessibilityRole="button"
+      accessibilityLabel={`Open session: ${item.stem_text_snapshot}`}
+    >
+      <ThemedText type="stem">{item.stem_text_snapshot}</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        {[formatDate(item.started_at), item.category].filter(Boolean).join(' · ')}
+      </ThemedText>
+    </Pressable>
+  );
+});
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
