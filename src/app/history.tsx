@@ -201,11 +201,16 @@ const SessionRow = memo(function SessionRow({
   scheme: Scheme;
   onPress: (id: string) => void;
 }) {
-  const accentColor = isCategoryName(item.category) ? CategoryColors[item.category][scheme === 'dark' ? 'dark' : 'light'].bg : undefined;
+  // .text (saturated), not .bg (pale) — the pale stripe measured ~1.15:1
+  // against the card fill (color-audit-2026-09-11.md), effectively invisible.
+  const accentColor = isCategoryName(item.category) ? CategoryColors[item.category][scheme === 'dark' ? 'dark' : 'light'].text : undefined;
 
   return (
     <Pressable onPress={() => onPress(item.id)} accessibilityRole="button" accessibilityLabel={`Open session: ${item.stem_text_snapshot}`}>
-      <Card style={styles.row} accentColor={accentColor}>
+      {/* 4px, not Card's default 3px, only when a category stripe is actually
+          drawn — the saturated stripe (D1 fix) reads as a slightly bolder
+          scanning aid at this width (color-audit-2026-09-11.md). */}
+      <Card style={[styles.row, accentColor !== undefined && { borderLeftWidth: 4 }]} accentColor={accentColor}>
         <ThemedText type="stem">{item.stem_text_snapshot}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           {[formatDate(item.started_at), item.category].filter(Boolean).join(' · ')}

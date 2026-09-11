@@ -12,10 +12,12 @@ import { useTheme } from '@/hooks/use-theme';
  * here rather than duplicated per screen (spec §10, ticket 19) with a
  * `minHeight` tap target that the label's small text alone wouldn't reach.
  *
- * `category` (2026-09-11 addition) colors the chip per `CategoryColors` —
- * selected chips are filled with the category color, unselected chips are
- * outlined in it, so the selected/unselected distinction survives per-
- * category coloring (used by the stems screen's category filter row).
+ * `category` (2026-09-11 addition, saturated outline per color-audit-2026-
+ * 09-11.md cycle 2) colors the chip per `CategoryColors` — selected chips
+ * are filled with the category color, unselected chips are outlined and
+ * labeled in the saturated `.text` swatch (not the pale `.bg` tint, which
+ * measured near-invisible), so the selected/unselected distinction survives
+ * per-category coloring (used by the stems/history screens' filter rows).
  *
  * `color` (2026-09-11 design-system foundation, ui-audit-2026-09-11.md
  * cycle 1) generalizes the same `{ bg, text }` shape `category` already
@@ -45,12 +47,12 @@ export function FilterChip({
   const style = chipColors
     ? selected
       ? { backgroundColor: chipColors.bg, borderWidth: 1, borderColor: chipColors.text }
-      : { backgroundColor: theme.backgroundElement, borderWidth: 1, borderColor: chipColors.bg }
+      : { backgroundColor: theme.backgroundElement, borderWidth: 1, borderColor: chipColors.text }
     : { backgroundColor: selected ? theme.backgroundSelected : theme.backgroundElement };
 
   return (
     <Pressable onPress={onPress} style={[styles.chip, style]} accessibilityRole="button" accessibilityState={{ selected }}>
-      <ThemedText type="small" style={chipColors && selected ? { color: chipColors.text } : undefined}>
+      <ThemedText type="small" style={chipColors ? { color: chipColors.text } : undefined}>
         {label}
       </ThemedText>
     </Pressable>
