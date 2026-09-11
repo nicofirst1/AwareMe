@@ -1,15 +1,20 @@
 /**
- * Pure notification-fire-time scheduling (spec §6.4). A fixed daily time
- * would let the user pre-compose endings mentally, which defeats the
- * exercise — so fire times are drawn uniformly at random within each
- * configured window, subject to a minimum 90-minute gap between any two.
+ * Pure notification-fire-time scheduling (spec §6.4). The default and only
+ * spec-MUST mode is "random": a fixed daily time would let the user
+ * pre-compose endings mentally, which defeats the exercise, so fire times
+ * are drawn uniformly at random within each configured window, subject to
+ * a minimum 90-minute gap between any two (`generateFireTimes`). A second,
+ * user-directed "fixed" mode (2026-09-11, DECISIONS.md) lets the user pick
+ * 1-4 exact daily times instead — the book's own suggestion is start and
+ * end of day (`generateFixedFireTimes`).
  *
- * No SQLite, no `expo-notifications`, no wall clock: `now` and the random
- * seed are both inputs, so a given call is fully reproducible (same
- * arguments in, same fire times out) and the 64-notification cap, the
- * rolling 10-day horizon, and DST are all exercised as plain Date algebra.
- * `src/notifications/scheduler.ts` is the thin glue that supplies these
- * from the real clock, settings, and `expo-notifications`.
+ * No SQLite, no `expo-notifications`, no wall clock: `now` (and, for random
+ * mode, the random seed) are both inputs, so a given call is fully
+ * reproducible (same arguments in, same fire times out) and the 64-
+ * notification cap, the rolling 10-day horizon, and DST are all exercised
+ * as plain Date algebra. `src/notifications/scheduler.ts` is the thin glue
+ * that supplies these from the real clock, settings, and
+ * `expo-notifications`.
  */
 
 import { mulberry32 } from '@/lib/prng';
@@ -139,6 +144,49 @@ function splitCount(total: number, parts: number): number[] {
   const base = Math.floor(total / parts);
   const remainder = total % parts;
   return Array.from({ length: parts }, (_, i) => base + (i < remainder ? 1 : 0));
+}
+
+export interface FixedScheduleInput {
+  /** 1-4 "HH:MM" local wall-clock times, fired every day (spec §6.4 "fixed" mode, 2026-09-11 addition). */
+  times: readonly string[];
+  now: Date;
+  horizonDays?: number; // default 10, same rolling horizon as random mode
+  maxPending?: number; // default 64, same iOS cap as random mode
+}
+
+/**
+ * The "fixed" notification mode (2026-09-11 user-directed addition,
+ * DECISIONS.md): the user picks 1-4 exact daily times instead of a random
+ * window — the book's own suggestion is "start and end of day". No
+ * randomness and no 90-minute gap rule (the user chose the times
+ * deliberately, so there's nothing to space out), but every other rule
+ * `generateFireTimes` follows still applies: the same rolling horizon, the
+ * same 64-notification cap, past-`now` times dropped, and the same
+ * local-time `Date` construction that keeps each time correct across a DST
+ * transition (see `windowOnDay`'s comment — the JS engine resolves local
+ * wall-clock fields against the host's timezone data, so "8am" stays 8am
+ * local on a transition day even though the UTC gap that day isn't 24h).
+ *
+ * Pure and deterministic: identical `input` always produces identical
+ * output, same idempotency property `generateFireTimes` has.
+ */
+export function generateFixedFireTimes(input: FixedScheduleInput): Date[] {
+  const horizonDays = input.horizonDays ?? DEFAULT_HORIZON_DAYS;
+  const maxPending = input.maxPending ?? DEFAULT_MAX_PENDING;
+  if (input.times.length === 0) return [];
+
+  const results: Date[] = [];
+  for (let d = 0; d < horizonDays; d++) {
+    const day = addDays(input.now, d);
+    for (const time of input.times) {
+      const { hour, minute } = parseHHMM(time);
+      const fireTime = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour, minute, 0, 0);
+      if (fireTime.getTime() > input.now.getTime()) results.push(fireTime);
+    }
+  }
+
+  results.sort((a, b) => a.getTime() - b.getTime());
+  return results.slice(0, maxPending);
 }
 
 /** One already-scheduled, still-pending notification, as read from `notification_schedule`. */

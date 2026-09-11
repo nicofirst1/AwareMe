@@ -1,4 +1,12 @@
-import { diffSchedule, generateFireTimes, MIN_GAP_MS, type PendingNotification, type ScheduleInput } from '../scheduling';
+import {
+  diffSchedule,
+  generateFireTimes,
+  generateFixedFireTimes,
+  MIN_GAP_MS,
+  type FixedScheduleInput,
+  type PendingNotification,
+  type ScheduleInput,
+} from '../scheduling';
 
 const NOW = new Date(2026, 8, 10, 0, 0, 0, 0); // 2026-09-10 local midnight
 
@@ -196,6 +204,81 @@ describe('generateFireTimes: idempotency', () => {
       seed: 55,
     });
     expect(a.map((t) => t.getTime())).toEqual(b.map((t) => t.getTime()));
+  });
+});
+
+describe('generateFixedFireTimes', () => {
+  function baseFixedInput(overrides: Partial<FixedScheduleInput> = {}): FixedScheduleInput {
+    return {
+      times: ['08:00', '21:00'],
+      now: NOW,
+      ...overrides,
+    };
+  }
+
+  it('fires every configured time on every day of the horizon', () => {
+    const times = generateFixedFireTimes(baseFixedInput({ horizonDays: 3 }));
+    // NOW is local midnight, so both times on all 3 days are still ahead of `now`.
+    expect(times).toHaveLength(6);
+    for (const t of times) {
+      expect([8, 21]).toContain(t.getHours());
+      expect(t.getMinutes()).toBe(0);
+    }
+  });
+
+  it('drops times at or before `now`', () => {
+    const laterToday = new Date(2026, 8, 10, 12, 0, 0, 0); // noon: 08:00 today is already past
+    const times = generateFixedFireTimes(baseFixedInput({ now: laterToday, horizonDays: 1 }));
+    expect(times).toHaveLength(1);
+    expect(times[0].getHours()).toBe(21);
+  });
+
+  it('defaults to a 10-day horizon', () => {
+    const times = generateFixedFireTimes(baseFixedInput());
+    const last = times[times.length - 1];
+    const tenDaysOut = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + 10, 0, 0, 0, 0);
+    expect(last.getTime()).toBeLessThan(tenDaysOut.getTime());
+  });
+
+  it('caps total pending at 64 (four times/day over a 10-day horizon already exceeds it easily with a smaller custom cap)', () => {
+    const times = generateFixedFireTimes(
+      baseFixedInput({ times: ['06:00', '10:00', '14:00', '18:00'], horizonDays: 10, maxPending: 5 }),
+    );
+    expect(times.length).toBeLessThanOrEqual(5);
+  });
+
+  it('returns nothing for an empty times list', () => {
+    expect(generateFixedFireTimes(baseFixedInput({ times: [] }))).toEqual([]);
+  });
+
+  it('is deterministic: identical input always produces identical output', () => {
+    const input = baseFixedInput({ horizonDays: 5 });
+    const first = generateFixedFireTimes(input).map((t) => t.getTime());
+    for (let i = 0; i < 5; i++) {
+      expect(generateFixedFireTimes(input).map((t) => t.getTime())).toEqual(first);
+    }
+  });
+
+  it('spring-forward (2026-03-29, Europe/Berlin loses 02:00-03:00): both daily times stay at their local wall-clock hour', () => {
+    process.env.TZ = 'Europe/Berlin';
+    const springDay = new Date(2026, 2, 28, 0, 0, 0, 0); // day before spring-forward
+    const times = generateFixedFireTimes({ times: ['08:00', '21:00'], now: springDay, horizonDays: 4 });
+    for (const t of times) {
+      expect([8, 21]).toContain(t.getHours());
+      expect(t.getMinutes()).toBe(0);
+    }
+    expect(times).toHaveLength(8);
+  });
+
+  it('fall-back (2026-10-25, Europe/Berlin repeats 02:00-03:00): both daily times stay at their local wall-clock hour', () => {
+    process.env.TZ = 'Europe/Berlin';
+    const fallDay = new Date(2026, 9, 24, 0, 0, 0, 0); // day before fall-back
+    const times = generateFixedFireTimes({ times: ['08:00', '21:00'], now: fallDay, horizonDays: 4 });
+    for (const t of times) {
+      expect([8, 21]).toContain(t.getHours());
+      expect(t.getMinutes()).toBe(0);
+    }
+    expect(times).toHaveLength(8);
   });
 });
 

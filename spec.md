@@ -294,12 +294,13 @@ This is the core screen. Get it right.
 
 ### 6.4 Notifications
 
-- The user defines one or more windows (e.g. 08:00 to 21:00) and a count per day.
-- The app schedules concrete local notifications at **uniformly random times within the window**, respecting a minimum 90 minute gap between them. A fixed daily time lets the user pre-compose endings mentally, which defeats the exercise. This randomness is a functional requirement.
-- Schedule a rolling 10 days ahead. iOS caps pending local notifications at 64, so cap total pending accordingly and top up on every app foreground.
-- Reschedule on: app foreground, settings change, timezone change, permission grant.
+- The user picks a scheduling mode, `random` (default) or `fixed` (2026-09-11 user-directed addition; see `DECISIONS.md`).
+- **Random mode:** the user defines one or more windows (e.g. 08:00 to 21:00) and a count per day. The app schedules concrete local notifications at **uniformly random times within the window**, respecting a minimum 90 minute gap between them. A fixed daily time lets the user pre-compose endings mentally, which defeats the exercise. This randomness is a functional requirement (MUST) for this mode.
+- **Fixed mode:** the user specifies 1 to 4 exact times of day instead of a window, e.g. the book's own suggestion of start and end of day (default seed: 08:00 and 21:00, only applied when the user switches into this mode). Those exact times fire daily. No randomness and no 90-minute gap rule apply here — the user chose the times deliberately — but the rolling horizon, the 64-notification cap, top-up, reconciliation, and the notification-copy privacy rule below are identical to random mode.
+- Schedule a rolling 10 days ahead, in either mode. iOS caps pending local notifications at 64, so cap total pending accordingly and top up on every app foreground.
+- Reschedule on: app foreground, settings change (including a mode switch), timezone change, permission grant.
 - Record every scheduled notification in `notification_schedule` and reconcile state on foreground.
-- Notification copy MUST NOT contain the stem text, since notifications appear on lock screens and this content is private. Use neutral copy such as "A sentence is waiting."
+- Notification copy MUST NOT contain the stem text, since notifications appear on lock screens and this content is private. Use neutral copy such as "A sentence is waiting." This applies in both modes.
 - Missing a notification has no consequence in the app. No streak counter, no guilt copy, no "you have not written in 4 days". If a streak-like display is added at all, it is descriptive and unemphasised.
 
 ### 6.5 Review mode
@@ -332,16 +333,20 @@ Available on demand and offered once a week (in-app, not by notification):
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
-| `endings_per_session` | int | 6 | Range 3 to 12 |
+| `endings_per_session` | int | 6 | Range 6 to 10 (2026-09-11: was 3 to 12; see `DECISIONS.md`) |
 | `timer_seconds` | int | 90 | Range 30 to 600 |
 | `review_timer_seconds` | int | 180 | |
 | `uncensored_mode` | bool | true | |
 | `sessions_per_day` | int | 1 | Range 0 to 6 |
-| `windows` | JSON | `[{start:"08:00",end:"21:00"}]` | Local wall-clock time |
+| `windows` | JSON | `[{start:"08:00",end:"21:00"}]` | Local wall-clock time; only used when `notification_mode` is `random` |
 | `stem_terminator` | string | `"..."` | |
 | `app_lock_enabled` | bool | false | Biometric or device passcode |
 | `weekly_review_prompt` | bool | true | |
 | `theme` | string | `system` | |
+| `stem_timer_enabled` | bool | false | 2026-09-11 addition. Optional per-stem time limit, separate from `timer_seconds`; off by default |
+| `stem_timer_seconds` | int | 60 | 2026-09-11 addition. Range 20 to 120. Only used when `stem_timer_enabled` is true |
+| `notification_mode` | string | `random` | 2026-09-11 addition. `random` or `fixed`; see §6.4 |
+| `notification_fixed_times` | JSON | `["08:00","21:00"]` | 2026-09-11 addition. 1 to 4 "HH:MM" local times; only used when `notification_mode` is `fixed` |
 
 ---
 

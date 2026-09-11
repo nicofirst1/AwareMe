@@ -11,7 +11,7 @@ import { getRepository } from '@/db';
 import { nowEventTime } from '@/db/time';
 import { selectStem } from '@/session/stemSelection';
 import { getNotifications } from './notificationsModule';
-import { diffSchedule, generateFireTimes, type PendingNotification } from './scheduling';
+import { diffSchedule, generateFireTimes, generateFixedFireTimes, type PendingNotification } from './scheduling';
 
 /**
  * Neutral copy only (§6.4): notifications sit on the lock screen, so the
@@ -70,8 +70,12 @@ export async function cancelAllPendingNotifications(): Promise<void> {
  * superseded, and schedules what's missing — each newly scheduled fire time
  * picks its stem now (via the weighted draw, §6.2) and stores it on the
  * `notification_schedule` row, so a tap later just reads it back rather
- * than drawing again at open time.
+ * than drawing again at open time. Reads `settings.notification_mode` to
+ * pick `generateFireTimes` (random, the default) or `generateFixedFireTimes`
+ * (fixed, 2026-09-11 addition) — everything downstream (diff, cap, cancel,
+ * schedule, stem pick, privacy-neutral copy) is identical either way.
  *
+
  * A no-op if notification permission isn't granted — the caller is
  * responsible for having asked; this function never prompts.
  *
@@ -91,12 +95,15 @@ export async function rescheduleNotifications(seed: number = Date.now()): Promis
   if (!granted) return;
 
   const settings = repo.getSettings();
-  const desired = generateFireTimes({
-    windows: settings.windows,
-    sessionsPerDay: settings.sessions_per_day,
-    now: new Date(now),
-    seed,
-  });
+  const desired =
+    settings.notification_mode === 'fixed'
+      ? generateFixedFireTimes({ times: settings.notification_fixed_times, now: new Date(now) })
+      : generateFireTimes({
+          windows: settings.windows,
+          sessionsPerDay: settings.sessions_per_day,
+          now: new Date(now),
+          seed,
+        });
 
   const existingPending: PendingNotification[] = repo
     .listPendingNotifications()
