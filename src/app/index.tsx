@@ -1,4 +1,5 @@
 import { useRouter, Link } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -7,6 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
+import { isWeeklyReviewDue } from '@/session/reviewPeriod';
 import { selectStem } from '@/session/stemSelection';
 
 /**
@@ -25,9 +27,47 @@ function pickStemNow(): { id: string; text: string } | null {
   return full ? { id: full.id, text: full.text } : null;
 }
 
+interface HomeStatus {
+  /** "N sessions this week" — omitted (not "0 sessions") when there are none: absence is never called out (§13.4/§13.6). */
+  weekCount: number;
+  /** Review is worth surfacing only when there's something to re-read and a week has passed since the last one. */
+  reviewAvailable: boolean;
+}
+
+/** Everything here is read at render time from existing rows — no derived value is ever stored (§13.7). */
+function loadHomeStatus(): HomeStatus {
+  const repo = getRepository();
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const recent = repo.listSessionsForHistory({ dateFrom: weekAgo });
+  const wasDue = isWeeklyReviewDue(repo.getLastReviewAt(), now.toISOString());
+  return { weekCount: recent.length, reviewAvailable: wasDue && recent.length > 0 };
+}
+
+const SECONDARY_LINKS = [
+  { href: '/stems', label: 'Stems' },
+  { href: '/history', label: 'History' },
+  { href: '/review', label: 'Review' },
+  { href: '/settings', label: 'Settings' },
+  { href: '/export', label: 'Export' },
+  { href: '/import', label: 'Import' },
+] as const;
+
 export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const [status, setStatus] = useState<HomeStatus | null>(null);
+
+  useEffect(() => {
+    // A status line is a nicety, not a requirement — if it can't be read
+    // (e.g. no DB available), show nothing rather than crash the home
+    // screen or say something alarming (§13.4).
+    try {
+      setStatus(loadHomeStatus());
+    } catch {
+      setStatus(null);
+    }
+  }, []);
 
   const startNow = () => {
     const stem = pickStemNow();
@@ -38,42 +78,59 @@ export default function HomeScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ThemedText type="title">Six Endings</ThemedText>
-        <ThemedText type="default" themeColor="textSecondary">
-          A quiet place to finish a sentence.
-        </ThemedText>
-        <Pressable
-          onPress={startNow}
-          style={[styles.button, { backgroundColor: theme.backgroundElement }]}
-          accessibilityRole="button"
-        >
-          <ThemedText type="subtitle">Start now</ThemedText>
-        </Pressable>
-        <Link href="/stems" style={styles.navLink}>
-          <ThemedText type="default">Browse stems</ThemedText>
-        </Link>
-        <Link href="/history" style={styles.navLink}>
-          <ThemedText type="default">History</ThemedText>
-        </Link>
-        <Link href="/review" style={styles.navLink}>
-          <ThemedText type="default">Review</ThemedText>
-        </Link>
-        <Link href="/export" style={styles.navLink}>
-          <ThemedText type="default">Export</ThemedText>
-        </Link>
-        <Link href="/import" style={styles.navLink}>
-          <ThemedText type="default">Import</ThemedText>
-        </Link>
-        <Link href="/settings" style={styles.navLink}>
-          <ThemedText type="default">Settings</ThemedText>
-        </Link>
-        {__DEV__ && (
-          <Link href="/debug" style={styles.navLink}>
-            <ThemedText type="small" themeColor="textSecondary">
-              Debug: dump all tables
+        <ThemedView style={styles.content}>
+          <ThemedView style={styles.header}>
+            <ThemedText type="title">Six Endings</ThemedText>
+            <ThemedText type="default" themeColor="textSecondary">
+              A quiet place to finish a sentence.
             </ThemedText>
-          </Link>
-        )}
+          </ThemedView>
+
+          <Pressable
+            onPress={startNow}
+            style={[styles.primaryButton, { backgroundColor: theme.backgroundElement }]}
+            accessibilityRole="button"
+          >
+            <ThemedText type="subtitle">Start writing</ThemedText>
+          </Pressable>
+
+          {status && (status.weekCount > 0 || status.reviewAvailable) && (
+            <ThemedView style={styles.statusBlock}>
+              {status.weekCount > 0 && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {status.weekCount === 1 ? '1 session this week' : `${status.weekCount} sessions this week`}
+                </ThemedText>
+              )}
+              {status.reviewAvailable && (
+                <Link href="/review" style={styles.reviewLink}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Review available
+                  </ThemedText>
+                </Link>
+              )}
+            </ThemedView>
+          )}
+
+          <ThemedView style={styles.grid}>
+            {SECONDARY_LINKS.map(({ href, label }) => (
+              <Link
+                key={href}
+                href={href}
+                style={[styles.tile, { backgroundColor: theme.backgroundElement }]}
+              >
+                <ThemedText type="default">{label}</ThemedText>
+              </Link>
+            ))}
+          </ThemedView>
+
+          {__DEV__ && (
+            <Link href="/debug" style={styles.navLink}>
+              <ThemedText type="small" themeColor="textSecondary">
+                Debug: dump all tables
+              </ThemedText>
+            </Link>
+          )}
+        </ThemedView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -87,17 +144,50 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: Spacing.two,
+  },
+  content: {
+    gap: Spacing.four,
     paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.five,
     alignSelf: 'center',
     maxWidth: MaxContentWidth,
     width: '100%',
   },
-  button: {
+  header: {
+    gap: Spacing.one,
+    alignItems: 'center',
+  },
+  primaryButton: {
+    minHeight: MinTouchTarget * 1.3,
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.four,
     borderRadius: Spacing.two,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusBlock: {
+    gap: Spacing.half,
+    alignItems: 'center',
+  },
+  reviewLink: {
+    minHeight: MinTouchTarget,
+    textAlignVertical: 'center',
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+    justifyContent: 'center',
+  },
+  tile: {
+    minHeight: MinTouchTarget,
+    minWidth: '30%',
+    flexGrow: 1,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Spacing.two,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   navLink: {
     minHeight: MinTouchTarget,
