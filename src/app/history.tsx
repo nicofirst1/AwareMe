@@ -3,14 +3,22 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Card } from '@/components/card';
+import { EmptyState } from '@/components/empty-state';
 import { FilterChip } from '@/components/filter-chip';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { CategoryColors, Spacing, type CategoryName } from '@/constants/theme';
 import { EndingSearchResult, getRepository, HistorySessionRow } from '@/db';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 
 type Theme = ReturnType<typeof useTheme>;
+type Scheme = ReturnType<typeof useColorScheme>;
+
+function isCategoryName(c: string | null): c is CategoryName {
+  return c !== null && c in CategoryColors;
+}
 
 type DateRangePreset = 'all' | '7d' | '30d' | '90d';
 
@@ -38,6 +46,7 @@ function dateFromForPreset(preset: DateRangePreset, now: Date): string | undefin
 export default function HistoryScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const scheme = useColorScheme();
   const [sessions, setSessions] = useState<HistorySessionRow[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [stemOptions, setStemOptions] = useState<{ id: string; text: string }[]>([]);
@@ -78,8 +87,8 @@ export default function HistoryScreen() {
     [theme, openSearchResult],
   );
   const renderSessionRow = useCallback(
-    ({ item }: { item: HistorySessionRow }) => <SessionRow item={item} theme={theme} onPress={openSearchResult} />,
-    [theme, openSearchResult],
+    ({ item }: { item: HistorySessionRow }) => <SessionRow item={item} theme={theme} scheme={scheme} onPress={openSearchResult} />,
+    [theme, scheme, openSearchResult],
   );
 
   return (
@@ -138,11 +147,7 @@ export default function HistoryScreen() {
             data={searchResults}
             keyExtractor={(r) => r.endingId}
             contentContainerStyle={styles.list}
-            ListEmptyComponent={
-              <ThemedText type="default" themeColor="textSecondary">
-                No matches.
-              </ThemedText>
-            }
+            ListEmptyComponent={<EmptyState message="No matches." />}
             renderItem={renderSearchResultRow}
           />
         ) : (
@@ -150,11 +155,7 @@ export default function HistoryScreen() {
             data={sessions}
             keyExtractor={(s) => s.id}
             contentContainerStyle={styles.list}
-            ListEmptyComponent={
-              <ThemedText type="default" themeColor="textSecondary">
-                Nothing here yet.
-              </ThemedText>
-            }
+            ListEmptyComponent={<EmptyState message="Nothing here yet." />}
             renderItem={renderSessionRow}
           />
         )}
@@ -173,19 +174,16 @@ const SearchResultRow = memo(function SearchResultRow({
   onPress: (id: string) => void;
 }) {
   return (
-    <Pressable
-      onPress={() => onPress(item.sessionId)}
-      style={[styles.row, { backgroundColor: theme.backgroundElement }]}
-      accessibilityRole="button"
-      accessibilityLabel={`Open session: ${item.stemTextSnapshot}`}
-    >
-      <ThemedText type="small" themeColor="textSecondary">
-        {item.stemTextSnapshot}
-      </ThemedText>
-      <ThemedText type="stem">{item.text}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        {formatDate(item.startedAt)}
-      </ThemedText>
+    <Pressable onPress={() => onPress(item.sessionId)} accessibilityRole="button" accessibilityLabel={`Open session: ${item.stemTextSnapshot}`}>
+      <Card style={styles.row}>
+        <ThemedText type="small" themeColor="textSecondary">
+          {item.stemTextSnapshot}
+        </ThemedText>
+        <ThemedText type="stem">{item.text}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {formatDate(item.startedAt)}
+        </ThemedText>
+      </Card>
     </Pressable>
   );
 });
@@ -193,23 +191,24 @@ const SearchResultRow = memo(function SearchResultRow({
 const SessionRow = memo(function SessionRow({
   item,
   theme,
+  scheme,
   onPress,
 }: {
   item: HistorySessionRow;
   theme: Theme;
+  scheme: Scheme;
   onPress: (id: string) => void;
 }) {
+  const accentColor = isCategoryName(item.category) ? CategoryColors[item.category][scheme === 'dark' ? 'dark' : 'light'].bg : undefined;
+
   return (
-    <Pressable
-      onPress={() => onPress(item.id)}
-      style={[styles.row, { backgroundColor: theme.backgroundElement }]}
-      accessibilityRole="button"
-      accessibilityLabel={`Open session: ${item.stem_text_snapshot}`}
-    >
-      <ThemedText type="stem">{item.stem_text_snapshot}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        {[formatDate(item.started_at), item.category].filter(Boolean).join(' · ')}
-      </ThemedText>
+    <Pressable onPress={() => onPress(item.id)} accessibilityRole="button" accessibilityLabel={`Open session: ${item.stem_text_snapshot}`}>
+      <Card style={styles.row} accentColor={accentColor}>
+        <ThemedText type="stem">{item.stem_text_snapshot}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {[formatDate(item.started_at), item.category].filter(Boolean).join(' · ')}
+        </ThemedText>
+      </Card>
     </Pressable>
   );
 });
@@ -282,8 +281,6 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   row: {
-    padding: Spacing.three,
-    borderRadius: Spacing.two,
     gap: Spacing.half,
   },
 });

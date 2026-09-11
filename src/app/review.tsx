@@ -1,9 +1,13 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/button';
+import { Card } from '@/components/card';
+import { EmptyState } from '@/components/empty-state';
 import { FilterChip } from '@/components/filter-chip';
+import { ProgressBar } from '@/components/progress-bar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -32,7 +36,6 @@ type ReviewPhase = 'reread' | 'meta-stem' | 'done';
  */
 export default function ReviewScreen() {
   const router = useRouter();
-  const theme = useTheme();
   const session = useWritingSession();
 
   const [phase, setPhase] = useState<ReviewPhase>('reread');
@@ -104,13 +107,7 @@ export default function ReviewScreen() {
             <ThemedText type="default" themeColor="textSecondary">
               Saved.
             </ThemedText>
-            <Pressable
-              onPress={() => router.back()}
-              style={[styles.button, { backgroundColor: theme.backgroundElement }]}
-              accessibilityRole="button"
-            >
-              <ThemedText type="subtitle">Close</ThemedText>
-            </Pressable>
+            <Button label="Close" onPress={() => router.back()} />
           </ScrollView>
         </SafeAreaView>
       </ThemedView>
@@ -135,12 +132,10 @@ export default function ReviewScreen() {
           </ThemedView>
 
           {reviewedSessions.length === 0 ? (
-            <ThemedText type="default" themeColor="textSecondary">
-              Nothing written in this period.
-            </ThemedText>
+            <EmptyState message="Nothing written in this period." />
           ) : (
             reviewedSessions.map(({ session: s, endings }) => (
-              <ThemedView key={s.id} style={styles.sessionBlock}>
+              <Card key={s.id} style={styles.sessionBlock}>
                 <ThemedText type="small" themeColor="textSecondary">
                   {formatDate(s.started_at)}
                 </ThemedText>
@@ -150,17 +145,11 @@ export default function ReviewScreen() {
                     {e.text || '(nothing written)'}
                   </ThemedText>
                 ))}
-              </ThemedView>
+              </Card>
             ))
           )}
 
-          <Pressable
-            onPress={beginMetaStem}
-            style={[styles.button, { backgroundColor: theme.backgroundElement }]}
-            accessibilityRole="button"
-          >
-            <ThemedText type="subtitle">Continue</ThemedText>
-          </Pressable>
+          <Button label="Continue" onPress={beginMetaStem} />
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
@@ -184,18 +173,7 @@ function MetaStemSession({ session }: { session: ReturnType<typeof useWritingSes
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <ThemedText type="stem">{session.stemText}</ThemedText>
 
-          {session.phase === 'active' && (
-            <ThemedView
-              type="backgroundElement"
-              style={styles.progressTrack}
-              accessible
-              accessibilityRole="progressbar"
-              accessibilityLabel="Time remaining"
-              accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
-            >
-              <ThemedView type="backgroundSelected" style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-            </ThemedView>
-          )}
+          {session.phase === 'active' && <ProgressBar progress={progress} accessibilityLabel="Time remaining" />}
 
           {session.phase === 'active' && (
             <>
@@ -212,13 +190,7 @@ function MetaStemSession({ session }: { session: ReturnType<typeof useWritingSes
                 placeholder="Keep the pen moving."
                 placeholderTextColor={theme.textSecondary}
               />
-              <Pressable
-                onPress={session.finishNow}
-                style={[styles.button, { backgroundColor: theme.backgroundElement }]}
-                accessibilityRole="button"
-              >
-                <ThemedText type="subtitle">Done</ThemedText>
-              </Pressable>
+              <Button label="Done" onPress={session.finishNow} />
             </>
           )}
         </ScrollView>
@@ -255,24 +227,10 @@ const styles = StyleSheet.create({
   ending: {
     opacity: 0.85,
   },
-  progressTrack: {
-    height: 3,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-  },
   input: {
     fontFamily: Fonts.serif,
     fontSize: 22,
     lineHeight: 34,
     minHeight: 80,
-  },
-  button: {
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.four,
-    borderRadius: Spacing.two,
-    alignItems: 'center',
   },
 });

@@ -3,12 +3,12 @@ import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
 import { EndingRow, getRepository, SessionRow } from '@/db';
 import { nowEventTime } from '@/db/time';
-import { useTheme } from '@/hooks/use-theme';
 
 /**
  * Session detail (§6.7): every ending in the session with its timing, and
@@ -19,7 +19,6 @@ import { useTheme } from '@/hooks/use-theme';
 export default function SessionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const theme = useTheme();
 
   const [detail, setDetail] = useState<{ session: SessionRow; endings: EndingRow[] } | null>(null);
 
@@ -75,14 +74,14 @@ export default function SessionDetailScreen() {
 
           <ThemedView style={styles.endingList}>
             {endings.map((e) => (
-              <ThemedView key={e.id} style={[styles.endingRow, { backgroundColor: theme.backgroundElement }]}>
+              <Card key={e.id} style={styles.endingRow}>
                 <ThemedText type="stem">{e.text || '(nothing written)'}</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
                   {formatTime(e.started_at)}
                   {e.submitted_at ? ` – ${formatTime(e.submitted_at)}` : ''} · {e.backspace_count} backspace
                   {e.backspace_count === 1 ? '' : 's'}
                 </ThemedText>
-              </ThemedView>
+              </Card>
             ))}
           </ThemedView>
 
@@ -129,8 +128,6 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   endingRow: {
-    padding: Spacing.three,
-    borderRadius: Spacing.two,
     gap: Spacing.half,
   },
   deleteLink: {
