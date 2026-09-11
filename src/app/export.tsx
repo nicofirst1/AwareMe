@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BackHeader } from '@/components/back-header';
 import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -55,6 +56,7 @@ export default function ExportScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
+        <BackHeader />
         <ThemedText type="title">Export</ThemedText>
         <ThemedText type="default" themeColor="textSecondary">
           Your data stays open to analysis, always. Nothing is ever locked in.

@@ -3,6 +3,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BackHeader } from '@/components/back-header';
 import { Card } from '@/components/card';
 import { EmptyState } from '@/components/empty-state';
 import { FilterChip } from '@/components/filter-chip';
@@ -94,6 +95,7 @@ export default function HistoryScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
+        <BackHeader style={styles.backHeader} />
         <ThemedText type="title" style={styles.title}>
           History
         </ThemedText>
@@ -253,9 +255,13 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
+  backHeader: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.two,
+  },
   title: {
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
+    paddingTop: Spacing.one,
   },
   search: {
     marginHorizontal: Spacing.four,

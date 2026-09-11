@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BackHeader } from '@/components/back-header';
 import { FilterChip } from '@/components/filter-chip';
 import { SectionHeader } from '@/components/section-header';
 import { ThemedText } from '@/components/themed-text';
@@ -234,6 +235,7 @@ export default function SettingsScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
+        <BackHeader style={styles.backHeader} />
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <ThemedText type="title">Settings</ThemedText>
 
@@ -456,6 +458,10 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
+  backHeader: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.two,
+  },
   scrollContent: {
     padding: Spacing.four,
     gap: Spacing.four,
@@ -514,9 +520,13 @@ const styles = StyleSheet.create({
     minHeight: MinTouchTarget,
     textAlign: 'center',
   },
+  // No extra `paddingTop` here (2026-09-11 visual-test finding: this stacked
+  // on top of `scrollContent`'s own `gap: Spacing.four` between children,
+  // doubling the space above "Delete all data" to ~48px vs. every other
+  // section boundary's ~32px — the ScrollView's gap alone now matches the
+  // rest of the screen's rhythm).
   destructiveBlock: {
     gap: Spacing.two,
-    paddingTop: Spacing.four,
   },
   deleteButton: {
     paddingVertical: Spacing.two,

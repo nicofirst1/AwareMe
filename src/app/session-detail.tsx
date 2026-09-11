@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BackHeader } from '@/components/back-header';
 import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -33,7 +34,8 @@ export default function SessionDetailScreen() {
     return (
       <ThemedView style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
-          <ThemedText type="default" themeColor="textSecondary">
+          <BackHeader style={styles.backHeader} />
+          <ThemedText type="default" themeColor="textSecondary" style={styles.notFound}>
             Session not found.
           </ThemedText>
         </SafeAreaView>
@@ -65,6 +67,7 @@ export default function SessionDetailScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
+        <BackHeader style={styles.backHeader} />
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <ThemedText type="stem">{session.stem_text_snapshot}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
@@ -116,6 +119,14 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  backHeader: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.two,
+  },
+  notFound: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.three,
   },
   scrollContent: {
     padding: Spacing.four,

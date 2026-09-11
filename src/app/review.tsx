@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BackHeader } from '@/components/back-header';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { EmptyState } from '@/components/empty-state';
@@ -103,6 +104,7 @@ export default function ReviewScreen() {
     return (
       <ThemedView style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
+          <BackHeader style={styles.backHeader} />
           <ScrollView contentContainerStyle={styles.scrollContent}>
             <ThemedText type="default" themeColor="textSecondary">
               Saved.
@@ -117,6 +119,7 @@ export default function ReviewScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
+        <BackHeader style={styles.backHeader} />
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <ThemedText type="title">Review</ThemedText>
           {wasDue && (
@@ -209,6 +212,10 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  backHeader: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.two,
   },
   scrollContent: {
     padding: Spacing.four,

@@ -4,6 +4,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BackHeader } from '@/components/back-header';
 import { Button } from '@/components/button';
 import { EmptyState } from '@/components/empty-state';
 import { FilterChip } from '@/components/filter-chip';
@@ -142,6 +143,7 @@ export default function StemsScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
+        <BackHeader style={styles.backHeader} />
         <ThemedView style={styles.headerRow}>
           <ThemedText type="title" style={styles.title}>
             Stems
@@ -378,12 +380,16 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
+  backHeader: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.two,
+  },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
+    paddingTop: Spacing.one,
     flexGrow: 0,
     flexShrink: 0,
   },

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, Link } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useRouter, useFocusEffect, Link } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,7 +9,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, MinTouchTarget, Radius, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
+import { nowEventTime } from '@/db/time';
 import { useTheme } from '@/hooks/use-theme';
+import { computeStreaks } from '@/session/progressStats';
 import { isWeeklyReviewDue } from '@/session/reviewPeriod';
 import { selectStem } from '@/session/stemSelection';
 
@@ -34,6 +36,8 @@ interface HomeStatus {
   weekCount: number;
   /** Review is worth surfacing only when there's something to re-read and a week has passed since the last one. */
   reviewAvailable: boolean;
+  /** Current consecutive-day streak — shown only at 3+ (gamification proposal §1.B), same quiet treatment as the lines above. */
+  currentStreak: number;
 }
 
 /** Everything here is read at render time from existing rows — no derived value is ever stored (§13.7). */
@@ -43,7 +47,9 @@ function loadHomeStatus(): HomeStatus {
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const recent = repo.listSessionsForHistory({ dateFrom: weekAgo });
   const wasDue = isWeeklyReviewDue(repo.getLastReviewAt(), now.toISOString());
-  return { weekCount: recent.length, reviewAvailable: wasDue && recent.length > 0 };
+  const { at, offsetMin } = nowEventTime(now);
+  const { current } = computeStreaks(repo.listSessionsForStats(), at, offsetMin);
+  return { weekCount: recent.length, reviewAvailable: wasDue && recent.length > 0, currentStreak: current };
 }
 
 // Ionicons outline glyphs (2026-09-11, ui-audit-2026-09-11.md cycle 2) — a
@@ -54,6 +60,7 @@ const SECONDARY_LINKS = [
   { href: '/stems', label: 'Stems', icon: 'leaf-outline' },
   { href: '/history', label: 'History', icon: 'time-outline' },
   { href: '/review', label: 'Review', icon: 'glasses-outline' },
+  { href: '/progress', label: 'Progress', icon: 'trophy-outline' },
   { href: '/settings', label: 'Settings', icon: 'options-outline' },
   { href: '/export', label: 'Export', icon: 'share-outline' },
   { href: '/import', label: 'Import', icon: 'download-outline' },
@@ -64,16 +71,25 @@ export default function HomeScreen() {
   const theme = useTheme();
   const [status, setStatus] = useState<HomeStatus | null>(null);
 
-  useEffect(() => {
-    // A status line is a nicety, not a requirement — if it can't be read
-    // (e.g. no DB available), show nothing rather than crash the home
-    // screen or say something alarming (§13.4).
-    try {
-      setStatus(loadHomeStatus());
-    } catch {
-      setStatus(null);
-    }
-  }, []);
+  // Focus-based, not mount-only (2026-09-11 visual-test finding: completing
+  // a session and navigating back here left the status block stale, since
+  // a plain `useEffect` only ran once on first mount). `useFocusEffect`
+  // calls `useNavigation()` internally, which throws outside a real
+  // navigation tree — `index.test.tsx` mocks it to run once on mount
+  // instead (same pattern `stems.test.tsx` already uses), so a bare
+  // `render(<HomeScreen />)` still exercises this without a NavigationContainer.
+  useFocusEffect(
+    useCallback(() => {
+      // A status line is a nicety, not a requirement — if it can't be read
+      // (e.g. no DB available), show nothing rather than crash the home
+      // screen or say something alarming (§13.4).
+      try {
+        setStatus(loadHomeStatus());
+      } catch {
+        setStatus(null);
+      }
+    }, []),
+  );
 
   const startNow = () => {
     const stem = pickStemNow();
@@ -94,11 +110,19 @@ export default function HomeScreen() {
 
           <Button label="Start writing" onPress={startNow} variant="primary" style={styles.primaryButton} />
 
-          {status && (status.weekCount > 0 || status.reviewAvailable) && (
+          {status && (status.weekCount > 0 || status.reviewAvailable || status.currentStreak >= 3) && (
             <ThemedView style={styles.statusBlock}>
               {status.weekCount > 0 && (
                 <ThemedText type="small" themeColor="textSecondary">
                   {status.weekCount === 1 ? '1 session this week' : `${status.weekCount} sessions this week`}
+                </ThemedText>
+              )}
+              {/* Descriptive only, never bold/colored/badged (§13.4/§13.6 as
+                  amended) — shown at 3+ so "1 day in a row" never reads as a
+                  demand (gamification proposal §1.B). */}
+              {status.currentStreak >= 3 && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {status.currentStreak} days in a row
                 </ThemedText>
               )}
               {status.reviewAvailable && (
