@@ -8,6 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Fonts, MaxContentWidth, MinTouchTarget, PressureColors, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
+import { formatMMSS, sessionDurationLabel } from '@/session/sessionMachine';
 import type { StemForSession } from '@/session/useWritingSession';
 import { useWritingSession } from '@/session/useWritingSession';
 
@@ -105,6 +106,15 @@ export default function WriteScreen() {
   });
 
   const submittedEndings = session.state?.endings.filter((e) => e.submittedAt !== null) ?? [];
+
+  // Countdown button label (2026-09-11 addition, §6.3.4): the per-stem
+  // remaining time when that timer is on, else the session's — same
+  // urgency source the button's color gradient already tracks
+  // (`pressureFraction` above). Falls back to the static "Next" label if
+  // neither timer has a value to show (defensive; shouldn't happen while
+  // `session.phase === 'active'`).
+  const countdownSeconds = stemTimerSeconds ? session.stemRemainingSeconds : session.remainingSeconds;
+  const buttonLabel = countdownSeconds !== null ? formatMMSS(countdownSeconds) : 'Next';
 
   // Enter submits the ending (2026-09-11 addition, §6.3.4): the input is
   // `multiline` so it wraps a long sentence, which means the platform
@@ -214,10 +224,14 @@ export default function WriteScreen() {
                   <ThemedView type="backgroundSelected" style={[styles.progressFill, { width: `${stemProgress * 100}%` }]} />
                 </ThemedView>
               )}
-              <Pressable onPress={() => session.submitActive()} accessibilityRole="button">
+              <Pressable
+                onPress={() => session.submitActive()}
+                accessibilityRole="button"
+                accessibilityLabel="Save this ending"
+              >
                 <Animated.View style={[styles.button, { backgroundColor: buttonBackgroundColor }]}>
                   <ThemedText type="subtitle" style={styles.buttonLabelOnPressure}>
-                    Next
+                    {buttonLabel}
                   </ThemedText>
                 </Animated.View>
               </Pressable>
@@ -240,6 +254,14 @@ export default function WriteScreen() {
               <ThemedText type="default" themeColor="textSecondary">
                 Saved.
               </ThemedText>
+              {session.state?.endedAt && (
+                // Computed at read time from the session's own timestamps
+                // (§13.7 — never store a derived value); quiet, descriptive,
+                // no praise (§13.4).
+                <ThemedText type="small" themeColor="textSecondary">
+                  {sessionDurationLabel(session.state.startedAt, session.state.endedAt, submittedEndings.length)}
+                </ThemedText>
+              )}
               <Pressable onPress={() => router.back()} style={[styles.button, { backgroundColor: theme.backgroundElement }]} accessibilityRole="button">
                 <ThemedText type="subtitle">Close</ThemedText>
               </Pressable>

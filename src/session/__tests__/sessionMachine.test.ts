@@ -2,8 +2,10 @@ import {
   computeReturnAction,
   expireActiveEnding,
   finalizeSession,
+  formatMMSS,
   isComplete,
   recordFirstKeypress,
+  sessionDurationLabel,
   startSession,
   submitActiveEnding,
   updateActiveEndingText,
@@ -246,5 +248,40 @@ describe('computeReturnAction (ADR-0001)', () => {
     const longTimer = { ...base, config: { ...CONFIG, timerSeconds: 3600 } };
     const action = computeReturnAction(longTimer, '2026-09-10T08:05:00.001Z');
     expect(action).toEqual({ kind: 'finalize', reason: 'abandoned' });
+  });
+});
+
+describe('formatMMSS', () => {
+  it('formats seconds under a minute with a leading "0:"', () => {
+    expect(formatMMSS(47)).toBe('0:47');
+    expect(formatMMSS(0)).toBe('0:00');
+  });
+
+  it('formats minutes and pads seconds to two digits', () => {
+    expect(formatMMSS(90)).toBe('1:30');
+    expect(formatMMSS(65)).toBe('1:05');
+  });
+
+  it('rounds fractional seconds', () => {
+    expect(formatMMSS(89.6)).toBe('1:30');
+  });
+
+  it('clamps negative or non-finite input to 0:00 rather than throwing', () => {
+    expect(formatMMSS(-5)).toBe('0:00');
+    expect(formatMMSS(NaN)).toBe('0:00');
+  });
+});
+
+describe('sessionDurationLabel', () => {
+  it('pluralizes "endings" and formats elapsed m:ss', () => {
+    expect(sessionDurationLabel('2026-09-10T08:00:00.000Z', '2026-09-10T08:04:32.000Z', 6)).toBe(
+      '6 endings · 4:32',
+    );
+  });
+
+  it('uses singular "ending" for a count of 1', () => {
+    expect(sessionDurationLabel('2026-09-10T08:00:00.000Z', '2026-09-10T08:00:47.000Z', 1)).toBe(
+      '1 ending · 0:47',
+    );
   });
 });

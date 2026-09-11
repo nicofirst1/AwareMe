@@ -178,6 +178,33 @@ export function finalizeSession(state: SessionState, reason: EndReason, at: stri
   };
 }
 
+/**
+ * `m:ss` for a countdown (2026-09-11 addition, §6.3.4/§13.7): the Save/Next
+ * button's label switches from static text to this once a timer is running.
+ * Seconds only (no `h:mm:ss`) — every session/per-stem timer is well under
+ * an hour, so a leading-hour branch would be dead code, not defensive.
+ * Negative/non-finite input clamps to '0:00' rather than throwing, since a
+ * caller mid-tick (e.g. an expiring interval) can transiently pass one.
+ */
+export function formatMMSS(totalSeconds: number): string {
+  const s = Number.isFinite(totalSeconds) ? Math.max(0, Math.round(totalSeconds)) : 0;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, '0')}`;
+}
+
+/**
+ * The completion view's quiet duration line (2026-09-11 addition, spec
+ * §13.7: never store a derived value — this is computed at read time from
+ * the two timestamps the session already persisted). e.g. "6 endings ·
+ * 4:32". Descriptive only, no praise/evaluation (§13.4).
+ */
+export function sessionDurationLabel(startedAt: string, endedAt: string, endingCount: number): string {
+  const elapsedSeconds = (Date.parse(endedAt) - Date.parse(startedAt)) / 1000;
+  const endingWord = endingCount === 1 ? 'ending' : 'endings';
+  return `${endingCount} ${endingWord} · ${formatMMSS(elapsedSeconds)}`;
+}
+
 export type ReturnAction =
   | { kind: 'resume'; remainingSeconds: number }
   | { kind: 'finalize'; reason: 'timeout' | 'abandoned' };
