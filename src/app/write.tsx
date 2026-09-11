@@ -4,6 +4,7 @@ import { Animated, Pressable, ScrollView, StyleSheet, TextInput } from 'react-na
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
+import { ProgressBar } from '@/components/progress-bar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts, MaxContentWidth, MinTouchTarget, PressureColors, Radius, Spacing } from '@/constants/theme';
@@ -163,18 +164,7 @@ export default function WriteScreen() {
             {terminator}
           </ThemedText>
 
-          {session.phase === 'active' && (
-            <ThemedView
-              type="backgroundElement"
-              style={styles.progressTrack}
-              accessible
-              accessibilityRole="progressbar"
-              accessibilityLabel="Time remaining"
-              accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
-            >
-              <ThemedView type="backgroundSelected" style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-            </ThemedView>
-          )}
+          {session.phase === 'active' && <ProgressBar progress={progress} accessibilityLabel="Time remaining" />}
 
           {/*
             Read-only text, not inputs: there is no control that lets the
@@ -208,16 +198,7 @@ export default function WriteScreen() {
                 placeholderTextColor={theme.textSecondary}
               />
               {stemProgress !== null && (
-                <ThemedView
-                  type="backgroundElement"
-                  style={styles.progressTrack}
-                  accessible
-                  accessibilityRole="progressbar"
-                  accessibilityLabel="Time remaining for this ending"
-                  accessibilityValue={{ min: 0, max: 100, now: Math.round(stemProgress * 100) }}
-                >
-                  <ThemedView type="backgroundSelected" style={[styles.progressFill, { width: `${stemProgress * 100}%` }]} />
-                </ThemedView>
+                <ProgressBar progress={stemProgress} accessibilityLabel="Time remaining for this ending" />
               )}
               <Pressable
                 onPress={() => session.submitActive()}
@@ -298,14 +279,6 @@ const styles = StyleSheet.create({
     minWidth: MinTouchTarget,
     alignItems: 'flex-end',
     justifyContent: 'center',
-  },
-  progressTrack: {
-    height: 3,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
   },
   input: {
     fontFamily: Fonts.serif,

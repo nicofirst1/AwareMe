@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
@@ -146,23 +147,15 @@ export default function OnboardingScreen() {
               ask again.
             </ThemedText>
             <ThemedView style={styles.buttonRow}>
-              <Pressable
-                onPress={askForNotifications}
-                style={[styles.button, { backgroundColor: theme.backgroundElement }]}
-                accessibilityRole="button"
-              >
-                <ThemedText type="subtitle">Allow reminders</ThemedText>
-              </Pressable>
-              <Pressable
+              <Button label="Allow reminders" onPress={askForNotifications} />
+              <Button
+                label="Not now"
+                variant="text"
                 onPress={() => {
                   setNotificationsEnabled(false);
                   goToStep(3);
                 }}
-                style={styles.textButton}
-                accessibilityRole="button"
-              >
-                <ThemedText type="default">Not now</ThemedText>
-              </Pressable>
+              />
             </ThemedView>
           </ThemedView>
 
@@ -209,9 +202,7 @@ export default function OnboardingScreen() {
               </ThemedView>
             )}
 
-            <Pressable onPress={finish} style={[styles.button, { backgroundColor: theme.backgroundElement }]} accessibilityRole="button">
-              <ThemedText type="subtitle">Done</ThemedText>
-            </Pressable>
+            <Button label="Done" onPress={finish} />
           </ThemedView>
         </ScrollView>
 
@@ -333,12 +324,6 @@ const styles = StyleSheet.create({
   navLink: {
     minHeight: MinTouchTarget,
     textAlignVertical: 'center',
-  },
-  button: {
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.four,
-    borderRadius: Spacing.two,
-    alignItems: 'center',
   },
   prefRow: {
     flexDirection: 'row',

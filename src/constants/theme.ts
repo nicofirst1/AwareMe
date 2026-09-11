@@ -77,6 +77,10 @@ export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
  * 8.61:1 / 9.27:1, assertiveness 7.55:1 / 8.95:1, purpose 9.53:1 / 8.63:1,
  * integrity 9.65:1 / 9.27:1 (light / dark respectively) — all well clear of
  * the 4.5:1 floor while staying muted, not traffic-light saturated (§10).
+ * `.bg` doubles as a decorative accent-stripe color for `Card`'s
+ * `accentColor` prop (history.tsx's `SessionRow`, cycle 3) — that use is
+ * non-text (a 3px left edge), so it isn't held to the 4.5:1 text-contrast
+ * bar above; only the `bg`/`text` pairing itself is.
  */
 export const CategoryColors = {
   awareness: {

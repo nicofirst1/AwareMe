@@ -190,7 +190,7 @@ function MetaStemSession({ session }: { session: ReturnType<typeof useWritingSes
                 placeholder="Keep the pen moving."
                 placeholderTextColor={theme.textSecondary}
               />
-              <Button label="Done" onPress={session.finishNow} />
+              <Button label="Done" onPress={session.finishNow} variant="text" />
             </>
           )}
         </ScrollView>

@@ -1,7 +1,9 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -56,29 +58,37 @@ export default function ImportScreen() {
         <Pressable
           onPress={() => runImport('merge')}
           disabled={busy !== null}
-          style={[styles.card, { backgroundColor: theme.backgroundElement, opacity: busy !== null && busy !== 'merge' ? 0.5 : 1 }]}
           accessibilityRole="button"
           accessibilityState={{ disabled: busy !== null, busy: busy === 'merge' }}
         >
-          <ThemedText type="subtitle">Merge</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            Adds rows from the file that aren&apos;t already here (matched by id). Nothing existing is changed or removed.
-          </ThemedText>
-          {busy === 'merge' && <ActivityIndicator style={styles.spinner} />}
+          <Card style={[styles.card, { opacity: busy !== null && busy !== 'merge' ? 0.5 : 1 }]}>
+            <ThemedView style={styles.cardHeader}>
+              <Ionicons name="git-merge-outline" size={20} color={theme.textSecondary} />
+              <ThemedText type="subtitle">Merge</ThemedText>
+            </ThemedView>
+            <ThemedText type="small" themeColor="textSecondary">
+              Adds rows from the file that aren&apos;t already here (matched by id). Nothing existing is changed or removed.
+            </ThemedText>
+            {busy === 'merge' && <ActivityIndicator style={styles.spinner} />}
+          </Card>
         </Pressable>
 
         <Pressable
           onPress={confirmReplace}
           disabled={busy !== null}
-          style={[styles.card, { backgroundColor: theme.backgroundElement, opacity: busy !== null && busy !== 'replace' ? 0.5 : 1 }]}
           accessibilityRole="button"
           accessibilityState={{ disabled: busy !== null, busy: busy === 'replace' }}
         >
-          <ThemedText type="subtitle">Replace</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            Deletes everything currently in the app, then loads the file in its place.
-          </ThemedText>
-          {busy === 'replace' && <ActivityIndicator style={styles.spinner} />}
+          <Card style={[styles.card, { opacity: busy !== null && busy !== 'replace' ? 0.5 : 1 }]}>
+            <ThemedView style={styles.cardHeader}>
+              <Ionicons name="swap-horizontal-outline" size={20} color={theme.textSecondary} />
+              <ThemedText type="subtitle">Replace</ThemedText>
+            </ThemedView>
+            <ThemedText type="small" themeColor="textSecondary">
+              Deletes everything currently in the app, then loads the file in its place.
+            </ThemedText>
+            {busy === 'replace' && <ActivityIndicator style={styles.spinner} />}
+          </Card>
         </Pressable>
       </SafeAreaView>
     </ThemedView>
@@ -98,9 +108,12 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   card: {
-    padding: Spacing.three,
-    borderRadius: Spacing.two,
     gap: Spacing.one,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
   spinner: {
     marginTop: Spacing.one,

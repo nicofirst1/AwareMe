@@ -4,6 +4,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-nativ
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FilterChip } from '@/components/filter-chip';
+import { SectionHeader } from '@/components/section-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
@@ -236,173 +237,189 @@ export default function SettingsScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <ThemedText type="title">Settings</ThemedText>
 
-          <NumberStepper
-            label="Endings per session"
-            value={settings.endings_per_session}
-            settingKey="endings_per_session"
-            onChange={(v) => set('endings_per_session', v)}
-          />
-          <Hint>How many endings you write to the same stem before the session ends.</Hint>
+          <ThemedView style={[styles.group, { borderTopColor: theme.border }]}>
+            <SectionHeader label="Session" />
 
-          <NumberStepper
-            label="Timer (seconds)"
-            value={settings.timer_seconds}
-            settingKey="timer_seconds"
-            step={10}
-            onChange={(v) => set('timer_seconds', v)}
-          />
-          <Hint>How long the whole session runs, from Start to timeout.</Hint>
-
-          <NumberStepper
-            label="Sessions per day"
-            value={settings.sessions_per_day}
-            settingKey="sessions_per_day"
-            onChange={onSessionsPerDayChange}
-          />
-          <Hint>How many reminder notifications to send per day, at most.</Hint>
-
-          <ThemedView style={styles.section}>
-            <ThemedText type="small" themeColor="textSecondary">
-              Stem time limit
-            </ThemedText>
-            <Hint>
-              An optional per-stem countdown, separate from the session timer above. Off by default; the writing
-              screen does not use it yet.
-            </Hint>
-            <ChipToggle
-              options={['off', 'on'] as const}
-              value={settings.stem_timer_enabled ? 'on' : 'off'}
-              onChange={(v) => set('stem_timer_enabled', v === 'on')}
+            <NumberStepper
+              label="Endings per session"
+              value={settings.endings_per_session}
+              settingKey="endings_per_session"
+              onChange={(v) => set('endings_per_session', v)}
             />
-            {settings.stem_timer_enabled && (
-              <NumberStepper
-                label="Seconds per stem"
-                value={settings.stem_timer_seconds}
-                settingKey="stem_timer_seconds"
-                step={5}
-                onChange={(v) => set('stem_timer_seconds', v)}
-              />
-            )}
-          </ThemedView>
+            <Hint>How many endings you write to the same stem before the session ends.</Hint>
 
-          <ThemedView style={styles.section}>
-            <ThemedText type="small" themeColor="textSecondary">
-              Notification timing
-            </ThemedText>
-            <Hint>
-              Random picks a different moment each day inside the window below, so the exercise can&apos;t be
-              pre-planned. Fixed fires at exact times you choose instead.
-            </Hint>
-            <ChipToggle options={NOTIFICATION_MODES} value={settings.notification_mode} onChange={onNotificationModeChange} />
-          </ThemedView>
+            <NumberStepper
+              label="Timer (seconds)"
+              value={settings.timer_seconds}
+              settingKey="timer_seconds"
+              step={10}
+              onChange={(v) => set('timer_seconds', v)}
+            />
+            <Hint>How long the whole session runs, from Start to timeout.</Hint>
 
-          {settings.notification_mode === 'random' ? (
             <ThemedView style={styles.section}>
               <ThemedText type="small" themeColor="textSecondary">
-                Notification window
+                Stem time limit
               </ThemedText>
-              <ThemedView style={styles.windowRow}>
-                <TextInput
-                  value={windowStart}
-                  onChangeText={setWindowStart}
-                  onBlur={saveWindow}
-                  placeholder="08:00"
-                  placeholderTextColor={theme.textSecondary}
-                  style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-                  accessibilityLabel="Window start time"
+              <Hint>
+                An optional per-stem countdown, separate from the session timer above. Off by default; the writing
+                screen does not use it yet.
+              </Hint>
+              <ChipToggle
+                options={['off', 'on'] as const}
+                value={settings.stem_timer_enabled ? 'on' : 'off'}
+                onChange={(v) => set('stem_timer_enabled', v === 'on')}
+              />
+              {settings.stem_timer_enabled && (
+                <NumberStepper
+                  label="Seconds per stem"
+                  value={settings.stem_timer_seconds}
+                  settingKey="stem_timer_seconds"
+                  step={5}
+                  onChange={(v) => set('stem_timer_seconds', v)}
                 />
-                <ThemedText type="default">to</ThemedText>
-                <TextInput
-                  value={windowEnd}
-                  onChangeText={setWindowEnd}
-                  onBlur={saveWindow}
-                  placeholder="21:00"
-                  placeholderTextColor={theme.textSecondary}
-                  style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-                  accessibilityLabel="Window end time"
-                />
-              </ThemedView>
-              {windowError && (
-                <ThemedText type="small" themeColor="error" accessibilityLiveRegion="polite">
-                  {windowError}
-                </ThemedText>
               )}
             </ThemedView>
-          ) : (
+          </ThemedView>
+
+          <ThemedView style={[styles.group, { borderTopColor: theme.border }]}>
+            <SectionHeader label="Notifications" />
+
+            <NumberStepper
+              label="Sessions per day"
+              value={settings.sessions_per_day}
+              settingKey="sessions_per_day"
+              onChange={onSessionsPerDayChange}
+            />
+            <Hint>How many reminder notifications to send per day, at most.</Hint>
+
             <ThemedView style={styles.section}>
               <ThemedText type="small" themeColor="textSecondary">
-                Fixed times ({FIXED_TIMES_RANGE.min}–{FIXED_TIMES_RANGE.max})
+                Notification timing
               </ThemedText>
-              {fixedTimes.map((t, i) => (
-                <ThemedView key={i} style={styles.windowRow}>
+              <Hint>
+                Random picks a different moment each day inside the window below, so the exercise can&apos;t be
+                pre-planned. Fixed fires at exact times you choose instead.
+              </Hint>
+              <ChipToggle options={NOTIFICATION_MODES} value={settings.notification_mode} onChange={onNotificationModeChange} />
+            </ThemedView>
+
+            {settings.notification_mode === 'random' ? (
+              <ThemedView style={styles.section}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Notification window
+                </ThemedText>
+                <ThemedView style={styles.windowRow}>
                   <TextInput
-                    value={t}
-                    onChangeText={(value) => changeFixedTimeAt(i, value)}
-                    onBlur={() => saveFixedTimes(fixedTimes)}
+                    value={windowStart}
+                    onChangeText={setWindowStart}
+                    onBlur={saveWindow}
                     placeholder="08:00"
                     placeholderTextColor={theme.textSecondary}
                     style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-                    accessibilityLabel={`Fixed time ${i + 1}`}
+                    accessibilityLabel="Window start time"
                   />
-                  <Pressable
-                    onPress={() => removeFixedTime(i)}
-                    disabled={fixedTimes.length <= FIXED_TIMES_RANGE.min}
-                    style={[styles.stepperButton, { backgroundColor: theme.backgroundElement, opacity: fixedTimes.length <= FIXED_TIMES_RANGE.min ? 0.4 : 1 }]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove fixed time ${i + 1}`}
-                  >
-                    <ThemedText type="subtitle">−</ThemedText>
-                  </Pressable>
+                  <ThemedText type="default">to</ThemedText>
+                  <TextInput
+                    value={windowEnd}
+                    onChangeText={setWindowEnd}
+                    onBlur={saveWindow}
+                    placeholder="21:00"
+                    placeholderTextColor={theme.textSecondary}
+                    style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+                    accessibilityLabel="Window end time"
+                  />
                 </ThemedView>
-              ))}
-              {fixedTimesError && (
-                <ThemedText type="small" themeColor="error" accessibilityLiveRegion="polite">
-                  {fixedTimesError}
+                {windowError && (
+                  <ThemedText type="small" themeColor="error" accessibilityLiveRegion="polite">
+                    {windowError}
+                  </ThemedText>
+                )}
+              </ThemedView>
+            ) : (
+              <ThemedView style={styles.section}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Fixed times ({FIXED_TIMES_RANGE.min}–{FIXED_TIMES_RANGE.max})
                 </ThemedText>
-              )}
-              <Pressable
-                onPress={addFixedTime}
-                disabled={fixedTimes.length >= FIXED_TIMES_RANGE.max}
-                style={[styles.navLink, { opacity: fixedTimes.length >= FIXED_TIMES_RANGE.max ? 0.4 : 1 }]}
-                accessibilityRole="button"
-                accessibilityLabel="Add fixed time"
-              >
-                <ThemedText type="default">+ Add time</ThemedText>
-              </Pressable>
-            </ThemedView>
-          )}
+                {fixedTimes.map((t, i) => (
+                  <ThemedView key={i} style={styles.windowRow}>
+                    <TextInput
+                      value={t}
+                      onChangeText={(value) => changeFixedTimeAt(i, value)}
+                      onBlur={() => saveFixedTimes(fixedTimes)}
+                      placeholder="08:00"
+                      placeholderTextColor={theme.textSecondary}
+                      style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+                      accessibilityLabel={`Fixed time ${i + 1}`}
+                    />
+                    <Pressable
+                      onPress={() => removeFixedTime(i)}
+                      disabled={fixedTimes.length <= FIXED_TIMES_RANGE.min}
+                      style={[styles.stepperButton, { backgroundColor: theme.backgroundElement, opacity: fixedTimes.length <= FIXED_TIMES_RANGE.min ? 0.4 : 1 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove fixed time ${i + 1}`}
+                    >
+                      <ThemedText type="subtitle">−</ThemedText>
+                    </Pressable>
+                  </ThemedView>
+                ))}
+                {fixedTimesError && (
+                  <ThemedText type="small" themeColor="error" accessibilityLiveRegion="polite">
+                    {fixedTimesError}
+                  </ThemedText>
+                )}
+                <Pressable
+                  onPress={addFixedTime}
+                  disabled={fixedTimes.length >= FIXED_TIMES_RANGE.max}
+                  style={[styles.navLink, { opacity: fixedTimes.length >= FIXED_TIMES_RANGE.max ? 0.4 : 1 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add fixed time"
+                >
+                  <ThemedText type="default">+ Add time</ThemedText>
+                </Pressable>
+              </ThemedView>
+            )}
 
-          <ChipToggle
-            label="Uncensored mode"
-            options={['on', 'off'] as const}
-            value={settings.uncensored_mode ? 'on' : 'off'}
-            onChange={(v) => set('uncensored_mode', v === 'on')}
-          />
-          <Hint>
-            Backspace only erases the word you&apos;re on, and you can&apos;t edit an earlier ending in the same
-            session. This keeps the writing unfiltered — turn it off if that restriction feels intolerable.
-          </Hint>
+            <ChipToggle
+              label="Weekly review prompt"
+              options={['on', 'off'] as const}
+              value={settings.weekly_review_prompt ? 'on' : 'off'}
+              onChange={(v) => set('weekly_review_prompt', v === 'on')}
+            />
+            <Hint>Offer a review of the past week&apos;s writing once a week, in-app.</Hint>
+          </ThemedView>
 
-          <ChipToggle label="Stem terminator" options={TERMINATORS} value={settings.stem_terminator as (typeof TERMINATORS)[number]} onChange={(v) => set('stem_terminator', v)} />
-          <Hint>The punctuation shown at the end of each stem.</Hint>
+          <ThemedView style={[styles.group, { borderTopColor: theme.border }]}>
+            <SectionHeader label="Writing" />
 
-          <ChipToggle
-            label="App lock"
-            options={['on', 'off'] as const}
-            value={settings.app_lock_enabled ? 'on' : 'off'}
-            onChange={(v) => set('app_lock_enabled', v === 'on')}
-          />
-          <Hint>Require your device passcode or biometrics to open the app.</Hint>
+            <ChipToggle
+              label="Uncensored mode"
+              options={['on', 'off'] as const}
+              value={settings.uncensored_mode ? 'on' : 'off'}
+              onChange={(v) => set('uncensored_mode', v === 'on')}
+            />
+            <Hint>
+              Backspace only erases the word you&apos;re on, and you can&apos;t edit an earlier ending in the same
+              session. This keeps the writing unfiltered — turn it off if that restriction feels intolerable.
+            </Hint>
 
-          <ChipToggle
-            label="Weekly review prompt"
-            options={['on', 'off'] as const}
-            value={settings.weekly_review_prompt ? 'on' : 'off'}
-            onChange={(v) => set('weekly_review_prompt', v === 'on')}
-          />
-          <Hint>Offer a review of the past week&apos;s writing once a week, in-app.</Hint>
+            <ChipToggle label="Stem terminator" options={TERMINATORS} value={settings.stem_terminator as (typeof TERMINATORS)[number]} onChange={(v) => set('stem_terminator', v)} />
+            <Hint>The punctuation shown at the end of each stem.</Hint>
+          </ThemedView>
 
-          <ChipToggle label="Theme" options={THEMES} value={settings.theme as (typeof THEMES)[number]} onChange={(v) => set('theme', v)} />
+          <ThemedView style={[styles.group, { borderTopColor: theme.border }]}>
+            <SectionHeader label="App" />
+
+            <ChipToggle
+              label="App lock"
+              options={['on', 'off'] as const}
+              value={settings.app_lock_enabled ? 'on' : 'off'}
+              onChange={(v) => set('app_lock_enabled', v === 'on')}
+            />
+            <Hint>Require your device passcode or biometrics to open the app.</Hint>
+
+            <ChipToggle label="Theme" options={THEMES} value={settings.theme as (typeof THEMES)[number]} onChange={(v) => set('theme', v)} />
+          </ThemedView>
 
           {savedNotice && (
             <ThemedText type="small" themeColor="textSecondary">
@@ -469,6 +486,11 @@ const styles = StyleSheet.create({
   stepperValue: {
     minWidth: 48,
     textAlign: 'center',
+  },
+  group: {
+    gap: Spacing.three,
+    paddingTop: Spacing.two,
+    borderTopWidth: 1,
   },
   section: {
     gap: Spacing.one,

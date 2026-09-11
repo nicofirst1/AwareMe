@@ -1,7 +1,9 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -9,10 +11,23 @@ import { getDatabase } from '@/db';
 import { exportAndShare, ExportFormat } from '@/export/fileExport';
 import { useTheme } from '@/hooks/use-theme';
 
-const FORMATS: { format: ExportFormat; label: string; description: string }[] = [
-  { format: 'sqlite', label: 'SQLite database', description: 'A direct copy of the app database. Highest fidelity — recommended for analysis.' },
-  { format: 'json', label: 'JSON bundle', description: 'A single JSON file with every row, including anything deleted.' },
-  { format: 'csv', label: 'CSV set (zipped)', description: 'One CSV per table plus a README, zipped.' },
+// Outline Ionicons (2026-09-11, ui-audit-2026-09-11.md cycle 4), same sparse
+// decorative idiom as index.tsx's secondary tiles — a scan anchor per
+// format, not a replacement for the label (accessible name stays the text).
+const FORMATS: { format: ExportFormat; label: string; description: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  {
+    format: 'sqlite',
+    label: 'SQLite database',
+    description: 'A direct copy of the app database. Highest fidelity — recommended for analysis.',
+    icon: 'server-outline',
+  },
+  {
+    format: 'json',
+    label: 'JSON bundle',
+    description: 'A single JSON file with every row, including anything deleted.',
+    icon: 'code-slash-outline',
+  },
+  { format: 'csv', label: 'CSV set (zipped)', description: 'One CSV per table plus a README, zipped.', icon: 'grid-outline' },
 ];
 
 /**
@@ -45,20 +60,24 @@ export default function ExportScreen() {
           Your data stays open to analysis, always. Nothing is ever locked in.
         </ThemedText>
 
-        {FORMATS.map(({ format, label, description }) => (
+        {FORMATS.map(({ format, label, description, icon }) => (
           <Pressable
             key={format}
             onPress={() => runExport(format)}
             disabled={busy !== null}
-            style={[styles.card, { backgroundColor: theme.backgroundElement, opacity: busy !== null && busy !== format ? 0.5 : 1 }]}
             accessibilityRole="button"
             accessibilityState={{ disabled: busy !== null, busy: busy === format }}
           >
-            <ThemedText type="subtitle">{label}</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              {description}
-            </ThemedText>
-            {busy === format && <ActivityIndicator style={styles.spinner} />}
+            <Card style={[styles.card, { opacity: busy !== null && busy !== format ? 0.5 : 1 }]}>
+              <ThemedView style={styles.cardHeader}>
+                <Ionicons name={icon} size={20} color={theme.textSecondary} />
+                <ThemedText type="subtitle">{label}</ThemedText>
+              </ThemedView>
+              <ThemedText type="small" themeColor="textSecondary">
+                {description}
+              </ThemedText>
+              {busy === format && <ActivityIndicator style={styles.spinner} />}
+            </Card>
           </Pressable>
         ))}
       </SafeAreaView>
@@ -79,9 +98,12 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   card: {
-    padding: Spacing.three,
-    borderRadius: Spacing.two,
     gap: Spacing.one,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
   spinner: {
     marginTop: Spacing.one,
