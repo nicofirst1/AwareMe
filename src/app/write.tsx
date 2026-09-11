@@ -1,11 +1,11 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Fonts, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
+import { Fonts, MaxContentWidth, MinTouchTarget, PressureColors, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
 import type { StemForSession } from '@/session/useWritingSession';
@@ -37,6 +37,11 @@ export default function WriteScreen() {
   const [terminator, setTerminator] = useState('...');
   const [pendingStem, setPendingStem] = useState<StemForSession | null>(null);
 
+  // Pressure cue (§6.3.4/13.4, 2026-09-11 addition): the button gradient
+  // tracks the per-stem timer when it's on, else the session timer — an
+  // urgency cue only, never a numeral or shame copy.
+  const buttonPressure = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     const repo = getRepository();
     setTerminator(repo.getSettings().stem_terminator);
@@ -65,6 +70,21 @@ export default function WriteScreen() {
     }
   }, [session.phase, session.state?.activeOrdinal]);
 
+  const timerSeconds = session.state?.config.timerSeconds ?? 1;
+  const stemTimerSeconds = session.state?.config.stemTimerSeconds ?? null;
+  const progress = session.phase === 'active' ? Math.max(0, Math.min(1, session.remainingSeconds / timerSeconds)) : 0;
+  const stemProgress =
+    session.phase === 'active' && stemTimerSeconds && session.stemRemainingSeconds !== null
+      ? Math.max(0, Math.min(1, session.stemRemainingSeconds / stemTimerSeconds))
+      : null;
+  // The per-stem timer drives the button's urgency when it's on (it's the
+  // tighter, more immediate deadline); otherwise the session timer does.
+  const pressureFraction = stemProgress ?? progress;
+
+  useEffect(() => {
+    buttonPressure.setValue(session.phase === 'active' ? 1 - pressureFraction : 0);
+  }, [buttonPressure, session.phase, pressureFraction]);
+
   if (!pendingStem && session.phase === 'idle') {
     return (
       <ThemedView style={styles.container}>
@@ -79,10 +99,27 @@ export default function WriteScreen() {
 
   const stemText = session.stemText ?? pendingStem?.text ?? '';
   const targetEndings = session.state?.config.targetEndings ?? 0;
-  const timerSeconds = session.state?.config.timerSeconds ?? 1;
-  const progress = session.phase === 'active' ? Math.max(0, Math.min(1, session.remainingSeconds / timerSeconds)) : 0;
+  const buttonBackgroundColor = buttonPressure.interpolate({
+    inputRange: [0, 1],
+    outputRange: [PressureColors.calm, PressureColors.urgent],
+  });
 
   const submittedEndings = session.state?.endings.filter((e) => e.submittedAt !== null) ?? [];
+
+  // Enter submits the ending (2026-09-11 addition, §6.3.4): the input is
+  // `multiline` so it wraps a long sentence, which means the platform
+  // delivers the return key as a trailing "\n" via onChangeText rather than
+  // firing onSubmitEditing (onSubmitEditing still covers iOS's fast path
+  // when it does fire). Strip the newline and submit the result directly —
+  // `submitActive`'s override param avoids racing the not-yet-committed
+  // state that a separate `changeActiveText` call would leave stale.
+  const handleChangeText = (nextText: string) => {
+    if (nextText.endsWith('\n')) {
+      session.submitActive(nextText.slice(0, -1));
+      return;
+    }
+    session.changeActiveText(nextText);
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -154,8 +191,9 @@ export default function WriteScreen() {
                 ref={inputRef}
                 style={[styles.input, { color: theme.text }]}
                 value={session.activeText}
-                onChangeText={session.changeActiveText}
-                onSubmitEditing={session.submitActive}
+                onChangeText={handleChangeText}
+                onSubmitEditing={() => session.submitActive()}
+                returnKeyType="done"
                 multiline
                 blurOnSubmit={false}
                 contextMenuHidden
@@ -164,12 +202,24 @@ export default function WriteScreen() {
                 placeholder="Keep the pen moving."
                 placeholderTextColor={theme.textSecondary}
               />
-              <Pressable
-                onPress={session.submitActive}
-                style={[styles.button, { backgroundColor: theme.backgroundElement }]}
-                accessibilityRole="button"
-              >
-                <ThemedText type="subtitle">Next</ThemedText>
+              {stemProgress !== null && (
+                <ThemedView
+                  type="backgroundElement"
+                  style={styles.progressTrack}
+                  accessible
+                  accessibilityRole="progressbar"
+                  accessibilityLabel="Time remaining for this ending"
+                  accessibilityValue={{ min: 0, max: 100, now: Math.round(stemProgress * 100) }}
+                >
+                  <ThemedView type="backgroundSelected" style={[styles.progressFill, { width: `${stemProgress * 100}%` }]} />
+                </ThemedView>
+              )}
+              <Pressable onPress={() => session.submitActive()} accessibilityRole="button">
+                <Animated.View style={[styles.button, { backgroundColor: buttonBackgroundColor }]}>
+                  <ThemedText type="subtitle" style={styles.buttonLabelOnPressure}>
+                    Next
+                  </ThemedText>
+                </Animated.View>
               </Pressable>
               <Pressable
                 onPress={session.finishNow}
@@ -253,6 +303,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     borderRadius: Spacing.two,
     alignItems: 'center',
+  },
+  // Fixed white, not theme-driven: the pressure gradient (constants/theme.ts
+  // `PressureColors`) is itself fixed in both themes, and white stays
+  // >=4.5:1 across its full range (measured minimum 5.13:1).
+  buttonLabelOnPressure: {
+    color: '#ffffff',
   },
   doneBlock: {
     gap: Spacing.three,

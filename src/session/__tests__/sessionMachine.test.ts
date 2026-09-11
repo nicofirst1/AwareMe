@@ -1,5 +1,6 @@
 import {
   computeReturnAction,
+  expireActiveEnding,
   finalizeSession,
   isComplete,
   recordFirstKeypress,
@@ -146,6 +147,65 @@ describe('finalizeSession', () => {
     const s = finalizeSession(startSession(CONFIG, T0), 'abandoned', '2026-09-10T08:10:00.000Z');
     expect(s.endings).toHaveLength(0);
     expect(s.endReason).toBe('abandoned');
+  });
+});
+
+describe('expireActiveEnding (per-stem timer, 2026-09-11 addition)', () => {
+  it('saves whatever is typed (including half-typed) and advances to the next field', () => {
+    let s = recordFirstKeypress(startSession(CONFIG, T0), T0);
+    s = updateActiveEndingText(s, 'half-typed thou', T0);
+    s = expireActiveEnding(s, '2026-09-10T08:01:00.000Z');
+
+    expect(s.endings[0].text).toBe('half-typed thou');
+    expect(s.endings[0].submittedAt).toBe('2026-09-10T08:01:00.000Z');
+    expect(s.activeOrdinal).toBe(2);
+    expect(s.endedAt).toBeNull(); // the session itself is not ended
+  });
+
+  it('mirrors session-level timeout for an untouched (empty) field: no row is created, ordinal still advances', () => {
+    const s0 = startSession(CONFIG, T0);
+    const s1 = expireActiveEnding(s0, '2026-09-10T08:01:00.000Z');
+
+    expect(s1.endings).toHaveLength(0);
+    expect(s1.activeOrdinal).toBe(2);
+  });
+
+  it('preserves an empty string when the field was touched but backspaced back to empty', () => {
+    let s = recordFirstKeypress(startSession(CONFIG, T0), T0);
+    s = updateActiveEndingText(s, '', T0);
+    s = expireActiveEnding(s, '2026-09-10T08:01:00.000Z');
+
+    expect(s.endings).toHaveLength(1);
+    expect(s.endings[0].text).toBe('');
+    expect(s.endings[0].submittedAt).toBe('2026-09-10T08:01:00.000Z');
+    expect(s.activeOrdinal).toBe(2);
+  });
+
+  it('is a no-op on the fields themselves once the session is finalized, but a plain no-op overall', () => {
+    let s = recordFirstKeypress(startSession(CONFIG, T0), T0);
+    s = finalizeSession(s, 'timeout', '2026-09-10T08:01:30.000Z');
+    const after = expireActiveEnding(s, '2026-09-10T09:00:00.000Z');
+    expect(after).toEqual(s);
+  });
+
+  it('is a no-op if the active field is already submitted (e.g. a race with a manual submit)', () => {
+    let s = recordFirstKeypress(startSession(CONFIG, T0), T0);
+    s = submitActiveEnding(s, '2026-09-10T08:00:10.000Z');
+    // activeOrdinal is now 2, with no row yet for field 2 -> same as the
+    // untouched-field case, just advances again.
+    const after = expireActiveEnding(s, '2026-09-10T08:01:00.000Z');
+    expect(after.activeOrdinal).toBe(3);
+    expect(after.endings).toHaveLength(1);
+  });
+
+  it('can advance past targetEndings; isComplete/finalize is the caller\'s responsibility, same as submitActiveEnding', () => {
+    let s = startSession(CONFIG, T0);
+    for (let i = 0; i < CONFIG.targetEndings; i++) {
+      s = recordFirstKeypress(s, T0);
+      s = expireActiveEnding(s, T0);
+    }
+    expect(isComplete(s)).toBe(true);
+    expect(s.endedAt).toBeNull();
   });
 });
 

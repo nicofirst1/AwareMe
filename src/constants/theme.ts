@@ -30,6 +30,19 @@ export const Colors = {
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 /**
+ * Save/Next button pressure gradient (2026-09-11 addition, §6.3.4/13.4): an
+ * urgency *cue*, not a countdown numeral or shame copy — interpolated by
+ * `Animated` between these two endpoints as time depletes. Deliberately the
+ * same in both themes (not theme-dependent) so the white label stays
+ * ≥4.5:1 throughout: measured minimum 5.13:1 across the full gradient,
+ * darkest midpoint included (olive/brown, not a bright yellow trap).
+ */
+export const PressureColors = {
+  calm: '#2E7D32',
+  urgent: '#B3261E',
+} as const;
+
+/**
  * `serif` is for stems and endings (the user's writing and the prompt).
  * `sans` is for everything else: buttons, labels, chrome.
  */

@@ -6,6 +6,7 @@ import { getDeviceLocale, nowEventTime } from '@/db/time';
 import { applyEdit } from './uncensoredEdit';
 import {
   computeReturnAction,
+  expireActiveEnding,
   finalizeSession,
   isComplete,
   recordFirstKeypress,
@@ -45,9 +46,12 @@ export interface WritingSessionView {
   state: SessionState | null;
   activeText: string;
   remainingSeconds: number;
+  /** Seconds left on the current stem's own countdown; null when `stem_timer_enabled` is off (2026-09-11 addition). */
+  stemRemainingSeconds: number | null;
   start: (stem: StemForSession) => void;
   changeActiveText: (nextText: string) => void;
-  submitActive: () => void;
+  /** `overrideText`: see the 2026-09-11 comment on the implementation — Enter-to-submit passes the not-yet-committed text directly. */
+  submitActive: (overrideText?: string) => void;
   finishNow: () => void;
 }
 
@@ -71,6 +75,7 @@ export function useWritingSession(): WritingSessionView {
   const [stemText, setStemText] = useState<string | null>(null);
   const [phase, setPhase] = useState<WritingPhase>('idle');
   const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [stemRemainingSeconds, setStemRemainingSeconds] = useState<number | null>(null);
 
   const stateRef = useRef<SessionState | null>(null);
   const sessionIdRef = useRef<string | null>(null);
@@ -126,11 +131,15 @@ export function useWritingSession(): WritingSessionView {
     }
 
     // Resume: rebuild in-memory state from the persisted rows and continue.
+    // `stem_timer_*` is not part of the sessions schema (it's a live
+    // setting, not a per-session snapshot), so re-read it from current
+    // settings same as a fresh `start()` would.
     const rebuilt: SessionState = {
       config: {
         targetEndings: open.session.target_endings,
         timerSeconds: open.session.timer_seconds,
         uncensoredMode: !!open.session.uncensored_mode,
+        stemTimerSeconds: settings.stem_timer_enabled ? settings.stem_timer_seconds : null,
       },
       startedAt: open.session.started_at,
       firstKeypressAt: open.session.first_keypress_at,
@@ -152,6 +161,7 @@ export function useWritingSession(): WritingSessionView {
     setStemText(open.session.stem_text_snapshot);
     setPhase('active');
     setRemainingSeconds(action.remainingSeconds);
+    setStemRemainingSeconds(rebuilt.config.stemTimerSeconds ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -197,6 +207,7 @@ export function useWritingSession(): WritingSessionView {
         targetEndings: stem.configOverrides?.targetEndings ?? settings.endings_per_session,
         timerSeconds: stem.configOverrides?.timerSeconds ?? settings.timer_seconds,
         uncensoredMode: settings.uncensored_mode,
+        stemTimerSeconds: settings.stem_timer_enabled ? settings.stem_timer_seconds : null,
       };
       const id = repo.createSession({
         stemId: stem.id,
@@ -216,8 +227,16 @@ export function useWritingSession(): WritingSessionView {
       setStemText(stem.text);
       setPhase('active');
       setRemainingSeconds(config.timerSeconds);
+      setStemRemainingSeconds(config.stemTimerSeconds ?? null);
     },
-    [repo, settings.endings_per_session, settings.timer_seconds, settings.uncensored_mode],
+    [
+      repo,
+      settings.endings_per_session,
+      settings.timer_seconds,
+      settings.uncensored_mode,
+      settings.stem_timer_enabled,
+      settings.stem_timer_seconds,
+    ],
   );
 
   const flushAutosave = useCallback(
@@ -266,32 +285,125 @@ export function useWritingSession(): WritingSessionView {
     [flushAutosave, repo],
   );
 
-  const submitActive = useCallback(() => {
+  const submitActive = useCallback(
+    // `overrideText`: for Enter-to-submit (2026-09-11 addition), write.tsx
+    // strips a trailing "\n" from the TextInput's `onChangeText` value and
+    // passes the result here directly, since `stateRef.current` (updated by
+    // a separate effect) would otherwise still hold the *previous* render's
+    // text — reading it synchronously right after `changeActiveText` would
+    // submit stale, pre-keystroke text. It still goes through `applyEdit`
+    // below, same as every other keystroke, so uncensored mode's
+    // backspace/cut restrictions apply identically regardless of entry path.
+    (overrideText?: string) => {
+      const current = stateRef.current;
+      const id = sessionIdRef.current;
+      if (!current || !id || current.endedAt) return;
+      let activeEnding = current.endings.find((e) => e.ordinal === current.activeOrdinal);
+      let working = current;
+
+      if (overrideText !== undefined && overrideText !== activeEnding?.text) {
+        const { at } = nowEventTime();
+        if (!activeEnding) {
+          repo.recordFirstKeypress(id, current.activeOrdinal, at);
+          working = recordFirstKeypress(current, at);
+        }
+        const previousText = activeEnding?.text ?? '';
+        const edit = applyEdit(previousText, overrideText, working.config.uncensoredMode);
+        working = updateActiveEndingText(working, edit.text, at, edit.backspaces);
+        setState(working);
+        activeEnding = working.endings.find((e) => e.ordinal === working.activeOrdinal);
+      }
+
+      const text = activeEnding?.text ?? '';
+      // Enter and the Next control share this path: an empty field is never
+      // submitted this way. Timeout/expiry still saves an empty field per
+      // §6.3.8 — that goes through `finalize`/`expireStem` below, not here.
+      if (!activeEnding || activeEnding.submittedAt || text.trim() === '') return;
+
+      // Flush any pending debounced text immediately so the submit is never
+      // racing a stale autosave.
+      if (autosaveTimer.current) {
+        clearTimeout(autosaveTimer.current);
+        autosaveTimer.current = null;
+      }
+      const delta = pendingBackspaceDelta.current;
+      pendingBackspaceDelta.current = 0;
+
+      const { at } = nowEventTime();
+      repo.autosaveEndingText(id, working.activeOrdinal, text, delta, at);
+      repo.submitEnding(id, working.activeOrdinal, at);
+      const next = submitActiveEnding(working, at);
+      setState(next);
+
+      if (isComplete(next)) {
+        finalize('user_done');
+      }
+    },
+    [repo, finalize],
+  );
+
+  // Per-stem timer expiry (2026-09-11 addition, spec §6.3.4): saves
+  // whatever is on screen and advances, same "nothing discarded" rule as
+  // session timeout but scoped to one field. The session timer keeps
+  // running independently and still wins if it fires first (the interval
+  // below is cleared whenever `finalize` has already ended the session).
+  const expireStem = useCallback(() => {
     const current = stateRef.current;
     const id = sessionIdRef.current;
     if (!current || !id || current.endedAt) return;
     const activeEnding = current.endings.find((e) => e.ordinal === current.activeOrdinal);
-    if (!activeEnding || activeEnding.submittedAt) return;
 
-    // Flush any pending debounced text immediately so the submit is never
-    // racing a stale autosave.
+    // Flush any pending debounced text/backspace-count immediately, same as
+    // a manual submit — otherwise the last <400ms of typing before expiry
+    // would be lost from `endings.text`/`backspace_count` even though the
+    // in-memory `text` shown on screen (and saved via `expireActiveEnding`
+    // below) is correct.
     if (autosaveTimer.current) {
       clearTimeout(autosaveTimer.current);
       autosaveTimer.current = null;
       const delta = pendingBackspaceDelta.current;
       pendingBackspaceDelta.current = 0;
-      flushAutosave(current.activeOrdinal, activeEnding.text, delta);
+      if (activeEnding) flushAutosave(current.activeOrdinal, activeEnding.text, delta);
     }
 
     const { at } = nowEventTime();
-    repo.submitEnding(id, current.activeOrdinal, at);
-    const next = submitActiveEnding(current, at);
+    // Only persist a submit if a row exists — an untouched field mirrors
+    // session-level timeout by leaving no row at all (see
+    // `expireActiveEnding`'s doc comment).
+    if (activeEnding && !activeEnding.submittedAt) {
+      repo.submitEnding(id, current.activeOrdinal, at);
+    }
+    const next = expireActiveEnding(current, at);
     setState(next);
 
     if (isComplete(next)) {
       finalize('user_done');
     }
-  }, [repo, flushAutosave, finalize]);
+  }, [repo, finalize, flushAutosave]);
+
+  // Resets the per-stem countdown every time the active field changes
+  // (manual submit, Enter, or expiry all advance `activeOrdinal`).
+  useEffect(() => {
+    if (phase !== 'active' || !state?.config.stemTimerSeconds) return;
+    setStemRemainingSeconds(state.config.stemTimerSeconds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, state?.activeOrdinal, state?.config.stemTimerSeconds]);
+
+  // Local per-stem countdown, independent of the session countdown above.
+  useEffect(() => {
+    if (phase !== 'active' || !state?.config.stemTimerSeconds) return;
+    const interval = setInterval(() => {
+      setStemRemainingSeconds((prev) => {
+        if (prev === null) return prev;
+        if (prev <= 1) {
+          expireStem();
+          return state.config.stemTimerSeconds ?? 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [phase, state?.activeOrdinal, state?.config.stemTimerSeconds, expireStem]);
 
   const finishNow = useCallback(() => finalize('user_done'), [finalize]);
 
@@ -303,6 +415,7 @@ export function useWritingSession(): WritingSessionView {
     state,
     activeText: activeEnding?.text ?? '',
     remainingSeconds,
+    stemRemainingSeconds,
     start,
     changeActiveText,
     submitActive,

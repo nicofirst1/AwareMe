@@ -203,7 +203,7 @@ function MetaStemSession({ session }: { session: ReturnType<typeof useWritingSes
                 style={[styles.input, { color: theme.text }]}
                 value={session.activeText}
                 onChangeText={session.changeActiveText}
-                onSubmitEditing={session.submitActive}
+                onSubmitEditing={() => session.submitActive()}
                 multiline
                 blurOnSubmit={false}
                 contextMenuHidden

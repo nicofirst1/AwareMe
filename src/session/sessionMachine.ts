@@ -24,6 +24,8 @@ export interface SessionConfig {
   targetEndings: number;
   timerSeconds: number;
   uncensoredMode: boolean;
+  /** Per-stem countdown in seconds (2026-09-11 addition, spec §6.3.4); undefined/null when `stem_timer_enabled` is off. */
+  stemTimerSeconds?: number | null;
 }
 
 /** The session's in-memory state. Mirrors `sessions` + its `endings` rows. */
@@ -117,6 +119,32 @@ export function submitActiveEnding(state: SessionState, at: string): SessionStat
   if (isFinalized(state)) return state;
   const active = currentEnding(state);
   if (!active || active.submittedAt !== null) return state;
+
+  return {
+    ...state,
+    lastActivityAt: at,
+    endings: state.endings.map((e) => (e.ordinal === active.ordinal ? { ...e, submittedAt: at } : e)),
+    activeOrdinal: state.activeOrdinal + 1,
+  };
+}
+
+/**
+ * Per-stem timer expiry (2026-09-11 addition, spec §6.3.4): whatever is on
+ * screen for the active field is saved as-is — even empty, even half-typed —
+ * and the session advances to the next field. Mirrors `finalizeSession`'s
+ * "nothing is ever discarded" rule (§6.3.8) but scoped to one field instead
+ * of ending the session: an untouched field (no keypress yet, so no
+ * `endings` row) is left with no row at all, exactly like a session-level
+ * timeout leaves an untouched field untouched. The session timer keeps
+ * running independently and still wins if it expires first.
+ */
+export function expireActiveEnding(state: SessionState, at: string): SessionState {
+  if (isFinalized(state)) return state;
+  const active = currentEnding(state);
+
+  if (!active || active.submittedAt !== null) {
+    return { ...state, lastActivityAt: at, activeOrdinal: state.activeOrdinal + 1 };
+  }
 
   return {
     ...state,
