@@ -56,7 +56,7 @@ Six tables: `stems`, `sessions`, `endings`, `reviews`, `settings`, `notification
 - **Stem selection (§6.2)** must be a pure function of (candidates, history, time, seed) so it's deterministically testable. Weighted draw with a recency penalty; never hard-exclude (a user with 3 stems must still get one).
 - **Uncensored writing mode (§6.3)** is the point of the app: backspace limited to the current word, no going back to earlier endings, no cut/select. On timeout, save whatever is on screen including a half-typed ending — nothing is ever discarded. Count backspaces even when the restriction is off.
 - **Notifications (§6.4)** fire at _uniformly random_ times within the user's window (min 90-min gap); randomness is a functional requirement, not a detail. Notification copy MUST NOT contain stem or user text (lock-screen privacy). iOS caps 64 pending — schedule ~10 days ahead and top up on foreground.
-- **No evaluation, no gamification.** The app never scores, praises, interprets, or shames absence. Streaks, if any, are descriptive and unemphasised (§13.4, §13.6).
+- **No evaluation; gamification is sanctioned but bounded.** The app never scores, praises, or interprets the user's writing. Gamification (milestone badges, streak display, post-session celebration) is permitted per the 2026-09-11 pivot, scoped to `docs/design/gamification-proposal-2026-09-11.md`: computed at read time (§13.7 still binds — no stored derived values), shown only after a session completes, never during writing, and never shaming absence — no guilt copy, no broken-streak dramatics (§13.4, §13.6).
 - **Export is first-class (§8):** SQLite copy + JSON bundle + zipped CSV set, all lossless, reachable in two taps. A round-trip test (export→wipe→import→export, byte-identical modulo `exported_at`) MUST exist. Never normalise the user's text.
 
 ## Seed content constraint (§5.1)
@@ -84,3 +84,7 @@ Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `
 ### Domain docs
 
 Single-context — one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Mobile UI design skill
+
+`.claude/skills/mobile-app-ui-design/` is installed (third-party, MIT, security-audited 2026-09-11) for mobile UI design work.

@@ -449,9 +449,9 @@ Note for scheduling: if publishing to Google Play from a personal developer acco
 1. No copyrighted stem text from Branden or any other author.
 2. No network, no accounts, no analytics, no telemetry.
 3. No AI features: no generated stems, no interpretation of the user's endings, no sentiment scoring shown in the app. Analysis is something the user does with their own exported data, on their own terms.
-4. No gamification that shames absence. Streaks, if present at all, are descriptive.
+4. Gamification is permitted only as bounded by `docs/design/gamification-proposal-2026-09-11.md`: milestone badges and streak display, computed at read time (§13.7 still governs), shown only after a session completes, never during writing. Gamification MUST NOT shame absence — no guilt copy, no broken-streak dramatics, no consequence for a missed day. Streaks, where shown, are descriptive.
 5. No destructive-by-default operations. Archive before delete, soft before hard.
-6. No evaluation of the user's writing anywhere in the interface.
+6. No evaluation of the user's writing anywhere in the interface. Post-session celebration and badge/streak display are not evaluation: they acknowledge history, never score, interpret, rank, or compare the user's writing itself, and MUST NOT appear during the writing phase.
 7. No stored derived values in the database.
 8. Do not change the schema without a migration and a version bump, even in development.
 
