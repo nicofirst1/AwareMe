@@ -95,7 +95,9 @@ function StatLine({ label, value }: { label: string; value: string | number }) {
       <ThemedText type="small" themeColor="textSecondary">
         {label}
       </ThemedText>
-      <ThemedText type="default">{value}</ThemedText>
+      <ThemedText type="default" themeColor="accent">
+        {value}
+      </ThemedText>
     </ThemedView>
   );
 }

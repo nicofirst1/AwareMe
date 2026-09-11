@@ -14,10 +14,19 @@ import type { BadgeDef } from '@/session/badges';
  * both states).
  *
  * Sans type throughout (§10: badges are chrome, not the user's writing).
+ *
+ * Earned cards also get a `CelebrationColors.glow` left-edge stripe (color
+ * audit 2026-09-11, cycle 3) via `Card`'s existing `accentColor` prop —
+ * decorative only, on top of the `glowSoft` fill, never the badge text color
+ * (`glow` isn't AA-safe as text — see theme.ts). Unearned cards pass no
+ * `accentColor`, unchanged.
  */
 export function BadgeCard({ badge, earned }: { badge: BadgeDef; earned: boolean }) {
   return (
-    <Card style={[styles.card, earned && { backgroundColor: CelebrationColors.glowSoft }]}>
+    <Card
+      style={[styles.card, earned && { backgroundColor: CelebrationColors.glowSoft }]}
+      accentColor={earned ? CelebrationColors.glow : undefined}
+    >
       <View style={!earned && styles.unearnedContent}>
         <ThemedText type="default">{badge.name}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
