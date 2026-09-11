@@ -34,5 +34,11 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Settings')).toBeTruthy();
     expect(screen.getByText('Export')).toBeTruthy();
     expect(screen.getByText('Import')).toBeTruthy();
+    expect(screen.getByText('About')).toBeTruthy();
+  });
+
+  it('has a tappable creator footer', () => {
+    render(<HomeScreen />);
+    expect(screen.getByText('Created by Nicolò Brandizzi')).toBeTruthy();
   });
 });

@@ -1,15 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, Link } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { Linking, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, MinTouchTarget, Radius, Spacing } from '@/constants/theme';
+import {
+  CategoryColors,
+  CelebrationColors,
+  MaxContentWidth,
+  MinTouchTarget,
+  Radius,
+  Spacing,
+} from '@/constants/theme';
 import { getRepository } from '@/db';
 import { nowEventTime } from '@/db/time';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { computeStreaks } from '@/session/progressStats';
 import { isWeeklyReviewDue } from '@/session/reviewPeriod';
@@ -53,22 +61,51 @@ function loadHomeStatus(): HomeStatus {
 }
 
 // Ionicons outline glyphs (2026-09-11, ui-audit-2026-09-11.md cycle 2) — a
-// small scan anchor per tile so the six destinations aren't an undifferentiated
+// small scan anchor per tile so the destinations aren't an undifferentiated
 // wall of text (audit's index.tsx finding). Decorative only: each tile's
 // accessible name still comes from its label text, not the icon.
+//
+// Per-tile hue (color-audit-2026-09-11.md §2A, "distribution not invention"
+// — every hue below already exists in theme.ts, none new). One sentence of
+// rationale each, no repeats across the eight tiles:
+// - Stems: responsibility — tending your own raw material is an act of upkeep.
+// - History: awareness — looking back at what you wrote is awareness turned backward.
+// - Review: self_acceptance — rereading your own words unedited is self-acceptance in practice.
+// - Progress: CelebrationColors.glow — the app's one sanctioned celebration hue, reserved for its one celebration screen.
+// - Settings: integrity — configuring the app to match how you actually want it to behave is integrity's "align the system with the self".
+// - Export: assertiveness — carrying your data out into the world is an assertive act.
+// - Import: purpose — bringing a backup back in serves the continuity of why you're keeping this record at all.
+// - About: accent — the same hue as the primary CTA, since this tile is about the app itself, not a category of writing.
 const SECONDARY_LINKS = [
-  { href: '/stems', label: 'Stems', icon: 'leaf-outline' },
-  { href: '/history', label: 'History', icon: 'time-outline' },
-  { href: '/review', label: 'Review', icon: 'glasses-outline' },
-  { href: '/progress', label: 'Progress', icon: 'trophy-outline' },
-  { href: '/settings', label: 'Settings', icon: 'options-outline' },
-  { href: '/export', label: 'Export', icon: 'share-outline' },
-  { href: '/import', label: 'Import', icon: 'download-outline' },
-] as const satisfies readonly { href: `/${string}`; label: string; icon: keyof typeof Ionicons.glyphMap }[];
+  { href: '/stems', label: 'Stems', icon: 'leaf-outline', color: CategoryColors.responsibility.light.text, colorDark: CategoryColors.responsibility.dark.text },
+  { href: '/history', label: 'History', icon: 'time-outline', color: CategoryColors.awareness.light.text, colorDark: CategoryColors.awareness.dark.text },
+  { href: '/review', label: 'Review', icon: 'glasses-outline', color: CategoryColors.self_acceptance.light.text, colorDark: CategoryColors.self_acceptance.dark.text },
+  { href: '/progress', label: 'Progress', icon: 'trophy-outline', color: CelebrationColors.glow, colorDark: CelebrationColors.glow },
+  { href: '/settings', label: 'Settings', icon: 'options-outline', color: CategoryColors.integrity.light.text, colorDark: CategoryColors.integrity.dark.text },
+  { href: '/export', label: 'Export', icon: 'share-outline', color: CategoryColors.assertiveness.light.text, colorDark: CategoryColors.assertiveness.dark.text },
+  { href: '/import', label: 'Import', icon: 'download-outline', color: CategoryColors.purpose.light.text, colorDark: CategoryColors.purpose.dark.text },
+  { href: '/about', label: 'About', icon: 'information-circle-outline', color: 'accent', colorDark: 'accent' },
+] as const satisfies readonly {
+  href: `/${string}`;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  colorDark: string;
+}[];
+
+/** Resolves a `SECONDARY_LINKS` color entry for the current theme — either an
+ * already-per-theme hex (category `.text`, or `CelebrationColors.glow`
+ * repeated on both sides since it's theme-invariant) or the literal
+ * `'accent'` sentinel meaning "read `theme.accent`" (About's tile). */
+function resolveTileColor(color: string, accent: string): string {
+  return color === 'accent' ? accent : color;
+}
 
 export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const scheme = useColorScheme();
+  const resolvedScheme = scheme === 'dark' ? 'dark' : 'light';
   const [status, setStatus] = useState<HomeStatus | null>(null);
 
   // Focus-based, not mount-only (2026-09-11 visual-test finding: completing
@@ -136,7 +173,7 @@ export default function HomeScreen() {
           )}
 
           <ThemedView style={styles.grid}>
-            {SECONDARY_LINKS.map(({ href, label, icon }) => (
+            {SECONDARY_LINKS.map(({ href, label, icon, color, colorDark }) => (
               <Link
                 key={href}
                 href={href}
@@ -145,7 +182,11 @@ export default function HomeScreen() {
                   { backgroundColor: label === 'Progress' ? theme.accentMuted : theme.backgroundElement },
                 ]}
               >
-                <Ionicons name={icon} size={20} color={theme.accent} />
+                <Ionicons
+                  name={icon}
+                  size={20}
+                  color={resolveTileColor(resolvedScheme === 'dark' ? colorDark : color, theme.accent)}
+                />
                 <ThemedText type="default">{label}</ThemedText>
               </Link>
             ))}
@@ -158,6 +199,16 @@ export default function HomeScreen() {
               </ThemedText>
             </Link>
           )}
+
+          <ThemedText
+            type="small"
+            themeColor="textSecondary"
+            style={styles.footer}
+            onPress={() => Linking.openURL('https://nicolobrandizzi.com/')}
+            accessibilityRole="link"
+          >
+            Created by Nicolò Brandizzi
+          </ThemedText>
         </ThemedView>
       </SafeAreaView>
     </ThemedView>
@@ -215,6 +266,11 @@ const styles = StyleSheet.create({
     gap: Spacing.half,
   },
   navLink: {
+    minHeight: MinTouchTarget,
+    textAlignVertical: 'center',
+  },
+  footer: {
+    textAlign: 'center',
     minHeight: MinTouchTarget,
     textAlignVertical: 'center',
   },
