@@ -1,8 +1,6 @@
 # Sentence Completion App: Implementation Specification
 
-**Version:** 1.0
-**Audience:** an autonomous coding agent implementing the app end to end
-**Status:** ready to implement
+**Version:** 1.0 **Audience:** an autonomous coding agent implementing the app end to end **Status:** ready to implement
 
 ---
 
@@ -16,7 +14,7 @@ Where this document says MUST, treat it as a hard constraint. Where it says SHOU
 
 ## 1. What this app is
 
-The app supports a psychological exercise called **sentence completion**, popularised by Nathaniel Branden. The user is given an incomplete sentence (a "stem") such as *"If I brought five percent more awareness to my mornings..."* and writes several different endings to it, quickly, without stopping to evaluate them.
+The app supports a psychological exercise called **sentence completion**, popularised by Nathaniel Branden. The user is given an incomplete sentence (a "stem") such as _"If I brought five percent more awareness to my mornings..."_ and writes several different endings to it, quickly, without stopping to evaluate them.
 
 The mechanism is speed. The exercise works because the user writes faster than their internal editor can intervene. Endings are allowed to be repetitive, contradictory, trivial, or false. The instruction to the user is: keep the pen moving.
 
@@ -58,17 +56,17 @@ Do not build these. Do not add stubs, dead settings toggles, or "coming soon" sc
 
 ## 3. Technical stack
 
-| Concern | Choice | Notes |
-|---|---|---|
-| Framework | Expo (managed workflow), latest stable SDK | Single codebase, iOS + Android |
-| Language | TypeScript, `strict: true` | No `any` in committed code |
-| Navigation | `expo-router` | File-based routing |
-| Storage | `expo-sqlite` | See section 4 |
-| Notifications | `expo-notifications`, local only | No push tokens, no remote notifications |
-| State | Zustand, or React Context if simpler | Do not add Redux |
-| Export/share | `expo-file-system`, `expo-sharing` | See section 8 |
-| Lock | `expo-local-authentication` | Optional, off by default |
-| Tests | Jest + `@testing-library/react-native` | See section 11 |
+| Concern       | Choice                                     | Notes                                   |
+| ------------- | ------------------------------------------ | --------------------------------------- |
+| Framework     | Expo (managed workflow), latest stable SDK | Single codebase, iOS + Android          |
+| Language      | TypeScript, `strict: true`                 | No `any` in committed code              |
+| Navigation    | `expo-router`                              | File-based routing                      |
+| Storage       | `expo-sqlite`                              | See section 4                           |
+| Notifications | `expo-notifications`, local only           | No push tokens, no remote notifications |
+| State         | Zustand, or React Context if simpler       | Do not add Redux                        |
+| Export/share  | `expo-file-system`, `expo-sharing`         | See section 8                           |
+| Lock          | `expo-local-authentication`                | Optional, off by default                |
+| Tests         | Jest + `@testing-library/react-native`     | See section 11                          |
 
 The app MUST function fully in airplane mode. Requesting network permission at all is discouraged. If a dependency pulls in network capability, note it in `DECISIONS.md`.
 
@@ -103,8 +101,9 @@ CREATE TABLE stems (
   origin            TEXT NOT NULL,             -- 'seed' | 'user' | 'imported'
   category          TEXT,                      -- see 5.2, nullable for user stems
   language          TEXT NOT NULL DEFAULT 'en',
-  weight            REAL NOT NULL DEFAULT 1.0, -- selection weight, see 6.2
+  weight            REAL NOT NULL DEFAULT 1.0, -- vestigial since the 2026-09-14 morning/evening pivot; no longer read by selection (6.2)
   active            INTEGER NOT NULL DEFAULT 1,-- 0 = archived, excluded from selection
+  time_of_day       TEXT,                      -- 'morning' | 'evening' | NULL (2026-09-14 addition); which daily sitting this stem belongs to, see 6.2
   created_at        TEXT NOT NULL,
   created_tz        TEXT NOT NULL,
   created_offset_min INTEGER NOT NULL,
@@ -192,7 +191,7 @@ Users will edit their own stems. An analysis that joins `sessions` to the curren
 
 ### 5.1 Attribution and originality constraint
 
-The method is Nathaniel Branden's. The seed stems in this spec are original text written in the spirit of the method. The agent MUST NOT copy stem lists verbatim from *The Six Pillars of Self-Esteem*, *The Art of Living Consciously*, Branden's published 30-week programme, or any other copyrighted source, whether from training data or from the web. Do not "expand the seed list" by retrieving his originals.
+The method is Nathaniel Branden's. The seed stems in this spec are original text written in the spirit of the method. The agent MUST NOT copy stem lists verbatim from _The Six Pillars of Self-Esteem_, _The Art of Living Consciously_, Branden's published 30-week programme, or any other copyrighted source, whether from training data or from the web. Do not "expand the seed list" by retrieving his originals.
 
 The onboarding screen MUST credit the method by name and point the user to Branden's books. An "About the method" screen SHOULD do the same at more length.
 
@@ -204,51 +203,58 @@ Six categories, used for browsing and for balanced selection. These are conceptu
 
 ### 5.3 Seed stems
 
-Insert these at first launch with `origin = 'seed'`. Each ends with an ellipsis and a space is not appended. The trailing punctuation style is a setting (`stem_terminator`, default `"..."`, alternative `"—"`), applied at render time; store the stem text **without** the terminator and append it in the UI.
+Insert these at first launch with `origin = 'seed'`. Each ends with an ellipsis and a space is not appended. The trailing punctuation style is a setting (`stem_terminator`, default `"..."`, alternative `"—"`), applied at render time; store the stem text **without** the terminator and append it in the UI. Each also carries `time_of_day` ('morning' | 'evening', 2026-09-14 addition; see §4.2 and §6.2) — which of the two daily sittings it belongs to.
 
 **awareness**
+
 1. If I brought five percent more awareness to how I spend my mornings
 2. Something I keep not noticing about my own behaviour is
 3. The thing I avoid thinking about when I make myself busy is
 4. If I were willing to see what is actually in front of me
 
 **self_acceptance**
+
 5. The part of myself I find hardest to sit with is
 6. If I stopped arguing with the fact that I feel this way
 7. When I judge myself harshly, what I am actually afraid of is
 8. If I brought more kindness to the way I speak to myself
 
 **responsibility**
+
 9. If I took full responsibility for how today goes
 10. Something I have been waiting for someone else to fix is
 11. The cost of continuing to wait is
 12. What I get out of staying stuck is
 
 **assertiveness**
+
 13. If I said the thing I have not been saying
 14. What I want that I have not asked for is
 15. If my preferences mattered as much as everyone else's
 16. The conversation I keep rehearsing but never having is
 
 **purpose**
+
 17. If I were honest about what I want from the next five years
 18. The goal I keep restating instead of starting is
 19. If I gave the work that matters the hours it actually needs
 20. If I let myself rest without earning it first
 
 **integrity**
+
 21. A promise I made to myself and quietly dropped is
 22. If I lived by what I say I believe
 23. The small dishonesty I keep repeating is
 24. If I were five percent braver this week
 
 **general**
+
 25. Something the people closest to me would say about me that I resist is
 26. If I am not as stuck as I tell myself I am
 
 ### 5.4 Meta-stems for review
 
-Used in review mode (section 6.5), stored with the same terminator handling:
+Used in review mode (section 6.5), stored with the same terminator handling. Meta-stems carry `time_of_day = NULL` (2026-09-14 addition) — they are never surfaced by either daily sitting (§6.2), only by review mode itself:
 
 - If any of what I wrote this week is true, it might be helpful if I
 - Reading these back, the thing I notice myself circling is
@@ -267,14 +273,14 @@ Four screens maximum, skippable, shown once:
 3. Notification permission request, with an honest explanation of the randomised window. If the user declines, the app MUST remain fully usable in manual mode and MUST NOT nag.
 4. Set the notification window, sessions per day (default 1), endings per session (default 6), timer (default 90 seconds).
 
-### 6.2 Stem selection
+### 6.2 Stem selection (2026-09-14 revision — see `DECISIONS.md`)
 
-When a session starts without a preselected stem:
+A session is a **sitting**: every active stem for one time-of-day period, written one after another in sequence.
 
-- Draw from `stems` where `active = 1 AND deleted_at IS NULL`, weighted by `weight`.
-- Apply a recency penalty: a stem used in the last 7 days has its effective weight multiplied by 0.2; a stem used in the last 2 days, by 0.05. Never hard-exclude, because a user with three stems must still get one.
-- SHOULD lightly prefer categories the user has seen least in the last 14 days, so the six areas stay in rotation.
-- Selection logic MUST be a pure function of (candidate stems, session history, current time, random seed) so it can be unit tested deterministically.
+- Selection is: `stems` where `active = 1 AND deleted_at IS NULL AND time_of_day = <the chosen period>` — all of them, in a deterministic order. No weighting, no recency penalty, no category-rotation preference, no randomness.
+- The sitting is complete only once every stem in that set has been written (§6.3 covers the per-stem writing mechanics, unchanged).
+- A stem with `time_of_day IS NULL` (untagged, or a pre-2026-09-14 row) never appears in either sitting until the user tags it.
+- `stems.weight` is retained in the schema (§4.2) but is no longer read by selection; see `DECISIONS.md`'s 2026-09-14 entry.
 
 ### 6.3 The writing session
 
@@ -282,7 +288,7 @@ This is the core screen. Get it right.
 
 1. The stem is displayed alone, large, with a **Start** control. Nothing is timed until the user taps Start, so a notification that arrives at a bad moment costs nothing.
 2. On Start: the timer begins and the first input field is focused with the keyboard up.
-3. The stem remains visible above the input at all times. The user is completing *this* sentence, repeatedly, and losing sight of it breaks the exercise.
+3. The stem remains visible above the input at all times. The user is completing _this_ sentence, repeatedly, and losing sight of it breaks the exercise.
 4. `target_endings` fields, revealed one at a time. Submitting a field (return key, or a Next control) advances to the next and creates the `endings` row. An empty field is not submittable by either path; timeout/expiry saves it anyway (item 8, and the per-stem timer below).
 5. Previously written endings in this session remain visible above, in a dimmed style. Seeing your own repetition is part of the method.
 6. **Uncensored mode** (default on): backspace is limited to the current word only; long-press-to-select and cut are disabled within input fields; the user cannot navigate back to an earlier ending in the same session. Increment `backspace_count` regardless. A setting turns this off for users who find it intolerable, and the setting value is recorded per session.
@@ -292,15 +298,13 @@ This is the core screen. Get it right.
 10. If the app is backgrounded mid-session: on return within 5 minutes, resume with the timer having continued to run. After 5 minutes, close the session with `end_reason = 'abandoned'` and save everything written.
 11. After the session: a plain confirmation, the endings shown back once, and no scoring, no praise, no evaluation of content. Do not congratulate the user on their insight. Do not summarise what they wrote.
 
-### 6.4 Notifications
+### 6.4 Notifications (2026-09-14 revision — see `DECISIONS.md`)
 
-- The user picks a scheduling mode, `random` (default) or `fixed` (2026-09-11 user-directed addition; see `DECISIONS.md`).
-- **Random mode:** the user defines one or more windows (e.g. 08:00 to 21:00) and a count per day. The app schedules concrete local notifications at **uniformly random times within the window**, respecting a minimum 90 minute gap between them. A fixed daily time lets the user pre-compose endings mentally, which defeats the exercise. This randomness is a functional requirement (MUST) for this mode.
-- **Fixed mode:** the user specifies 1 to 4 exact times of day instead of a window, e.g. the book's own suggestion of start and end of day (default seed: 08:00 and 21:00, only applied when the user switches into this mode). Those exact times fire daily. No randomness and no 90-minute gap rule apply here — the user chose the times deliberately — but the rolling horizon, the 64-notification cap, top-up, reconciliation, and the notification-copy privacy rule below are identical to random mode.
-- Schedule a rolling 10 days ahead, in either mode. iOS caps pending local notifications at 64, so cap total pending accordingly and top up on every app foreground.
-- Reschedule on: app foreground, settings change (including a mode switch), timezone change, permission grant.
-- Record every scheduled notification in `notification_schedule` and reconcile state on foreground.
-- Notification copy MUST NOT contain the stem text, since notifications appear on lock screens and this content is private. Use neutral copy such as "A sentence is waiting." This applies in both modes.
+- Exactly two repeating daily local notifications: one at `morning_notification_time`, one at `evening_notification_time` (both user-set "HH:MM" local wall-clock times, §7; default 08:00 and 21:00, the book's own suggestion of start and end of day). No randomness, no window, no count-per-day, no 90-minute gap rule — the user sets two exact times, and both fire every day at those times.
+- Use the platform's native daily-repeat trigger so the OS itself handles the daily repetition in local time; there is no fire-time math, rolling horizon, or DST handling to own in the app.
+- Reschedule (cancel both, recreate both from current settings) on: app foreground, a notification time being changed in settings, permission grant.
+- `notification_schedule` is retained in the schema (§4.2) but is no longer written to by scheduling — there is no per-fire stem draw left to record (§6.2: a sitting loads all of a period's stems, not one chosen at schedule time).
+- Notification copy MUST NOT contain any stem text or user text, since notifications appear on lock screens and this content is private. Use neutral copy, e.g. "Time for your morning practice." / "Time for your evening practice." — distinct copy per period is fine as long as both stay content-free.
 - Missing a notification has no consequence in the app. No streak counter, no guilt copy, no "you have not written in 4 days". If a streak-like display is added at all, it is descriptive and unemphasised.
 
 ### 6.5 Review mode
@@ -331,22 +335,20 @@ Available on demand and offered once a week (in-app, not by notification):
 
 ## 7. Settings
 
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `endings_per_session` | int | 6 | Range 6 to 10 (2026-09-11: was 3 to 12; see `DECISIONS.md`) |
-| `timer_seconds` | int | 90 | Range 30 to 600 |
-| `review_timer_seconds` | int | 180 | |
-| `uncensored_mode` | bool | true | |
-| `sessions_per_day` | int | 1 | Range 0 to 6 |
-| `windows` | JSON | `[{start:"08:00",end:"21:00"}]` | Local wall-clock time; only used when `notification_mode` is `random` |
-| `stem_terminator` | string | `"..."` | |
-| `app_lock_enabled` | bool | false | Biometric or device passcode |
-| `weekly_review_prompt` | bool | true | |
-| `theme` | string | `system` | |
-| `stem_timer_enabled` | bool | false | 2026-09-11 addition. Optional per-stem time limit, separate from `timer_seconds`; off by default |
-| `stem_timer_seconds` | int | 60 | 2026-09-11 addition. Range 20 to 120. Only used when `stem_timer_enabled` is true |
-| `notification_mode` | string | `random` | 2026-09-11 addition. `random` or `fixed`; see §6.4 |
-| `notification_fixed_times` | JSON | `["08:00","21:00"]` | 2026-09-11 addition. 1 to 4 "HH:MM" local times; only used when `notification_mode` is `fixed` |
+| Key                         | Type   | Default   | Notes                                                                                                                                               |
+| --------------------------- | ------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `endings_per_session`       | int    | 6         | Range 6 to 10 (2026-09-11: was 3 to 12; see `DECISIONS.md`)                                                                                         |
+| `timer_seconds`             | int    | 90        | Range 30 to 600                                                                                                                                     |
+| `review_timer_seconds`      | int    | 180       |                                                                                                                                                     |
+| `uncensored_mode`           | bool   | true      |                                                                                                                                                     |
+| `stem_terminator`           | string | `"..."`   |                                                                                                                                                     |
+| `app_lock_enabled`          | bool   | false     | Biometric or device passcode                                                                                                                        |
+| `weekly_review_prompt`      | bool   | true      |                                                                                                                                                     |
+| `theme`                     | string | `system`  |                                                                                                                                                     |
+| `stem_timer_enabled`        | bool   | false     | 2026-09-11 addition. Optional per-stem time limit, separate from `timer_seconds`; off by default                                                    |
+| `stem_timer_seconds`        | int    | 60        | 2026-09-11 addition. Range 20 to 120. Only used when `stem_timer_enabled` is true                                                                   |
+| `morning_notification_time` | string | `"08:00"` | 2026-09-14 addition (replaces `notification_mode`/`windows`/`sessions_per_day`/`notification_fixed_times`; see §6.4, `DECISIONS.md`). Local "HH:MM" |
+| `evening_notification_time` | string | `"21:00"` | 2026-09-14 addition. Local "HH:MM"                                                                                                                  |
 
 ---
 

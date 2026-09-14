@@ -24,6 +24,7 @@ function makeStem(i: number): LibraryStemRow {
     origin: 'seed',
     category: categories[i % categories.length],
     weight: 1,
+    time_of_day: i % 2 === 0 ? 'morning' : 'evening',
     active: 1,
     deleted_at: null,
     created_at: '2026-01-01T00:00:00.000Z',

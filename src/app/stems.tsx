@@ -14,7 +14,7 @@ import { CategoryColors, MinTouchTarget, Radius, Spacing, type CategoryName } fr
 import { getRepository, LibraryStemRow } from '@/db';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
-import { canDeactivateStems, matchesStemFilters, type ActiveFilter } from '@/session/stemLibraryFilter';
+import { canDeactivateStems, matchesStemFilters, type ActiveFilter, type TimeOfDayFilter } from '@/session/stemLibraryFilter';
 
 function isCategoryName(c: string | null): c is CategoryName {
   return c !== null && c in CategoryColors;
@@ -62,6 +62,7 @@ export default function StemsScreen() {
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('active');
   const [originFilter, setOriginFilter] = useState<OriginFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
+  const [timeOfDayFilter, setTimeOfDayFilter] = useState<TimeOfDayFilter>('all');
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
 
   const categories = useMemo(
@@ -70,8 +71,8 @@ export default function StemsScreen() {
   );
 
   const filtered = useMemo(
-    () => stems.filter((s) => matchesStemFilters(s, { query, activeFilter, originFilter, categoryFilter })),
-    [stems, query, activeFilter, originFilter, categoryFilter],
+    () => stems.filter((s) => matchesStemFilters(s, { query, activeFilter, originFilter, categoryFilter, timeOfDayFilter })),
+    [stems, query, activeFilter, originFilter, categoryFilter, timeOfDayFilter],
   );
 
   // Selection mode (2026-09-11, replaces long-press-instant-toggle — see
@@ -218,6 +219,18 @@ export default function StemsScreen() {
               value={originFilter}
               onChange={(v) => setOriginFilter(v as OriginFilter)}
             />
+
+            <FilterRow
+              label="Time of day"
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'morning', label: 'Morning' },
+                { value: 'evening', label: 'Evening' },
+                { value: 'none', label: 'Unset' },
+              ]}
+              value={timeOfDayFilter}
+              onChange={(v) => setTimeOfDayFilter(v as TimeOfDayFilter)}
+            />
           </ThemedView>
         )}
 
@@ -320,6 +333,7 @@ const StemRow = memo(function StemRow({
           <ThemedText type="small" themeColor="textSecondary">
             {[
               categoryColors ? null : item.category, // shown as a colored chip instead, when we have one
+              item.time_of_day,
               item.origin,
               isDeleted ? 'deleted' : !item.active ? 'archived' : null,
             ]

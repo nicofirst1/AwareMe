@@ -46,19 +46,16 @@ export default function OnboardingScreen() {
   const scrollRef = useRef<ScrollView>(null);
 
   const [step, setStep] = useState(0);
-  const [sessionsPerDay, setSessionsPerDay] = useState(1);
   const [endingsPerSession, setEndingsPerSession] = useState(6);
   const [timerSeconds, setTimerSeconds] = useState(90);
-  const [windowStart, setWindowStart] = useState('08:00');
-  const [windowEnd, setWindowEnd] = useState('21:00');
+  const [morningTime, setMorningTime] = useState('08:00');
+  const [eveningTime, setEveningTime] = useState('21:00');
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean | null>(null);
 
   const finish = () => {
     repo.setOnboardingComplete();
-    if (isValidHHMM(windowStart) && isValidHHMM(windowEnd) && windowStart < windowEnd) {
-      repo.setSetting('windows', [{ start: windowStart, end: windowEnd }]);
-    }
-    repo.setSetting('sessions_per_day', sessionsPerDay);
+    if (isValidHHMM(morningTime)) repo.setSetting('morning_notification_time', morningTime);
+    if (isValidHHMM(eveningTime)) repo.setSetting('evening_notification_time', eveningTime);
     repo.setSetting('endings_per_session', endingsPerSession);
     repo.setSetting('timer_seconds', timerSeconds);
     if (notificationsEnabled) {
@@ -138,8 +135,8 @@ export default function OnboardingScreen() {
           <ThemedView style={[styles.page, { width }]}>
             <ThemedText type="title">Reminders</ThemedText>
             <ThemedText type="default">
-              This app can nudge you at a random time in a window you choose — a fixed time would let you plan
-              an answer, which defeats the point. Notifications never show the sentence or your writing, even on
+              This app can nudge you twice a day, at a morning and an evening time you choose — the book&apos;s own
+              suggestion is start and end of day. Notifications never show the sentence or your writing, even on
               the lock screen.
             </ThemedText>
             <ThemedText type="default" themeColor="textSecondary">
@@ -166,12 +163,6 @@ export default function OnboardingScreen() {
             </ThemedText>
 
             <PrefRow
-              label="Sessions per day"
-              value={sessionsPerDay}
-              rangeKey="sessions_per_day"
-              onChange={setSessionsPerDay}
-            />
-            <PrefRow
               label="Endings per session"
               value={endingsPerSession}
               rangeKey="endings_per_session"
@@ -181,23 +172,23 @@ export default function OnboardingScreen() {
 
             {notificationsEnabled && (
               <ThemedView style={styles.windowRow}>
-                <ThemedText type="default">Window</ThemedText>
+                <ThemedText type="default">Morning</ThemedText>
                 <TextInput
-                  value={windowStart}
-                  onChangeText={setWindowStart}
+                  value={morningTime}
+                  onChangeText={setMorningTime}
                   placeholder="08:00"
                   placeholderTextColor={theme.textSecondary}
                   style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-                  accessibilityLabel="Window start time"
+                  accessibilityLabel="Morning notification time"
                 />
-                <ThemedText type="default">to</ThemedText>
+                <ThemedText type="default">Evening</ThemedText>
                 <TextInput
-                  value={windowEnd}
-                  onChangeText={setWindowEnd}
+                  value={eveningTime}
+                  onChangeText={setEveningTime}
                   placeholder="21:00"
                   placeholderTextColor={theme.textSecondary}
                   style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-                  accessibilityLabel="Window end time"
+                  accessibilityLabel="Evening notification time"
                 />
               </ThemedView>
             )}

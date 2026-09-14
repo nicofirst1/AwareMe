@@ -24,6 +24,8 @@ export interface StemRow {
   origin: 'seed' | 'user' | 'imported' | 'meta';
   category: string | null;
   weight: number;
+  /** Morning/evening pivot (migration 0003): which fixed daily notification this stem belongs to. Null for meta-stems and any pre-pivot row never backfilled (DECISIONS.md 2026-09-14). */
+  time_of_day: TimeOfDay | null;
 }
 
 export interface LibraryStemRow extends StemRow {
@@ -265,7 +267,7 @@ export class Repository {
   /** Active, non-deleted stems, for session start and the stem library. */
   listActiveStems(): StemRow[] {
     return this.db.getAllSync<StemRow>(
-      "SELECT id, text, origin, category, weight FROM stems WHERE active = 1 AND deleted_at IS NULL ORDER BY created_at",
+      "SELECT id, text, origin, category, weight, time_of_day FROM stems WHERE active = 1 AND deleted_at IS NULL ORDER BY created_at",
       [],
     );
   }
@@ -273,7 +275,7 @@ export class Repository {
   /** Active, non-deleted stems tagged for the given time of day (migration 0003), for the two fixed daily notifications. Ordered by `id` (UUIDv7, chronological) for a deterministic draw. */
   getActiveStemsForTimeOfDay(timeOfDay: TimeOfDay): StemRow[] {
     return this.db.getAllSync<StemRow>(
-      'SELECT id, text, origin, category, weight FROM stems WHERE active = 1 AND deleted_at IS NULL AND time_of_day = ? ORDER BY id',
+      'SELECT id, text, origin, category, weight, time_of_day FROM stems WHERE active = 1 AND deleted_at IS NULL AND time_of_day = ? ORDER BY id',
       [timeOfDay],
     );
   }
@@ -288,7 +290,7 @@ export class Repository {
    */
   listAllStems(): LibraryStemRow[] {
     return this.db.getAllSync<LibraryStemRow>(
-      "SELECT id, text, origin, category, weight, active, deleted_at, created_at FROM stems WHERE origin != 'meta' ORDER BY created_at DESC",
+      "SELECT id, text, origin, category, weight, time_of_day, active, deleted_at, created_at FROM stems WHERE origin != 'meta' ORDER BY created_at DESC",
       [],
     );
   }
@@ -296,7 +298,7 @@ export class Repository {
   /** The 3 seeded meta-stems (§5.4), each with the real `stems.id` a review session's `stem_id` FK needs. */
   listMetaStems(): StemRow[] {
     return this.db.getAllSync<StemRow>(
-      "SELECT id, text, origin, category, weight FROM stems WHERE origin = 'meta' ORDER BY created_at",
+      "SELECT id, text, origin, category, weight, time_of_day FROM stems WHERE origin = 'meta' ORDER BY created_at",
       [],
     );
   }
@@ -328,15 +330,23 @@ export class Repository {
   /**
    * Adds a stem the user wrote or pasted (§6.6). Caller validates first
    * (`validateStemText`) — this just persists. `origin` is `'user'` for a
-   * single add, `'imported'` for bulk import.
+   * single add, `'imported'` for bulk import. `timeOfDay` (morning/evening
+   * pivot, migration 0003) defaults to null — a user stem not tagged to
+   * either period never surfaces in a sitting via `getActiveStemsForTimeOfDay`,
+   * same as a pre-pivot row (DECISIONS.md 2026-09-14: no backfill).
    */
-  addStem(input: { text: string; category: string | null; origin: 'user' | 'imported' }): string {
+  addStem(input: {
+    text: string;
+    category: string | null;
+    origin: 'user' | 'imported';
+    timeOfDay?: TimeOfDay | null;
+  }): string {
     const id = newId();
     const { at, tz, offsetMin } = nowEventTime();
     this.db.runSync(
-      `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min)
-       VALUES (?, ?, ?, ?, 'en', 1.0, 1, ?, ?, ?)`,
-      [id, input.text, input.origin, input.category, at, tz, offsetMin],
+      `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day)
+       VALUES (?, ?, ?, ?, 'en', 1.0, 1, ?, ?, ?, ?)`,
+      [id, input.text, input.origin, input.category, at, tz, offsetMin, input.timeOfDay ?? null],
     );
     return id;
   }
@@ -346,11 +356,11 @@ export class Repository {
    * The caller is responsible for showing a preview + count before calling
    * this — it commits unconditionally.
    */
-  bulkImportStems(lines: readonly string[], category: string | null): number {
+  bulkImportStems(lines: readonly string[], category: string | null, timeOfDay: TimeOfDay | null = null): number {
     let count = 0;
     this.db.withTransactionSync(() => {
       for (const text of lines) {
-        this.addStem({ text, category, origin: 'imported' });
+        this.addStem({ text, category, origin: 'imported', timeOfDay });
         count++;
       }
     });
@@ -358,12 +368,17 @@ export class Repository {
   }
 
   /**
-   * Edits a stem's text/category in place. Sessions keep their
+   * Edits a stem's text/category/time-of-day in place. Sessions keep their
    * `stem_text_snapshot` (§4.4) — this never touches `sessions`, so past
    * sessions stay attributed to the wording shown at the time.
    */
-  updateStem(id: string, input: { text: string; category: string | null }): void {
-    this.db.runSync('UPDATE stems SET text = ?, category = ? WHERE id = ?', [input.text, input.category, id]);
+  updateStem(id: string, input: { text: string; category: string | null; timeOfDay?: TimeOfDay | null }): void {
+    this.db.runSync('UPDATE stems SET text = ?, category = ?, time_of_day = ? WHERE id = ?', [
+      input.text,
+      input.category,
+      input.timeOfDay ?? null,
+      id,
+    ]);
   }
 
   /** Archive/unarchive (§6.6's primary destructive action — reversible, unlike delete). */

@@ -24,9 +24,10 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Six Endings')).toBeTruthy();
   });
 
-  it('has one primary action and a secondary destination group', () => {
+  it('has morning and evening session starts and a secondary destination group', () => {
     render(<HomeScreen />);
-    expect(screen.getByText('Start writing')).toBeTruthy();
+    expect(screen.getByText('Morning session')).toBeTruthy();
+    expect(screen.getByText('Evening session')).toBeTruthy();
     expect(screen.getByText('Stems')).toBeTruthy();
     expect(screen.getByText('History')).toBeTruthy();
     expect(screen.getByText('Review')).toBeTruthy();

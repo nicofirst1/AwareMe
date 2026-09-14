@@ -8,7 +8,7 @@ import { FilterChip } from '@/components/filter-chip';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CategoryColors, Fonts, MaxContentWidth, Radius, Spacing, type CategoryName } from '@/constants/theme';
-import { getRepository } from '@/db';
+import { getRepository, type TimeOfDay } from '@/db';
 import { nowEventTime } from '@/db/time';
 import { useTheme } from '@/hooks/use-theme';
 import { validateStemText, WEIGHT_BY_SETTING, type WeightSetting } from '@/session/stemValidation';
@@ -17,6 +17,20 @@ import { validateStemText, WEIGHT_BY_SETTING, type WeightSetting } from '@/sessi
 // §2) rather than a hand-maintained list, so this can never drift out of
 // sync with `CategoryColors` or the same list in stem-import.tsx.
 const CATEGORIES = Object.keys(CategoryColors) as CategoryName[];
+
+// Morning/evening pivot (migration 0003): which fixed daily notification a
+// stem belongs to, plus "none" (null — never surfaced by either period's
+// sitting, same as a pre-pivot row per DECISIONS.md 2026-09-14).
+const TIME_OF_DAY_OPTIONS = ['none', 'morning', 'evening'] as const;
+type TimeOfDayOption = (typeof TIME_OF_DAY_OPTIONS)[number];
+
+function toOption(t: TimeOfDay | null): TimeOfDayOption {
+  return t ?? 'none';
+}
+
+function fromOption(o: TimeOfDayOption): TimeOfDay | null {
+  return o === 'none' ? null : o;
+}
 
 function weightToSetting(weight: number): WeightSetting {
   if (weight <= WEIGHT_BY_SETTING.less) return 'less';
@@ -45,6 +59,7 @@ export default function StemEditScreen() {
 
   const [text, setText] = useState(existing?.text ?? '');
   const [category, setCategory] = useState<string | null>(existing?.category ?? null);
+  const [timeOfDay, setTimeOfDay] = useState<TimeOfDayOption>(toOption(existing?.time_of_day ?? null));
   const [weightSetting, setWeightSetting] = useState<WeightSetting>(weightToSetting(existing?.weight ?? 1.0));
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -72,11 +87,12 @@ export default function StemEditScreen() {
     setWarning(result.warning);
 
     const trimmed = text.trim();
+    const resolvedTimeOfDay = fromOption(timeOfDay);
     if (existing) {
-      repo.updateStem(existing.id, { text: trimmed, category });
+      repo.updateStem(existing.id, { text: trimmed, category, timeOfDay: resolvedTimeOfDay });
       repo.setStemWeight(existing.id, WEIGHT_BY_SETTING[weightSetting]);
     } else {
-      const newId = repo.addStem({ text: trimmed, category, origin: 'user' });
+      const newId = repo.addStem({ text: trimmed, category, origin: 'user', timeOfDay: resolvedTimeOfDay });
       repo.setStemWeight(newId, WEIGHT_BY_SETTING[weightSetting]);
     }
     router.back();
@@ -144,6 +160,20 @@ export default function StemEditScreen() {
             <FilterChip label="None" selected={category === null} onPress={() => setCategory(null)} />
             {CATEGORIES.map((c) => (
               <FilterChip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} category={c} />
+            ))}
+          </ThemedView>
+
+          <ThemedText type="small" themeColor="textSecondary">
+            Time of day
+          </ThemedText>
+          <ThemedView style={styles.chipRow}>
+            {TIME_OF_DAY_OPTIONS.map((o) => (
+              <FilterChip
+                key={o}
+                label={o === 'none' ? 'None' : o === 'morning' ? 'Morning' : 'Evening'}
+                selected={timeOfDay === o}
+                onPress={() => setTimeOfDay(o)}
+              />
             ))}
           </ThemedView>
 

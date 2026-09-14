@@ -3,7 +3,15 @@ import { canDeactivateStem, canDeactivateStems, matchesStemFilters, type Filtera
 const BASE: StemLibraryFilters = { query: '', activeFilter: 'active', originFilter: 'all', categoryFilter: 'all' };
 
 function stem(overrides: Partial<FilterableStem> = {}): FilterableStem {
-  return { text: 'If I brought more awareness', origin: 'seed', category: 'awareness', active: 1, deleted_at: null, ...overrides };
+  return {
+    text: 'If I brought more awareness',
+    origin: 'seed',
+    category: 'awareness',
+    active: 1,
+    deleted_at: null,
+    time_of_day: null,
+    ...overrides,
+  };
 }
 
 function idStem(id: string, overrides: Partial<FilterableStem> = {}): FilterableStem & { id: string } {
@@ -48,6 +56,21 @@ describe('matchesStemFilters', () => {
     const filters: StemLibraryFilters = { ...BASE, query: 'AWARENESS' };
     expect(matchesStemFilters(stem({ text: 'more awareness' }), filters)).toBe(true);
     expect(matchesStemFilters(stem({ text: 'something else' }), filters)).toBe(false);
+  });
+
+  it('filters by time of day', () => {
+    const morningFilters: StemLibraryFilters = { ...BASE, timeOfDayFilter: 'morning' };
+    expect(matchesStemFilters(stem({ time_of_day: 'morning' }), morningFilters)).toBe(true);
+    expect(matchesStemFilters(stem({ time_of_day: 'evening' }), morningFilters)).toBe(false);
+    expect(matchesStemFilters(stem({ time_of_day: null }), morningFilters)).toBe(false);
+
+    const noneFilters: StemLibraryFilters = { ...BASE, timeOfDayFilter: 'none' };
+    expect(matchesStemFilters(stem({ time_of_day: null }), noneFilters)).toBe(true);
+    expect(matchesStemFilters(stem({ time_of_day: 'morning' }), noneFilters)).toBe(false);
+
+    const allFilters: StemLibraryFilters = { ...BASE, timeOfDayFilter: 'all' };
+    expect(matchesStemFilters(stem({ time_of_day: 'evening' }), allFilters)).toBe(true);
+    expect(matchesStemFilters(stem({ time_of_day: null }), allFilters)).toBe(true);
   });
 
   it('combines all filters with AND', () => {

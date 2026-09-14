@@ -9,7 +9,7 @@ import { ProgressBar } from '@/components/progress-bar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts, MaxContentWidth, MinTouchTarget, PressureColors, Radius, Spacing } from '@/constants/theme';
-import { getRepository } from '@/db';
+import { getRepository, type StemRow, type TimeOfDay } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
 import type { BadgeDef } from '@/session/badges';
 import { assembleNewlyEarnedBadges } from '@/session/badgeReveal';
@@ -18,22 +18,66 @@ import type { StemForSession } from '@/session/useWritingSession';
 import { useWritingSession } from '@/session/useWritingSession';
 
 /**
- * The writing session (spec §6.3). No navigation chrome beyond a single
- * exit affordance (§10) — the stem stays pinned above the input, previously
- * written endings are shown dimmed above it (§6.3.5), and the timer is a
- * thin, calm progress bar with no numerals larger than the text (§6.3.7).
+ * The queue for one writing sitting (morning/evening pivot, 2026-09-14): all
+ * active stems for the chosen period, in `getActiveStemsForTimeOfDay`'s
+ * deterministic order. Recomputed on every mount rather than persisted
+ * anywhere — a "sitting" has no row of its own (spec keeps one `sessions`
+ * row per stem, ADR-0001/CLAUDE.md), so this is the one place the sequence
+ * exists.
+ */
+function loadQueue(timeOfDay: TimeOfDay): StemRow[] {
+  return getRepository().getActiveStemsForTimeOfDay(timeOfDay);
+}
+
+/**
+ * ADR-0001 resume, extended for a sitting: if a session was left open by a
+ * previous run, `useWritingSession`'s own mount effect resumes/finalizes
+ * that one `sessions` row exactly as before — this only needs to figure out
+ * which period's queue it belongs to (by checking list membership; stems
+ * carry no `time_of_day` on `StemRow` itself) and where in that queue to
+ * pick back up, so the remaining stems in the sitting still get written
+ * rather than the sitting silently ending at one stem. Falls back to a
+ * one-stem queue of just the resumed stem when it isn't (or is no longer)
+ * in either period's active list — e.g. a single-stem write from the stem
+ * library (below), or a stem archived mid-sitting.
+ */
+function resumeQueue(openStemId: string): { queue: StemRow[]; startIndex: number } {
+  const repo = getRepository();
+  for (const timeOfDay of ['morning', 'evening'] as const) {
+    const queue = repo.getActiveStemsForTimeOfDay(timeOfDay);
+    const index = queue.findIndex((s) => s.id === openStemId);
+    if (index >= 0) return { queue, startIndex: index };
+  }
+  const solo = repo.listAllStems().find((s) => s.id === openStemId && s.deleted_at === null);
+  return { queue: solo ? [solo] : [], startIndex: 0 };
+}
+
+/**
+ * The writing session (spec §6.3), driving one multi-stem sitting
+ * (morning/evening pivot): every active stem for `timeOfDay` is presented
+ * one at a time, in sequence — advancing to the next stem re-runs the same
+ * per-stem machinery (`useWritingSession`) rather than anything new, since
+ * each stem is still its own `sessions` row. No navigation chrome beyond a
+ * single exit affordance (§10) — the stem stays pinned above the input,
+ * previously written endings are shown dimmed above it (§6.3.5), and the
+ * timer is a thin, calm progress bar with no numerals larger than the text
+ * (§6.3.7).
  *
- * `origin`/`notificationId`/`notifiedAt` are only present when this screen
- * was reached by tapping a notification (§6.4, ticket 10) — the stem was
- * already chosen at schedule time, so this screen just looks it up rather
- * than drawing again.
+ * `origin` is only 'notification' when this screen was reached by tapping a
+ * notification (§6.4) — selection is no longer chosen at schedule time
+ * (§6.2's weighted draw is gone), so there is nothing to look up; the
+ * sitting still loads fresh from `getActiveStemsForTimeOfDay`.
+ *
+ * `stemId` (instead of `timeOfDay`) is the stem library's "write on this
+ * stem now" entry point (DECISIONS.md Q2: `origin='manual'`, deliberately
+ * bypassing period-based selection) — it builds a one-stem queue rather
+ * than a whole period's sitting.
  */
 export default function WriteScreen() {
-  const { stemId, origin, notificationId, notifiedAt } = useLocalSearchParams<{
-    stemId: string;
+  const { timeOfDay, stemId, origin } = useLocalSearchParams<{
+    timeOfDay?: TimeOfDay;
+    stemId?: string;
     origin?: string;
-    notificationId?: string;
-    notifiedAt?: string;
   }>();
   const router = useRouter();
   const theme = useTheme();
@@ -41,7 +85,21 @@ export default function WriteScreen() {
   const inputRef = useRef<TextInput>(null);
 
   const [terminator, setTerminator] = useState('...');
-  const [pendingStem, setPendingStem] = useState<StemForSession | null>(null);
+  const [queue, setQueue] = useState<StemRow[] | null>(null);
+  const [queueIndex, setQueueIndex] = useState(0);
+  // Which queue index `session.start()` has already been called for — -1
+  // means none yet. A resumed session (ADR-0001) is seeded to its own
+  // index directly, since `useWritingSession`'s mount effect already
+  // brought it into 'active' without this screen calling `start()` itself.
+  const [startedIndex, setStartedIndex] = useState(-1);
+
+  const stemOrigin: StemForSession['origin'] = origin === 'notification' ? 'notification' : 'manual';
+  const pendingStem = queue?.[queueIndex] ?? null;
+  // §6.3.1: nothing is timed until Start is tapped — true for every stem in
+  // the sitting, not just the first. False while resuming into an
+  // already-active session, and false once `start()` has been called for
+  // the current index (whether still active or already 'done').
+  const awaitingStart = pendingStem !== null && startedIndex < queueIndex;
 
   // Pressure cue (§6.3.4/13.4, 2026-09-11 addition): the button gradient
   // tracks the per-stem timer when it's on, else the session timer — an
@@ -51,6 +109,7 @@ export default function WriteScreen() {
   // Completion celebration (gamification proposal §1.A/§2, cycle 2): a
   // single calm settle on "Saved." — scale 0.92->1 + opacity 0->1, ~400ms,
   // friction-tuned to land without overshoot ("settle, don't bounce").
+  // Shown once, after the whole sitting completes — never between stems.
   const settleAnim = useRef(new Animated.Value(0)).current;
   // Badge reveal: fade + 8px upward slide, shared by every stacked badge
   // card (proposal §2) — they appear together, sequenced only against the
@@ -69,20 +128,73 @@ export default function WriteScreen() {
     };
   }, []);
 
-  // Assembles the badge reveal once, when this session lands on 'done' —
-  // see badgeReveal.ts for why "before" is derived by excluding this
-  // session's id rather than reading before the save (the save already
-  // happened by the time this phase renders).
+  // Loads the sitting's queue once on mount: resumes an open session's
+  // position if ADR-0001 left one, otherwise starts fresh from either
+  // `timeOfDay`'s full active-stem list or a single `stemId` (stem
+  // library's "write now"), at index 0.
   useEffect(() => {
-    if (session.phase !== 'done' || !session.sessionId) return;
+    const repo = getRepository();
+    setTerminator(repo.getSettings().stem_terminator);
+
+    const open = repo.getOpenSession();
+    if (open) {
+      const resumed = resumeQueue(open.session.stem_id);
+      setQueue(resumed.queue);
+      setQueueIndex(resumed.startIndex);
+      // `useWritingSession`'s own mount effect resumes this session
+      // directly into 'active' — mark it already-started so the Start
+      // gate below doesn't ask the user to tap Start on a running timer.
+      setStartedIndex(resumed.startIndex);
+      return;
+    }
+
+    if (timeOfDay) {
+      setQueue(loadQueue(timeOfDay));
+      setQueueIndex(0);
+    } else if (stemId) {
+      const solo = repo.listAllStems().find((s) => s.id === stemId && s.deleted_at === null);
+      setQueue(solo ? [solo] : []);
+      setQueueIndex(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeOfDay, stemId]);
+
+  const isLastInQueue = queue !== null && queueIndex >= queue.length - 1;
+
+  // Advances the queue pointer the moment one stem finishes, unless it was
+  // the last — the whole-sitting completion screen (with any badge reveal)
+  // only renders on that last stem's 'done' phase (§6.3.11, proposal "never
+  // between stems"). Advancing just moves the pointer; §6.3.1's Start
+  // control (below, gated by `awaitingStart`) still holds the next stem's
+  // timer until the user taps it, same as the first stem.
+  useEffect(() => {
+    if (session.phase !== 'done' || !queue) return;
+    if (isLastInQueue) return;
+    setQueueIndex((i) => i + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.phase]);
+
+  const startPendingStem = () => {
+    if (!pendingStem) return;
+    setStartedIndex(queueIndex);
+    session.start({ id: pendingStem.id, text: pendingStem.text, origin: stemOrigin });
+  };
+
+  // Assembles the badge reveal once, when the *last* stem in the sitting
+  // lands on 'done' — see badgeReveal.ts for why "before" is derived by
+  // excluding this session's id rather than reading before the save (the
+  // save already happened by the time this phase renders).
+  useEffect(() => {
+    if (session.phase !== 'done' || !session.sessionId || !isLastInQueue) return;
     setNewlyEarnedBadges(assembleNewlyEarnedBadges(getRepository(), session.sessionId));
-  }, [session.phase, session.sessionId]);
+  }, [session.phase, session.sessionId, isLastInQueue]);
 
   // Drives the settle animation and, sequenced ~300ms later, the badge
-  // reveal's fade+slide. Reduced motion: skip straight to the final state,
-  // no animation at all.
+  // reveal's fade+slide — only for the sitting's final 'done' (the one that
+  // actually renders the completion block below). Reduced motion: skip
+  // straight to the final state, no animation at all.
   useEffect(() => {
-    if (session.phase !== 'done') return;
+    if (session.phase !== 'done' || !isLastInQueue) return;
     if (reduceMotion) {
       settleAnim.setValue(1);
       badgeRevealAnim.setValue(1);
@@ -106,27 +218,7 @@ export default function WriteScreen() {
       }).start();
     }, 300);
     return () => clearTimeout(badgeTimer);
-  }, [session.phase, reduceMotion, settleAnim, badgeRevealAnim]);
-
-  useEffect(() => {
-    const repo = getRepository();
-    setTerminator(repo.getSettings().stem_terminator);
-    if (stemId) {
-      // listAllStems, not listActiveStems: the library (ticket 07) allows
-      // writing on an archived stem deliberately, outside the weighted
-      // rotation that `active` gates. A soft-deleted stem is excluded.
-      const stem = repo.listAllStems().find((s) => s.id === stemId && s.deleted_at === null);
-      if (stem) {
-        setPendingStem({
-          id: stem.id,
-          text: stem.text,
-          origin: origin === 'notification' ? 'notification' : 'manual',
-          notificationId,
-          notifiedAt,
-        });
-      }
-    }
-  }, [stemId, origin, notificationId, notifiedAt]);
+  }, [session.phase, isLastInQueue, reduceMotion, settleAnim, badgeRevealAnim]);
 
   useEffect(() => {
     if (session.phase === 'active') {
@@ -151,19 +243,27 @@ export default function WriteScreen() {
     buttonPressure.setValue(session.phase === 'active' ? 1 - pressureFraction : 0);
   }, [buttonPressure, session.phase, pressureFraction]);
 
-  if (!pendingStem && session.phase === 'idle') {
+  if (queue !== null && queue.length === 0) {
     return (
       <ThemedView style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
           <ThemedText type="default" themeColor="textSecondary">
-            No stem selected.
+            No stems set for this time of day yet. Add one from the stem library.
           </ThemedText>
         </SafeAreaView>
       </ThemedView>
     );
   }
 
-  const stemText = session.stemText ?? pendingStem?.text ?? '';
+  if (queue === null) {
+    return (
+      <ThemedView style={styles.container}>
+        <SafeAreaView style={styles.safeArea} />
+      </ThemedView>
+    );
+  }
+
+  const stemText = awaitingStart ? (pendingStem?.text ?? '') : (session.stemText ?? '');
   const targetEndings = session.state?.config.targetEndings ?? 0;
   const buttonBackgroundColor = buttonPressure.interpolate({
     inputRange: [0, 1],
@@ -201,12 +301,12 @@ export default function WriteScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           {/*
-            Only shown before a session starts: once writing is under way,
-            "Done" (below) is the single exit affordance (§10) — it saves
-            and finishes rather than leaving a session dangling open, which
-            an equally-visible second exit here would invite.
+            Only shown before a stem's Start is tapped: once writing is
+            under way, "Done" (below) is the single exit affordance (§10) —
+            it saves and finishes rather than leaving a session dangling
+            open, which an equally-visible second exit here would invite.
           */}
-          {session.phase === 'idle' && (
+          {awaitingStart && (
             <ThemedView style={styles.exitRow}>
               <Pressable
                 onPress={() => router.back()}
@@ -220,6 +320,12 @@ export default function WriteScreen() {
                 </ThemedText>
               </Pressable>
             </ThemedView>
+          )}
+
+          {queue.length > 1 && (
+            <ThemedText type="small" themeColor="textSecondary">
+              Stem {queueIndex + 1} of {queue.length}
+            </ThemedText>
           )}
 
           <ThemedText type="stem">
@@ -239,9 +345,7 @@ export default function WriteScreen() {
             </ThemedText>
           ))}
 
-          {session.phase === 'idle' && pendingStem && (
-            <Button label="Start" onPress={() => session.start(pendingStem)} />
-          )}
+          {awaitingStart && <Button label="Start" onPress={startPendingStem} />}
 
           {session.phase === 'active' && (
             <>
@@ -288,7 +392,7 @@ export default function WriteScreen() {
             </>
           )}
 
-          {session.phase === 'done' && (
+          {session.phase === 'done' && isLastInQueue && (
             <ThemedView style={styles.doneBlock}>
               <Animated.View
                 style={{

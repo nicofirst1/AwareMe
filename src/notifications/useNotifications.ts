@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 
-import { getRepository } from '@/db';
+import type { TimeOfDay } from '@/db';
 import { getNotifications } from './notificationsModule';
 import { rescheduleNotifications, NOTIFICATION_DATA_KIND } from './scheduler';
 
@@ -49,11 +49,12 @@ export function useNotificationScheduler(): void {
 }
 
 /**
- * Tapping a notification deep-links straight into a writing session on the
- * stem chosen for it at schedule time (§6.4, §6.2) — read back from
- * `notification_schedule` by the OS identifier the tap response carries,
- * never re-drawn at tap time. `origin='notification'` on the resulting
- * session comes from the `/write` route params this pushes.
+ * Tapping a notification deep-links straight into that period's writing
+ * sitting (§6.4, morning/evening pivot): the tap's silent `data.timeOfDay`
+ * payload (not stem or user text — §6.4's lock-screen privacy rule) says
+ * which of the two fixed daily notifications fired, and `/write` loads every
+ * active stem for that period itself (§6.2). `origin='notification'` on each
+ * resulting session comes from the `/write` route params this pushes.
  *
  * Installs nothing where the native module isn't available (Expo Go).
  */
@@ -66,25 +67,16 @@ export function useNotificationTapRouting(): void {
     if (!Notifications) return;
 
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data;
-      if (data?.kind !== NOTIFICATION_DATA_KIND) return;
+      const data = response.notification.request.content.data as { kind?: string; timeOfDay?: TimeOfDay } | undefined;
+      if (data?.kind !== NOTIFICATION_DATA_KIND || !data.timeOfDay) return;
 
       const osIdentifier = response.notification.request.identifier;
       if (handledIds.current.has(osIdentifier)) return;
       handledIds.current.add(osIdentifier);
 
-      const repo = getRepository();
-      const row = repo.getNotificationByOsIdentifier(osIdentifier);
-      if (!row?.stem_id) return; // nothing to open on — no stem was available when this fired
-
       router.push({
         pathname: '/write',
-        params: {
-          stemId: row.stem_id,
-          origin: 'notification',
-          notificationId: row.id,
-          notifiedAt: row.scheduled_for,
-        },
+        params: { timeOfDay: data.timeOfDay, origin: 'notification' },
       });
     });
     return () => sub.remove();

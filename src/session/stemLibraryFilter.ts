@@ -9,15 +9,21 @@ export interface FilterableStem {
   category: string | null;
   active: number; // 0/1
   deleted_at: string | null;
+  /** Morning/evening pivot (migration 0003): null for an untagged stem — matched by the 'all' filter only, never by 'morning'/'evening'. */
+  time_of_day: string | null;
 }
 
 export type ActiveFilter = 'active' | 'archived' | 'all';
+
+/** 'all' | 'morning' | 'evening' | 'none' (untagged — `time_of_day IS NULL`). */
+export type TimeOfDayFilter = 'all' | 'morning' | 'evening' | 'none';
 
 export interface StemLibraryFilters {
   query: string;
   activeFilter: ActiveFilter;
   originFilter: string; // 'all' | a specific origin
   categoryFilter: string; // 'all' | a specific category
+  timeOfDayFilter?: TimeOfDayFilter; // defaults to 'all'
 }
 
 export function matchesStemFilters(stem: FilterableStem, filters: StemLibraryFilters): boolean {
@@ -30,6 +36,12 @@ export function matchesStemFilters(stem: FilterableStem, filters: StemLibraryFil
   if (filters.originFilter !== 'all' && stem.origin !== filters.originFilter) return false;
   if (filters.categoryFilter !== 'all' && stem.category !== filters.categoryFilter) return false;
 
+  const timeOfDayFilter = filters.timeOfDayFilter ?? 'all';
+  if (timeOfDayFilter === 'none' && stem.time_of_day !== null) return false;
+  if ((timeOfDayFilter === 'morning' || timeOfDayFilter === 'evening') && stem.time_of_day !== timeOfDayFilter) {
+    return false;
+  }
+
   const q = filters.query.trim().toLowerCase();
   if (q && !stem.text.toLowerCase().includes(q)) return false;
 
@@ -37,10 +49,10 @@ export function matchesStemFilters(stem: FilterableStem, filters: StemLibraryFil
 }
 
 /**
- * `selectStem` (§6.2) returns null on zero active candidates, and "start
- * now" then silently does nothing — so the library refuses to deactivate
- * the last active stem rather than let the app go dead-ended. Deleted stems
- * don't count as active candidates either way.
+ * A period's session (§6.2) needs at least one active stem for that
+ * time-of-day, so the library refuses to deactivate the last active stem
+ * rather than let a period go dead-ended. Deleted stems don't count as
+ * active candidates either way.
  */
 export function canDeactivateStem(stems: readonly FilterableStem[], target: FilterableStem): boolean {
   if (!target.active) return true; // already inactive; activating is always fine

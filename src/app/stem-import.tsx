@@ -9,12 +9,16 @@ import { FilterChip } from '@/components/filter-chip';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CategoryColors, Fonts, MaxContentWidth, Radius, Spacing, type CategoryName } from '@/constants/theme';
-import { getRepository } from '@/db';
+import { getRepository, type TimeOfDay } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
 
 // See stem-edit.tsx's identical comment: derived from the palette so the
 // two category pickers can never drift apart (ui-audit-2026-09-11.md §2).
 const CATEGORIES = Object.keys(CategoryColors) as CategoryName[];
+
+// Same morning/evening/none picker as stem-edit.tsx, applied to the whole batch.
+const TIME_OF_DAY_OPTIONS = ['none', 'morning', 'evening'] as const;
+type TimeOfDayOption = (typeof TIME_OF_DAY_OPTIONS)[number];
 
 /** One stem per non-blank line (§6.6). Trimmed; blank lines dropped. */
 function linesToStems(raw: string): string[] {
@@ -36,6 +40,7 @@ export default function StemImportScreen() {
 
   const [raw, setRaw] = useState('');
   const [category, setCategory] = useState<string | null>(null);
+  const [timeOfDay, setTimeOfDay] = useState<TimeOfDayOption>('none');
 
   const lines = useMemo(() => linesToStems(raw), [raw]);
 
@@ -52,7 +57,8 @@ export default function StemImportScreen() {
 
   const commit = () => {
     if (lines.length === 0) return;
-    const count = repo.bulkImportStems(lines, category);
+    const resolvedTimeOfDay: TimeOfDay | null = timeOfDay === 'none' ? null : timeOfDay;
+    const count = repo.bulkImportStems(lines, category, resolvedTimeOfDay);
     Alert.alert('Imported', `Added ${count} stem${count === 1 ? '' : 's'}.`, [
       { text: 'OK', onPress: () => router.back() },
     ]);
@@ -86,6 +92,20 @@ export default function StemImportScreen() {
             <FilterChip label="None" selected={category === null} onPress={() => setCategory(null)} />
             {CATEGORIES.map((c) => (
               <FilterChip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} category={c} />
+            ))}
+          </ThemedView>
+
+          <ThemedText type="small" themeColor="textSecondary">
+            Time of day (applied to all)
+          </ThemedText>
+          <ThemedView style={styles.chipRow}>
+            {TIME_OF_DAY_OPTIONS.map((o) => (
+              <FilterChip
+                key={o}
+                label={o === 'none' ? 'None' : o === 'morning' ? 'Morning' : 'Evening'}
+                selected={timeOfDay === o}
+                onPress={() => setTimeOfDay(o)}
+              />
             ))}
           </ThemedView>
 

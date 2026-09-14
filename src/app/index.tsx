@@ -15,28 +15,16 @@ import {
   Radius,
   Spacing,
 } from '@/constants/theme';
-import { getRepository } from '@/db';
+import { getRepository, type TimeOfDay } from '@/db';
 import { nowEventTime } from '@/db/time';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { computeStreaks } from '@/session/progressStats';
 import { isWeeklyReviewDue } from '@/session/reviewPeriod';
-import { selectStem } from '@/session/stemSelection';
 
-/**
- * Picks a stem by the weighted rotation (§6.2) and navigates straight to
- * the writing session on it — "start now". Selection itself is the pure
- * `selectStem`; this is just the glue that supplies its (candidates,
- * history, now, seed) from the repository and the clock.
- */
-function pickStemNow(): { id: string; text: string } | null {
-  const repo = getRepository();
-  const candidates = repo.listActiveStems();
-  const history = repo.getRecentStemUsage();
-  const picked = selectStem(candidates, history, new Date().toISOString(), Date.now());
-  if (!picked) return null;
-  const full = candidates.find((s) => s.id === picked.id);
-  return full ? { id: full.id, text: full.text } : null;
+/** The time-of-day whose start button is shown more prominently — the one matching the current local hour. Evening starts at 17:00 local, same boundary either period's stems don't otherwise depend on. */
+function currentTimeOfDay(): TimeOfDay {
+  return new Date().getHours() >= 17 ? 'evening' : 'morning';
 }
 
 interface HomeStatus {
@@ -128,10 +116,10 @@ export default function HomeScreen() {
     }, []),
   );
 
-  const startNow = () => {
-    const stem = pickStemNow();
-    if (!stem) return; // no stems at all — nothing to start
-    router.push({ pathname: '/write', params: { stemId: stem.id } });
+  const currentPeriod = currentTimeOfDay();
+
+  const startSitting = (timeOfDay: TimeOfDay) => {
+    router.push({ pathname: '/write', params: { timeOfDay } });
   };
 
   return (
@@ -145,7 +133,24 @@ export default function HomeScreen() {
             </ThemedText>
           </ThemedView>
 
-          <Button label="Start writing" onPress={startNow} variant="primary" style={styles.primaryButton} />
+          {/* Two clearly-labeled starts (morning/evening pivot, 2026-09-14):
+              both periods are always reachable, but the one matching the
+              current local hour gets the primary button so the common case
+              is a single tap. */}
+          <ThemedView style={styles.startRow}>
+            <Button
+              label="Morning session"
+              onPress={() => startSitting('morning')}
+              variant={currentPeriod === 'morning' ? 'primary' : 'secondary'}
+              style={styles.primaryButton}
+            />
+            <Button
+              label="Evening session"
+              onPress={() => startSitting('evening')}
+              variant={currentPeriod === 'evening' ? 'primary' : 'secondary'}
+              style={styles.primaryButton}
+            />
+          </ThemedView>
 
           {status && (status.weekCount > 0 || status.reviewAvailable || status.currentStreak >= 3) && (
             <ThemedView style={styles.statusBlock}>
@@ -235,6 +240,10 @@ const styles = StyleSheet.create({
   header: {
     gap: Spacing.one,
     alignItems: 'center',
+  },
+  startRow: {
+    gap: Spacing.two,
+    width: '100%',
   },
   primaryButton: {
     minHeight: MinTouchTarget * 1.3,

@@ -10,14 +10,12 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
 import { getRepository, Settings } from '@/db';
-import type { NotificationMode } from '@/db/seed/settings';
 import { cancelAllPendingNotifications, rescheduleNotifications } from '@/notifications/scheduler';
-import { clampSetting, FIXED_TIMES_RANGE, isValidFixedTimes, isValidHHMM, SETTINGS_RANGES } from '@/session/settingsValidation';
+import { clampSetting, isValidHHMM, SETTINGS_RANGES } from '@/session/settingsValidation';
 import { useTheme } from '@/hooks/use-theme';
 
 const THEMES = ['system', 'light', 'dark'] as const;
 const TERMINATORS = ['...', '—'] as const;
-const NOTIFICATION_MODES = ['random', 'fixed'] as const;
 
 /**
  * A number field with +/- steppers, clamped to spec §7's stated range. No
@@ -114,19 +112,18 @@ function Hint({ children }: { children: string }) {
  * Settings (§7): every tunable, its stated range, persisted one key at a
  * time via `Repository.setSetting` (JSON-encoded in the `settings` table,
  * `updated_at` stamped per write — the existing settings-table pattern, no
- * schema change). Changing the notification window or sessions/day calls
- * `rescheduleNotifications()` on save, the seam ticket 10 built for exactly
- * this (DECISIONS.md, ticket-10 entry).
+ * schema change). Changing a notification time calls `rescheduleNotifications()`
+ * on save (morning/evening pivot, 2026-09-14): it cancels and recreates the
+ * app's two daily triggers from the freshly saved settings.
  */
 export default function SettingsScreen() {
   const theme = useTheme();
   const repo = useMemo(() => getRepository(), []);
   const [settings, setSettings] = useState<Settings>(() => repo.getSettings());
-  const [windowStart, setWindowStart] = useState(settings.windows[0]?.start ?? '08:00');
-  const [windowEnd, setWindowEnd] = useState(settings.windows[0]?.end ?? '21:00');
-  const [windowError, setWindowError] = useState<string | null>(null);
-  const [fixedTimes, setFixedTimes] = useState<string[]>(settings.notification_fixed_times);
-  const [fixedTimesError, setFixedTimesError] = useState<string | null>(null);
+  const [morningTime, setMorningTime] = useState(settings.morning_notification_time);
+  const [eveningTime, setEveningTime] = useState(settings.evening_notification_time);
+  const [morningError, setMorningError] = useState<string | null>(null);
+  const [eveningError, setEveningError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
   const [wiping, setWiping] = useState(false);
 
@@ -136,61 +133,28 @@ export default function SettingsScreen() {
     setSavedNotice(true);
   };
 
-  const saveWindow = () => {
-    if (!isValidHHMM(windowStart) || !isValidHHMM(windowEnd) || windowStart >= windowEnd) {
-      setWindowError('Enter a start and end time (HH:MM), with start before end.');
+  const saveMorningTime = () => {
+    if (!isValidHHMM(morningTime)) {
+      setMorningError('Enter a valid time (HH:MM).');
       return;
     }
-    setWindowError(null);
-    set('windows', [{ start: windowStart, end: windowEnd }]);
+    setMorningError(null);
+    set('morning_notification_time', morningTime);
     rescheduleNotifications().catch((error) => {
       if (__DEV__) console.warn('Notification reschedule failed:', error);
     });
   };
 
-  const onSessionsPerDayChange = (next: number) => {
-    set('sessions_per_day', next);
-    rescheduleNotifications().catch((error) => {
-      if (__DEV__) console.warn('Notification reschedule failed:', error);
-    });
-  };
-
-  const onNotificationModeChange = (mode: NotificationMode) => {
-    set('notification_mode', mode);
-    rescheduleNotifications().catch((error) => {
-      if (__DEV__) console.warn('Notification reschedule failed:', error);
-    });
-  };
-
-  const saveFixedTimes = (next: string[]) => {
-    if (!isValidFixedTimes(next)) {
-      setFixedTimesError(`Enter 1–4 valid times (HH:MM).`);
+  const saveEveningTime = () => {
+    if (!isValidHHMM(eveningTime)) {
+      setEveningError('Enter a valid time (HH:MM).');
       return;
     }
-    setFixedTimesError(null);
-    set('notification_fixed_times', next);
+    setEveningError(null);
+    set('evening_notification_time', eveningTime);
     rescheduleNotifications().catch((error) => {
       if (__DEV__) console.warn('Notification reschedule failed:', error);
     });
-  };
-
-  const changeFixedTimeAt = (index: number, value: string) => {
-    const next = fixedTimes.map((t, i) => (i === index ? value : t));
-    setFixedTimes(next);
-  };
-
-  const addFixedTime = () => {
-    if (fixedTimes.length >= FIXED_TIMES_RANGE.max) return;
-    const next = [...fixedTimes, '12:00'];
-    setFixedTimes(next);
-    saveFixedTimes(next);
-  };
-
-  const removeFixedTime = (index: number) => {
-    if (fixedTimes.length <= FIXED_TIMES_RANGE.min) return;
-    const next = fixedTimes.filter((_, i) => i !== index);
-    setFixedTimes(next);
-    saveFixedTimes(next);
   };
 
   const confirmDeleteAll = () => {
@@ -220,10 +184,10 @@ export default function SettingsScreen() {
     try {
       await cancelAllPendingNotifications();
       repo.deleteAllData();
-      setSettings(repo.getSettings());
       const fresh = repo.getSettings();
-      setWindowStart(fresh.windows[0]?.start ?? '08:00');
-      setWindowEnd(fresh.windows[0]?.end ?? '21:00');
+      setSettings(fresh);
+      setMorningTime(fresh.morning_notification_time);
+      setEveningTime(fresh.evening_notification_time);
       Alert.alert('Data deleted', 'The app has been reset to its factory state.');
     } catch (err) {
       Alert.alert('Delete failed', err instanceof Error ? err.message : String(err));
@@ -287,100 +251,46 @@ export default function SettingsScreen() {
           <ThemedView style={[styles.group, { borderTopColor: hexToRgba(theme.accent, 0.3) }]}>
             <SectionHeader label="Notifications" />
 
-            <NumberStepper
-              label="Sessions per day"
-              value={settings.sessions_per_day}
-              settingKey="sessions_per_day"
-              onChange={onSessionsPerDayChange}
-            />
-            <Hint>How many reminder notifications to send per day, at most.</Hint>
-
             <ThemedView style={styles.section}>
               <ThemedText type="small" themeColor="textSecondary">
-                Notification timing
+                Notification times
               </ThemedText>
-              <Hint>
-                Random picks a different moment each day inside the window below, so the exercise can&apos;t be
-                pre-planned. Fixed fires at exact times you choose instead.
-              </Hint>
-              <ChipToggle options={NOTIFICATION_MODES} value={settings.notification_mode} onChange={onNotificationModeChange} />
+              <Hint>Two reminders a day, at exact times you choose — the book&apos;s own suggestion is start and end of day.</Hint>
+              <ThemedView style={styles.windowRow}>
+                <ThemedText type="default">Morning</ThemedText>
+                <TextInput
+                  value={morningTime}
+                  onChangeText={setMorningTime}
+                  onBlur={saveMorningTime}
+                  placeholder="08:00"
+                  placeholderTextColor={theme.textSecondary}
+                  style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+                  accessibilityLabel="Morning notification time"
+                />
+              </ThemedView>
+              {morningError && (
+                <ThemedText type="small" themeColor="error" accessibilityLiveRegion="polite">
+                  {morningError}
+                </ThemedText>
+              )}
+              <ThemedView style={styles.windowRow}>
+                <ThemedText type="default">Evening</ThemedText>
+                <TextInput
+                  value={eveningTime}
+                  onChangeText={setEveningTime}
+                  onBlur={saveEveningTime}
+                  placeholder="21:00"
+                  placeholderTextColor={theme.textSecondary}
+                  style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+                  accessibilityLabel="Evening notification time"
+                />
+              </ThemedView>
+              {eveningError && (
+                <ThemedText type="small" themeColor="error" accessibilityLiveRegion="polite">
+                  {eveningError}
+                </ThemedText>
+              )}
             </ThemedView>
-
-            {settings.notification_mode === 'random' ? (
-              <ThemedView style={styles.section}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Notification window
-                </ThemedText>
-                <ThemedView style={styles.windowRow}>
-                  <TextInput
-                    value={windowStart}
-                    onChangeText={setWindowStart}
-                    onBlur={saveWindow}
-                    placeholder="08:00"
-                    placeholderTextColor={theme.textSecondary}
-                    style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-                    accessibilityLabel="Window start time"
-                  />
-                  <ThemedText type="default">to</ThemedText>
-                  <TextInput
-                    value={windowEnd}
-                    onChangeText={setWindowEnd}
-                    onBlur={saveWindow}
-                    placeholder="21:00"
-                    placeholderTextColor={theme.textSecondary}
-                    style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-                    accessibilityLabel="Window end time"
-                  />
-                </ThemedView>
-                {windowError && (
-                  <ThemedText type="small" themeColor="error" accessibilityLiveRegion="polite">
-                    {windowError}
-                  </ThemedText>
-                )}
-              </ThemedView>
-            ) : (
-              <ThemedView style={styles.section}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Fixed times ({FIXED_TIMES_RANGE.min}–{FIXED_TIMES_RANGE.max})
-                </ThemedText>
-                {fixedTimes.map((t, i) => (
-                  <ThemedView key={i} style={styles.windowRow}>
-                    <TextInput
-                      value={t}
-                      onChangeText={(value) => changeFixedTimeAt(i, value)}
-                      onBlur={() => saveFixedTimes(fixedTimes)}
-                      placeholder="08:00"
-                      placeholderTextColor={theme.textSecondary}
-                      style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-                      accessibilityLabel={`Fixed time ${i + 1}`}
-                    />
-                    <Pressable
-                      onPress={() => removeFixedTime(i)}
-                      disabled={fixedTimes.length <= FIXED_TIMES_RANGE.min}
-                      style={[styles.stepperButton, { backgroundColor: theme.backgroundElement, opacity: fixedTimes.length <= FIXED_TIMES_RANGE.min ? 0.4 : 1 }]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove fixed time ${i + 1}`}
-                    >
-                      <ThemedText type="subtitle">−</ThemedText>
-                    </Pressable>
-                  </ThemedView>
-                ))}
-                {fixedTimesError && (
-                  <ThemedText type="small" themeColor="error" accessibilityLiveRegion="polite">
-                    {fixedTimesError}
-                  </ThemedText>
-                )}
-                <Pressable
-                  onPress={addFixedTime}
-                  disabled={fixedTimes.length >= FIXED_TIMES_RANGE.max}
-                  style={[styles.navLink, { opacity: fixedTimes.length >= FIXED_TIMES_RANGE.max ? 0.4 : 1 }]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add fixed time"
-                >
-                  <ThemedText type="default">+ Add time</ThemedText>
-                </Pressable>
-              </ThemedView>
-            )}
 
             <ChipToggle
               label="Weekly review prompt"
