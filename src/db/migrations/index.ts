@@ -1,5 +1,6 @@
 import { MIGRATION_0001_INITIAL } from './0001_initial';
 import { MIGRATION_0002_ENDINGS_FTS } from './0002_endings_fts';
+import { MIGRATION_0003_STEMS_TIME_OF_DAY } from './0003_stems_time_of_day';
 
 /** One numbered migration: `version` is the `schema_version` it upgrades to. */
 export interface Migration {
@@ -14,6 +15,7 @@ export interface Migration {
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, sql: MIGRATION_0001_INITIAL },
   { version: 2, sql: MIGRATION_0002_ENDINGS_FTS },
+  { version: 3, sql: MIGRATION_0003_STEMS_TIME_OF_DAY },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

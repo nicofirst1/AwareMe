@@ -1,6 +1,6 @@
 import { newId } from './id';
 import { SqlBindValue, SqlExecutor } from './executor';
-import { META_STEMS, SEED_STEMS } from './seed/stems';
+import { META_STEMS, SEED_STEMS, TimeOfDay } from './seed/stems';
 import { DEFAULT_SETTINGS, Settings } from './seed/settings';
 import { nowEventTime } from './time';
 import { EndReason, SessionOrigin } from '@/session/sessionMachine';
@@ -146,9 +146,9 @@ export class Repository {
       for (const stem of SEED_STEMS) {
         const { at, tz, offsetMin } = nowEventTime();
         this.db.runSync(
-          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min)
-           VALUES (?, ?, 'seed', ?, 'en', 1.0, 1, ?, ?, ?)`,
-          [newId(), stem.text, stem.category, at, tz, offsetMin],
+          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day)
+           VALUES (?, ?, 'seed', ?, 'en', 1.0, 1, ?, ?, ?, ?)`,
+          [newId(), stem.text, stem.category, at, tz, offsetMin, stem.timeOfDay],
         );
       }
 
@@ -267,6 +267,14 @@ export class Repository {
     return this.db.getAllSync<StemRow>(
       "SELECT id, text, origin, category, weight FROM stems WHERE active = 1 AND deleted_at IS NULL ORDER BY created_at",
       [],
+    );
+  }
+
+  /** Active, non-deleted stems tagged for the given time of day (migration 0003), for the two fixed daily notifications. Ordered by `id` (UUIDv7, chronological) for a deterministic draw. */
+  getActiveStemsForTimeOfDay(timeOfDay: TimeOfDay): StemRow[] {
+    return this.db.getAllSync<StemRow>(
+      'SELECT id, text, origin, category, weight FROM stems WHERE active = 1 AND deleted_at IS NULL AND time_of_day = ? ORDER BY id',
+      [timeOfDay],
     );
   }
 

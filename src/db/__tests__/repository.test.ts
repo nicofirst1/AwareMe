@@ -183,17 +183,15 @@ describe('Repository.setSetting', () => {
     expect(repo.getSettings().theme).toBe('dark');
   });
 
-  it('back-fills settings keys added after a device was first seeded (2026-09-11: stem timer, notification mode/fixed times), with no migration needed', () => {
+  it('back-fills settings keys added after a device was first seeded (2026-09-14: morning/evening notification times), with no migration needed', () => {
     const { db, repo } = freshRepository();
     // Simulates an existing install seeded before these keys existed: only
-    // the pre-2026-09-11 key set is present in the settings table.
+    // the pre-2026-09-14 key set is present in the settings table.
     const preExistingKeys: (keyof typeof DEFAULT_SETTINGS)[] = [
       'endings_per_session',
       'timer_seconds',
       'review_timer_seconds',
       'uncensored_mode',
-      'sessions_per_day',
-      'windows',
       'stem_terminator',
       'app_lock_enabled',
       'weekly_review_prompt',
@@ -210,8 +208,8 @@ describe('Repository.setSetting', () => {
     const settings = repo.getSettings();
     expect(settings.stem_timer_enabled).toBe(DEFAULT_SETTINGS.stem_timer_enabled);
     expect(settings.stem_timer_seconds).toBe(DEFAULT_SETTINGS.stem_timer_seconds);
-    expect(settings.notification_mode).toBe(DEFAULT_SETTINGS.notification_mode);
-    expect(settings.notification_fixed_times).toEqual(DEFAULT_SETTINGS.notification_fixed_times);
+    expect(settings.morning_notification_time).toBe(DEFAULT_SETTINGS.morning_notification_time);
+    expect(settings.evening_notification_time).toBe(DEFAULT_SETTINGS.evening_notification_time);
   });
 });
 

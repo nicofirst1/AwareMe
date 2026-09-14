@@ -66,6 +66,34 @@ describe('Repository.listMetaStems', () => {
   });
 });
 
+describe('Repository.getActiveStemsForTimeOfDay', () => {
+  it('returns only active, non-deleted stems tagged for the given time of day', () => {
+    const { db, repo } = freshRepository();
+
+    const morning = repo.getActiveStemsForTimeOfDay('morning');
+    const evening = repo.getActiveStemsForTimeOfDay('evening');
+    expect(morning.length).toBeGreaterThan(0);
+    expect(evening.length).toBeGreaterThan(0);
+    expect(morning.length + evening.length).toBe(26); // all 26 seed stems; the 3 meta-stems carry time_of_day = NULL
+    expect(morning.some((s) => evening.some((e) => e.id === s.id))).toBe(false);
+
+    // A newly added stem has no time_of_day (NULL) and never surfaces here.
+    const id = repo.addStem({ text: 'Untagged stem', category: null, origin: 'user' });
+    expect(repo.getActiveStemsForTimeOfDay('morning').some((s) => s.id === id)).toBe(false);
+    expect(repo.getActiveStemsForTimeOfDay('evening').some((s) => s.id === id)).toBe(false);
+
+    // Archiving removes it from the draw.
+    const morningId = morning[0].id;
+    repo.setStemActive(morningId, false);
+    expect(repo.getActiveStemsForTimeOfDay('morning').some((s) => s.id === morningId)).toBe(false);
+
+    // Soft-deleting removes it too.
+    const eveningId = evening[0].id;
+    db.prepare("UPDATE stems SET deleted_at = '2026-09-14T00:00:00.000Z' WHERE id = ?").run(eveningId);
+    expect(repo.getActiveStemsForTimeOfDay('evening').some((s) => s.id === eveningId)).toBe(false);
+  });
+});
+
 describe('Repository.bulkImportStems', () => {
   it('adds one stem per line, all origin=imported, and returns the count', () => {
     const { db, repo } = freshRepository();
