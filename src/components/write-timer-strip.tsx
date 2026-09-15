@@ -23,6 +23,7 @@ export function WriteTimerStrip({
   positionLabel,
   progress,
   timeLabel,
+  timeColor,
 }: {
   /** e.g. "Stem 2 of 5". Omit for a single-stem sitting — there's no position to report. */
   positionLabel?: string;
@@ -30,6 +31,15 @@ export function WriteTimerStrip({
   progress?: number;
   /** MM:SS remaining, rendered at `subtitle` scale — §6.3.7/W6: never larger than the `stem` text (22pt). Omit alongside `progress`. */
   timeLabel?: string;
+  /**
+   * Optional color for the MM:SS numerals; `undefined` (the default) leaves
+   * them in the theme's normal text color. Write/review pass the
+   * `pressureColorAt` gradient here while the session is active — §6.3.7's
+   * depleting-color cue, relocated from the removed countdown Save button
+   * (2026-09-15 owner decision, DECISIONS.md at merge). ThemedText merges a
+   * caller's `style` last, so this overrides the default theme text color.
+   */
+  timeColor?: string;
 }) {
   if (!positionLabel && progress === undefined && !timeLabel) return null;
 
@@ -44,7 +54,7 @@ export function WriteTimerStrip({
           ) : (
             <View />
           )}
-          {timeLabel && <ThemedText type="subtitle">{timeLabel}</ThemedText>}
+          {timeLabel && <ThemedText type="subtitle" style={timeColor ? { color: timeColor } : undefined}>{timeLabel}</ThemedText>}
         </View>
       )}
       {progress !== undefined && <ProgressBar progress={progress} accessibilityLabel="Time remaining" />}

@@ -118,11 +118,48 @@ export type CategoryName = keyof typeof CategoryColors;
  * same in both themes (not theme-dependent) so the white label stays
  * ≥4.5:1 throughout: measured minimum 5.13:1 across the full gradient,
  * darkest midpoint included (olive/brown, not a bright yellow trap).
+ *
+ * 2026-09-15: its on-fill consumer (the write screen's countdown Save
+ * button) is gone (owner decision, expo-feedback round cycle 2; recorded in
+ * DECISIONS.md at merge) — the write/review screens now color the top-strip
+ * MM:SS numerals via `pressureColorAt` below. Export kept (vestigial
+ * token, like the schema's pre-pivot tables): the numerals' per-theme
+ * derivation now lives in `pressureColorAt` — its light-theme calm endpoint
+ * coincides with `calm` verbatim; dark's is `success` (#6FCF73) instead.
  */
 export const PressureColors = {
   calm: '#2E7D32',
   urgent: '#B3261E',
 } as const;
+
+function hexToRgb(hex: string): [number, number, number] {
+  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+}
+
+/**
+ * Pressure color for the write/review top strip's MM:SS numerals
+ * (2026-09-15 owner decision, expo-feedback round cycle 2 — recorded in
+ * DECISIONS.md at merge): the countdown Save button is gone, and §6.3.7's
+ * depleting-color cue — a *may*, ambient only, no penalty text, no shaming
+ * copy (§13.4) — now colors the numerals as the active timer depletes.
+ * `fraction` 0 = calm, 1 = urgent; values outside 0..1 clamp.
+ *
+ * The endpoints are the per-theme `success`/`error` tokens, deliberately
+ * NOT the theme-invariant `PressureColors`: the numerals are text sitting
+ * on each theme's `background` (unlike the old button's fixed gradient
+ * fill), so both endpoints must clear 4.5:1 against that background —
+ * light `success` 5.13:1 → `error` 6.5:1; dark `success` 10.85:1 →
+ * `error` 7.3:1 (figures from the token comments above). Measured across
+ * the full interpolation: the gradient's minimum contrast is 5.13:1 (light)
+ * and 7.21:1 (dark), so every point on the path clears AA.
+ */
+export function pressureColorAt(fraction: number, scheme: 'light' | 'dark'): string {
+  const t = Math.max(0, Math.min(1, fraction));
+  const from = hexToRgb(Colors[scheme].success);
+  const to = hexToRgb(Colors[scheme].error);
+  const mixed = [0, 1, 2].map((i) => Math.round(from[i] + (to[i] - from[i]) * t));
+  return `#${mixed.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
 
 /**
  * Badge "earned" accent (2026-09-11 gamification proposal §2,

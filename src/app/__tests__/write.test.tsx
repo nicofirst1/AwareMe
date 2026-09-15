@@ -64,8 +64,12 @@ describe('WriteScreen', () => {
     fireEvent.press(screen.getByText('Start'));
 
     const input = await screen.findByLabelText('Your ending');
-    fireEvent.changeText(input, 'a stray thought I keep circling back to');
-    fireEvent.press(screen.getByLabelText('Save this ending'));
+    // 2026-09-15 owner decision (cycle 2): the countdown Save button is
+    // gone — regression pin that it never reappears after Start. Submission
+    // is the return key: the multiline field's trailing "\n" drives
+    // `submitActive` (§6.3.4's "return key, or a Next control").
+    expect(screen.queryByLabelText('Save this ending')).toBeNull();
+    fireEvent.changeText(input, 'a stray thought I keep circling back to\n');
 
     await screen.findByText(/Stem 2 of 2/);
     await screen.findByText(/What I need to admit to myself is/);

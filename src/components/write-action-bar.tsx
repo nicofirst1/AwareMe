@@ -1,17 +1,27 @@
-import { Animated, Pressable, StyleSheet, TextInput, View, type ColorValue } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ProgressBar } from '@/components/progress-bar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Fonts, MinTouchTarget, Radius, Spacing } from '@/constants/theme';
+import { Fonts, MinTouchTarget, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 /**
  * Write screen's pinned bottom action bar (layout-audit-2026-09-15, LC8/W1):
- * the input plus every writing-time control (per-stem timer bar, the
- * pressure-gradient Save button, Done, the endings-written count) — the set
- * W1 measured buried below the fold as the endings stack grew. Lives above
- * the keyboard (caller wraps the screen in `KeyboardAvoidingView`).
+ * the input plus every writing-time control (per-stem timer bar, Done, the
+ * endings-written count) — the set W1 measured buried below the fold as the
+ * endings stack grew. Lives above the keyboard (caller wraps the screen in
+ * `KeyboardAvoidingView`).
+ *
+ * Submission is the return key (spec §6.3.4's "return key, or a Next
+ * control"): the multiline field's trailing-"\n" `onChangeText` path in the
+ * callers drives `submitActive`, with `onSubmitEditing` covering iOS's fast
+ * path. The countdown Save/Next button that used to sit here was removed
+ * (2026-09-15 owner decision, DECISIONS.md at merge) — it read as "the
+ * Start button never left"; the depleting-color pressure cue moved to the
+ * top strip's MM:SS numerals (`WriteTimerStrip`'s `timeColor`). Timeout and
+ * Done still auto-save whatever is on screen (§6.3.8) — nothing is ever
+ * discarded.
  *
  * Reused verbatim by review.tsx's `MetaStemSession` (cycle 4, wave 2): that
  * screen's meta-stem is "a normal timed session" (spec §6.5.2) with no
@@ -27,9 +37,6 @@ export function WriteActionBar({
   placeholder = 'Keep the pen moving.',
   inputAccessibilityLabel = 'Your ending',
   stemProgress,
-  onSave,
-  saveLabel,
-  savePressureColor,
   onDone,
   doneLabel = 'Done',
   endingsWritten,
@@ -44,11 +51,6 @@ export function WriteActionBar({
   inputAccessibilityLabel?: string;
   /** 0–1 fraction for the optional per-stem timer (`stem_timer_enabled`, spec §6.3.4's "second, independent countdown"). Omit/null to hide. */
   stemProgress?: number | null;
-  onSave: () => void;
-  /** MM:SS or "Next" — §6.3.7/W6: rendered at `subtitle` scale, never larger than the `stem` text. */
-  saveLabel: string;
-  /** The pressure-gradient fill (spec §6.3.4/W6 keep-fact) — caller owns the `Animated.Value`/interpolation, this component only paints it. */
-  savePressureColor: ColorValue | Animated.AnimatedInterpolation<string | number>;
   onDone: () => void;
   doneLabel?: string;
   /** Endings written so far vs. the session's target. Omit both to hide the row (review's meta-stem has exactly one, cycle 4). */
@@ -77,13 +79,6 @@ export function WriteActionBar({
       {stemProgress != null && (
         <ProgressBar progress={stemProgress} accessibilityLabel="Time remaining for this ending" />
       )}
-      <Pressable onPress={onSave} accessibilityRole="button" accessibilityLabel="Save this ending">
-        <Animated.View style={[styles.saveButton, { backgroundColor: savePressureColor }]}>
-          <ThemedText type="subtitle" style={styles.saveLabel}>
-            {saveLabel}
-          </ThemedText>
-        </Animated.View>
-      </Pressable>
       <View style={styles.footerRow}>
         <Pressable
           onPress={onDone}
@@ -119,22 +114,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 34,
     minHeight: 80,
-  },
-  // Radius.small matches `Button`'s own secondary/countdown radius so this
-  // bespoke pressure-animated button reads as the same button family.
-  saveButton: {
-    minHeight: MinTouchTarget,
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.four,
-    borderRadius: Radius.small,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Fixed white, not theme-driven: the pressure gradient (constants/theme.ts
-  // `PressureColors`) is itself fixed in both themes, and white stays
-  // >=4.5:1 across its full range (measured minimum 5.13:1).
-  saveLabel: {
-    color: '#ffffff',
   },
   footerRow: {
     flexDirection: 'row',

@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Animated,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -18,9 +17,10 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WriteActionBar } from '@/components/write-action-bar';
 import { WriteTimerStrip } from '@/components/write-timer-strip';
-import { MaxContentWidth, PressureColors, Spacing } from '@/constants/theme';
+import { MaxContentWidth, pressureColorAt, Spacing } from '@/constants/theme';
 import { EndingRow, getRepository, SessionRow } from '@/db';
 import { nowEventTime } from '@/db/time';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatMMSS } from '@/session/sessionMachine';
 import {
@@ -202,7 +202,7 @@ function MetaStemSession({ session }: { session: ReturnType<typeof useWritingSes
   const timerSeconds = session.state?.config.timerSeconds ?? 1;
   const stemTimerSeconds = session.state?.config.stemTimerSeconds ?? null;
   const progress = session.phase === 'active' ? Math.max(0, Math.min(1, session.remainingSeconds / timerSeconds)) : 0;
-  // The per-stem timer drives the button's urgency when it's on (settings
+  // The per-stem timer drives the pressure cue when it's on (settings
   // apply to the meta-stem like any session); otherwise the session timer
   // does — same `pressureFraction` rule as write.tsx.
   const stemProgress =
@@ -211,21 +211,15 @@ function MetaStemSession({ session }: { session: ReturnType<typeof useWritingSes
       : null;
   const pressureFraction = stemProgress ?? progress;
 
-  // Pressure cue (§6.3.4): urgency gradient only, never a numeral or shame
-  // copy — identical to write.tsx's mechanism.
-  const buttonPressure = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    buttonPressure.setValue(session.phase === 'active' ? 1 - pressureFraction : 0);
-  }, [buttonPressure, session.phase, pressureFraction]);
-
-  const buttonBackgroundColor = buttonPressure.interpolate({
-    inputRange: [0, 1],
-    outputRange: [PressureColors.calm, PressureColors.urgent],
-  });
-
-  const countdownSeconds = stemTimerSeconds ? session.stemRemainingSeconds : session.remainingSeconds;
-  const saveLabel = countdownSeconds !== null ? formatMMSS(countdownSeconds) : 'Next';
+  // §6.3.7's depleting-color cue (2026-09-15 owner decision, DECISIONS.md at
+  // merge): the top-strip MM:SS numerals carry the pressure gradient now
+  // that the countdown Save button is gone — ambient urgency only, no
+  // shaming copy (§13.4). Recomputed per render (the screen re-renders on
+  // every timer tick), so no Animated value is needed; `undefined` outside
+  // 'active' leaves the numerals in the theme's normal text color. Same
+  // `pressureColorAt` mechanism as write.tsx.
+  const resolvedScheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const pressureColor = session.phase === 'active' ? pressureColorAt(1 - pressureFraction, resolvedScheme) : undefined;
 
   // Enter submits the ending — same trailing-newline path as write.tsx
   // (multiline field, so the return key usually arrives via onChangeText).
@@ -245,6 +239,7 @@ function MetaStemSession({ session }: { session: ReturnType<typeof useWritingSes
             <WriteTimerStrip
               progress={session.phase === 'active' ? progress : undefined}
               timeLabel={session.phase === 'active' ? formatMMSS(session.remainingSeconds) : undefined}
+              timeColor={pressureColor}
             />
           </ThemedView>
 
@@ -260,9 +255,6 @@ function MetaStemSession({ session }: { session: ReturnType<typeof useWritingSes
                 onSubmitEditing={() => session.submitActive()}
                 inputAccessibilityLabel="Your reflection"
                 placeholder="Keep the pen moving."
-                onSave={() => session.submitActive()}
-                saveLabel={saveLabel}
-                savePressureColor={buttonBackgroundColor}
                 onDone={session.finishNow}
               />
             </ThemedView>
