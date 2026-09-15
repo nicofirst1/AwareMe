@@ -207,7 +207,7 @@ export default function SettingsScreen() {
               </ThemedText>
               <Hint>Two reminders a day, at exact times you choose — the book&apos;s own suggestion is start and end of day.</Hint>
               <ThemedView style={styles.windowRow}>
-                <ThemedText type="default">Morning</ThemedText>
+                <ThemedText type="eyebrow">Morning</ThemedText>
                 <TextInput
                   value={morningTime}
                   onChangeText={setMorningTime}
@@ -224,7 +224,7 @@ export default function SettingsScreen() {
                 </ThemedText>
               )}
               <ThemedView style={styles.windowRow}>
-                <ThemedText type="default">Evening</ThemedText>
+                <ThemedText type="eyebrow">Evening</ThemedText>
                 <TextInput
                   value={eveningTime}
                   onChangeText={setEveningTime}
