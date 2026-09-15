@@ -52,10 +52,18 @@ describe('ProgressScreen', () => {
     expect(screen.getByText('Seven-Day Rhythm')).toBeTruthy();
 
     // Stats block.
+    // Layout round cycle 6 (P2): the two sections have eyebrow headers.
+    expect(screen.getByText('Totals')).toBeTruthy();
+    expect(screen.getByText('Badges')).toBeTruthy();
     expect(screen.getByText('Sessions')).toBeTruthy();
     expect(screen.getByText('Endings')).toBeTruthy();
     expect(screen.getByText('Stems written on')).toBeTruthy();
     expect(screen.getByText('Longest streak')).toBeTruthy();
+    // Big-number treatment (P1): stat values render as their own text
+    // nodes — one session / two endings in the fixture (the "2" endings
+    // value is unambiguous; "1" appears for both sessions and stems).
+    expect(screen.getByText('2')).toBeTruthy();
+    expect(screen.getByText('1 day')).toBeTruthy();
   });
 
   it('renders all 11 badges regardless of earned state', () => {
