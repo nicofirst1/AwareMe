@@ -59,6 +59,12 @@ One row per stem, seed or user-authored.
 - \`time_of_day\` (text, nullable) — \`morning\` or \`evening\`; which fixed
   daily notification this stem belongs to. Null for meta-stems and any
   pre-pivot row never backfilled.
+- \`week_number\` (integer, nullable) — the official programme block
+  (1–30) this stem belongs to (2026-09-15, ADR-0005). Null for
+  non-programme stems.
+- \`is_weekly_meta\` (integer, 0/1) — 1 for the official weekly reflection
+  stem (§5.4 #1), the one the scheduled weekly reflection uses. 0 for
+  everything else.
 
 ## sessions.csv
 One row per writing session (a stem shown once, with one or more endings).

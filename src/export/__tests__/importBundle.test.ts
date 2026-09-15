@@ -30,6 +30,9 @@ function makeStemRow(overrides: Partial<Record<string, unknown>> = {}) {
     created_tz: 'UTC',
     created_offset_min: 0,
     deleted_at: null,
+    time_of_day: null,
+    week_number: null,
+    is_weekly_meta: 0,
     ...overrides,
   };
 }

@@ -100,4 +100,86 @@ describe('migrate', () => {
     );
     raw.close();
   });
+
+  it('the v4 fixture\'s stems table carries week_number and is_weekly_meta (migration 0004)', () => {
+    const raw = new DatabaseSync(fixturePath(4));
+    const columns = raw.prepare('PRAGMA table_info(stems)').all() as {
+      name: string;
+      type: string;
+      notnull: number;
+      dflt_value: string | null;
+    }[];
+    const byName = Object.fromEntries(columns.map((c) => [c.name, c]));
+    expect(byName['week_number']).toBeDefined();
+    expect(byName['week_number'].type).toBe('INTEGER');
+    expect(byName['is_weekly_meta']).toBeDefined();
+    expect(byName['is_weekly_meta'].type).toBe('INTEGER');
+    expect(byName['is_weekly_meta'].notnull).toBe(1);
+    expect(byName['is_weekly_meta'].dflt_value).toBe('0');
+    raw.close();
+  });
+
+  it('the v4 fixture contains the four §7 settings rows migration 0004 inserts, JSON-encoded', () => {
+    const raw = new DatabaseSync(fixturePath(4));
+    const rows = raw.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
+    const byKey = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+    expect(byKey['evening_practice_enabled']).toBe('true');
+    expect(byKey['weekly_meta_day']).toBe('"sunday"');
+    expect(byKey['weekly_meta_time']).toBe('"21:00"');
+    expect(byKey['program_week_override']).toBe('null');
+    raw.close();
+  });
+
+  it('upgrading the v3 fixture tags the existing weekly meta-stem, inserts the new settings, and leaves other stems untouched', () => {
+    const scratch = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'six-endings-migrate-')), 'copy.db');
+    fs.copyFileSync(fixturePath(3), scratch);
+    const raw = new DatabaseSync(scratch);
+    const db = nodeSqliteExecutor(raw);
+
+    // Mimic a real v3 install: the v1 seed stems are present and active;
+    // the weekly reflection stem exists as an origin='meta' row.
+    db.runSync(
+      `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day)
+       VALUES ('stem-v1-1', 'A pre-amendment stem', 'seed', 'awareness', 'en', 1.0, 1, '2026-01-01T00:00:00.000Z', 'UTC', 0, 'morning')`,
+      [],
+    );
+    db.runSync(
+      `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min)
+       VALUES ('stem-meta-1', 'If any of what I wrote this week is true, it might be helpful if I', 'meta', NULL, 'en', 1.0, 0, '2026-01-01T00:00:00.000Z', 'UTC', 0)`,
+      [],
+    );
+
+    migrate(db, '9.9.9');
+
+    const meta = db.getFirstSync<{ schema_version: number }>('SELECT schema_version FROM schema_meta WHERE id = 1', []);
+    expect(meta?.schema_version).toBe(CURRENT_SCHEMA_VERSION);
+
+    // ADR-0005 decision 6: the existing meta row is TAGGED, not duplicated.
+    const weekly = db.getAllSync<{ id: string; is_weekly_meta: number }>(
+      "SELECT id, is_weekly_meta FROM stems WHERE text = 'If any of what I wrote this week is true, it might be helpful if I'",
+      [],
+    );
+    expect(weekly).toHaveLength(1);
+    expect(weekly[0]).toEqual({ id: 'stem-meta-1', is_weekly_meta: 1 });
+
+    // Spec §5.3 (as amended): pre-amendment installs keep their rows as
+    // they are — no retirement, no programme tags, no retro-seeding.
+    const v1 = db.getFirstSync<Record<string, unknown>>('SELECT * FROM stems WHERE id = ?', ['stem-v1-1']);
+    expect(v1).toMatchObject({ active: 1, deleted_at: null, week_number: null, is_weekly_meta: 0 });
+    expect((db.getFirstSync<{ c: number }>('SELECT COUNT(*) AS c FROM stems WHERE week_number IS NOT NULL', []) as { c: number }).c).toBe(0);
+
+    // The four §7 keys land for the upgrading install.
+    const settings = Object.fromEntries(
+      (db.getAllSync<{ key: string; value: string }>('SELECT key, value FROM settings', []) as { key: string; value: string }[]).map(
+        (r) => [r.key, r.value],
+      ),
+    );
+    expect(settings['evening_practice_enabled']).toBe('true');
+    expect(settings['weekly_meta_day']).toBe('"sunday"');
+    expect(settings['weekly_meta_time']).toBe('"21:00"');
+    expect(settings['program_week_override']).toBe('null');
+
+    raw.close();
+    fs.rmSync(path.dirname(scratch), { recursive: true, force: true });
+  });
 });

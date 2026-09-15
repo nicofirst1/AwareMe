@@ -1,4 +1,4 @@
-/** The shape of every settings row, decoded. Keys match spec.md §7, as amended by the morning/evening pivot (migration 0003, DECISIONS.md): two fixed daily notification times replace the random-window/fixed-mode settings. */
+/** The shape of every settings row, decoded. Keys match spec.md §7, as amended by the morning/evening pivot (migration 0003, DECISIONS.md): two fixed daily notification times replace the random-window/fixed-mode settings; and by the official-programme amendment (migration 0004, ADR-0005, 2026-09-15): evening-practice toggle, weekly reflection schedule, and the programme-week override. */
 export interface Settings {
   endings_per_session: number;
   timer_seconds: number;
@@ -15,9 +15,17 @@ export interface Settings {
   morning_notification_time: string;
   /** Local "HH:MM" fire time for the evening notification. */
   evening_notification_time: string;
+  /** 2026-09-15 addition (ADR-0005). Gates the evening reflection sitting (§6.2) and the evening notification (§6.4). */
+  evening_practice_enabled: boolean;
+  /** 2026-09-15 addition. Day of the weekly reflection notification (§6.4); any weekday name, lowercase. */
+  weekly_meta_day: string;
+  /** 2026-09-15 addition. Local "HH:MM" fire time of the weekly reflection notification. */
+  weekly_meta_time: string;
+  /** 2026-09-15 addition. User-selected current programme week (1–30); null = derive from history (§6.2). Cleared when the selected week's reflection completes. */
+  program_week_override: number | null;
 }
 
-/** Default settings, per spec.md §7 as amended by the morning/evening pivot. Values are JSON-encoded in the settings table. */
+/** Default settings, per spec.md §7 as amended by the morning/evening pivot and the official-programme amendment (ADR-0005). Values are JSON-encoded in the settings table. */
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
   endings_per_session: 6,
   timer_seconds: 90,
@@ -31,4 +39,8 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   stem_timer_seconds: 60,
   morning_notification_time: '08:00',
   evening_notification_time: '21:00',
+  evening_practice_enabled: true,
+  weekly_meta_day: 'sunday',
+  weekly_meta_time: '21:00',
+  program_week_override: null,
 };

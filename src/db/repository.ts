@@ -1,6 +1,6 @@
 import { newId } from './id';
 import { SqlBindValue, SqlExecutor } from './executor';
-import { META_STEMS, SEED_STEMS, TimeOfDay } from './seed/stems';
+import { EVENING_META_STEMS, PROGRAMME_SEED_STEMS, RETIRED_SEED_STEMS, TimeOfDay, WEEKLY_META_STEM } from './seed/stems';
 import { DEFAULT_SETTINGS, Settings } from './seed/settings';
 import { nowEventTime } from './time';
 import { EndReason, SessionOrigin } from '@/session/sessionMachine';
@@ -138,47 +138,88 @@ export class Repository {
   }
 
   /**
-   * Inserts the seed stems and default settings on first launch. Idempotent:
+   * Inserts the seed corpus and default settings on first launch. Idempotent:
    * a no-op if stems already exist, so it's safe to call on every app start.
+   *
+   * The corpus, per spec §5 as amended 2026-09-15 (ADR-0005):
+   * 1. the official Sentence Completion I programme — every stem of Weeks
+   *    1–30, byte-for-byte from the canonical snapshot, stored WITHOUT the
+   *    trailing terminator (`stem_terminator` is appended at render),
+   *    `time_of_day = 'morning'`, each tagged with its `week_number`;
+   * 2. the official weekly reflection stem, seeded once with
+   *    `is_weekly_meta = 1`, `week_number = NULL`, `time_of_day = NULL`;
+   * 3. the two evening-review meta-stems (`origin = 'meta'`, inactive),
+   *    as since v1;
+   * 4. the 26 retired v1 originals — soft-deleted AT SEED TIME
+   *    (`deleted_at` set, `active = 0`): present for provenance/exports,
+   *    never active, never shown in the library (spec §5.3).
    */
   seedIfEmpty(): void {
     if (this.hasStems()) return;
 
     this.db.withTransactionSync(() => {
-      for (const stem of SEED_STEMS) {
+      for (const stem of PROGRAMME_SEED_STEMS) {
         const { at, tz, offsetMin } = nowEventTime();
         this.db.runSync(
-          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day)
-           VALUES (?, ?, 'seed', ?, 'en', 1.0, 1, ?, ?, ?, ?)`,
-          [newId(), stem.text, stem.category, at, tz, offsetMin, stem.timeOfDay],
+          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
+           VALUES (?, ?, 'seed', NULL, 'en', 1.0, 1, ?, ?, ?, 'morning', ?, 0)`,
+          [newId(), stem.text, at, tz, offsetMin, stem.weekNumber],
         );
       }
 
-      // Meta-stems (§5.4) are a distinct concept from stems (CONTEXT.md:
-      // "used only in review... avoid: review prompt"), not a category of
-      // them — seeded with `active = 0` so they can never surface via
-      // weighted selection (§6.2) or `listActiveStems`, and `origin =
-      // 'meta'` so `listAllStems` (the stem library) can exclude them by
-      // construction. They still need a real `stems` row because
-      // `sessions.stem_id` is a foreign key (spec §4.2) and review's
-      // meta-stem completion is "a normal timed session" (§6.5.2) with a
-      // real `sessions` row like any other.
-      for (const text of META_STEMS) {
+      // The official weekly reflection stem (§5.4 #1). A real `stems` row
+      // because `sessions.stem_id` is a foreign key (spec §4.2) and the
+      // weekly reflection completion is "a normal timed session" (§6.5.2).
+      // Unlike the evening meta-stems below it is `origin = 'seed'` and
+      // `active = 1` — the 2026-09-15 amendment makes it the scheduled
+      // weekly reflection's own stem (ADR-0005), reached via
+      // `is_weekly_meta = 1`, never via the generic active-stem reads
+      // (guarded below).
+      {
         const { at, tz, offsetMin } = nowEventTime();
         this.db.runSync(
-          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min)
-           VALUES (?, ?, 'meta', NULL, 'en', 1.0, 0, ?, ?, ?)`,
+          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
+           VALUES (?, ?, 'seed', NULL, 'en', 1.0, 1, ?, ?, ?, NULL, NULL, 1)`,
+          [newId(), WEEKLY_META_STEM, at, tz, offsetMin],
+        );
+      }
+
+      // Evening-review meta-stems (§5.4, minus the weekly one) are a
+      // distinct concept from stems (CONTEXT.md: "used only in review..."),
+      // not a category of them — seeded with `active = 0` so they can never
+      // surface via the sitting draws or `listActiveStems`, and `origin =
+      // 'meta'` so `listAllStems` (the stem library) can exclude them by
+      // construction. Same real-row reasoning as the weekly stem above.
+      for (const text of EVENING_META_STEMS) {
+        const { at, tz, offsetMin } = nowEventTime();
+        this.db.runSync(
+          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, week_number, is_weekly_meta)
+           VALUES (?, ?, 'meta', NULL, 'en', 1.0, 0, ?, ?, ?, NULL, 0)`,
           [newId(), text, at, tz, offsetMin],
         );
       }
 
+      // Retired v1 originals (spec §5.3, struck 2026-09-15): soft-deleted
+      // at seed time — the append-only way to ship provenance without ever
+      // surfacing them (§4.1, §4.5: exports keep the flag intact).
+      for (const stem of RETIRED_SEED_STEMS) {
+        const { at, tz, offsetMin } = nowEventTime();
+        this.db.runSync(
+          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta, deleted_at)
+           VALUES (?, ?, 'seed', ?, 'en', 1.0, 0, ?, ?, ?, ?, NULL, 0, ?)`,
+          [newId(), stem.text, stem.category, at, tz, offsetMin, stem.timeOfDay, at],
+        );
+      }
+
+      // INSERT OR IGNORE: migration 0004 (which runs before this on every
+      // open) already inserted the four §7 keys it added — on a fresh
+      // install those rows exist by the time seeding runs.
       for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
         const { at } = nowEventTime();
-        this.db.runSync('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)', [
-          key,
-          JSON.stringify(value),
-          at,
-        ]);
+        this.db.runSync(
+          'INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, ?)',
+          [key, JSON.stringify(value), at],
+        );
       }
     });
   }
@@ -264,10 +305,15 @@ export class Repository {
     this.seedIfEmpty();
   }
 
-  /** Active, non-deleted stems, for session start and the stem library. */
+  /**
+   * Active, non-deleted stems, for generic session start and stem reads.
+   * Excludes the weekly meta-stem (`is_weekly_meta = 1`, migration 0004):
+   * it is review machinery (§6.5), reached only through its flag — it must
+   * never surface in a sitting draw or a generic stem list.
+   */
   listActiveStems(): StemRow[] {
     return this.db.getAllSync<StemRow>(
-      "SELECT id, text, origin, category, weight, time_of_day FROM stems WHERE active = 1 AND deleted_at IS NULL ORDER BY created_at",
+      "SELECT id, text, origin, category, weight, time_of_day FROM stems WHERE active = 1 AND deleted_at IS NULL AND is_weekly_meta = 0 ORDER BY created_at",
       [],
     );
   }
@@ -284,21 +330,28 @@ export class Repository {
    * Every stem, including archived and soft-deleted ones, for the stem
    * library (§6.6) — the library filters/searches client-side over this,
    * unlike `listActiveStems`'s narrow session-start use. Excludes
-   * `origin = 'meta'`: meta-stems (§5.4) are a distinct concept, used only
-   * in review, and never editable/browsable/writable-on-demand like a
-   * regular stem.
+   * `origin = 'meta'` (the evening meta-stems) and the weekly meta-stem
+   * (`is_weekly_meta = 1`, seeded `origin = 'seed'` since migration 0004):
+   * review stems are a distinct concept, used only in review, and never
+   * editable/browsable/writable-on-demand like a regular stem.
    */
   listAllStems(): LibraryStemRow[] {
     return this.db.getAllSync<LibraryStemRow>(
-      "SELECT id, text, origin, category, weight, time_of_day, active, deleted_at, created_at FROM stems WHERE origin != 'meta' ORDER BY created_at DESC",
+      "SELECT id, text, origin, category, weight, time_of_day, active, deleted_at, created_at FROM stems WHERE origin != 'meta' AND is_weekly_meta = 0 ORDER BY created_at DESC",
       [],
     );
   }
 
-  /** The 3 seeded meta-stems (§5.4), each with the real `stems.id` a review session's `stem_id` FK needs. */
+  /**
+   * The 3 §5.4 review meta-stems, each with the real `stems.id` a review
+   * session's `stem_id` FK needs. Since migration 0004 the weekly one is
+   * `origin = 'seed'` (tagged `is_weekly_meta = 1`), so the filter is the
+   * disjunction — spec §5.4: all three remain available to on-demand
+   * review. Seeded order (weekly first) is preserved by `created_at`.
+   */
   listMetaStems(): StemRow[] {
     return this.db.getAllSync<StemRow>(
-      "SELECT id, text, origin, category, weight, time_of_day FROM stems WHERE origin = 'meta' ORDER BY created_at",
+      "SELECT id, text, origin, category, weight, time_of_day FROM stems WHERE origin = 'meta' OR is_weekly_meta = 1 ORDER BY created_at",
       [],
     );
   }

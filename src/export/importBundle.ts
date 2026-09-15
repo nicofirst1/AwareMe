@@ -15,7 +15,7 @@ const IMPORT_TABLES: readonly (keyof ExportBundle & TableName)[] = ['stems', 'se
 
 /** Column order per table — must match `csvBundle.ts` / the DDL exactly; insert fails loudly (unknown column) if a bundle is missing one rather than silently dropping data. */
 const COLUMNS: Record<(typeof IMPORT_TABLES)[number], readonly string[]> = {
-  stems: ['id', 'text', 'origin', 'category', 'language', 'weight', 'active', 'created_at', 'created_tz', 'created_offset_min', 'deleted_at', 'time_of_day'],
+  stems: ['id', 'text', 'origin', 'category', 'language', 'weight', 'active', 'created_at', 'created_tz', 'created_offset_min', 'deleted_at', 'time_of_day', 'week_number', 'is_weekly_meta'],
   sessions: [
     'id', 'stem_id', 'stem_text_snapshot', 'origin', 'target_endings', 'timer_seconds', 'uncensored_mode',
     'started_at', 'first_keypress_at', 'ended_at', 'end_reason', 'notification_id', 'notified_at', 'opened_at',
