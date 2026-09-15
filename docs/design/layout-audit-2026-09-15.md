@@ -1,5 +1,7 @@
 # Layout audit — 2026-09-15
 
+> **Close-out (2026-09-15, same day):** all six cycles of the implementation plan below were executed, independently reviewed, and merged — see `layout-round-2026-09-15.md` for the round report and `layout-round-2026-09-15-captures/` for the committed evidence.
+
 Executed per the confirmed mandate (`layout-audit-brief-2026-09-15.md`). Owner verdict being solved: "too minimal / gray / empty", "messy and unstructured", "does not look professional" — **a layout complaint, not a color one.** The color-audit cycles 1–4 (`392d51b`, `6443c18`, `dad6eb4`, `309e074`) stay untouched; this pass restructures layout underneath them and reverts nothing.
 
 ## Method (and how to reproduce)
