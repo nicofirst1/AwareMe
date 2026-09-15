@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, Link } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Linking, StyleSheet } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
@@ -20,12 +20,27 @@ import { getRepository, type TimeOfDay } from '@/db';
 import { nowEventTime } from '@/db/time';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
+import { currentSittingPeriod } from '@/session/currentSitting';
 import { computeStreaks } from '@/session/progressStats';
 import { isWeeklyReviewDue } from '@/session/reviewPeriod';
 
-/** The time-of-day whose start button is shown more prominently — the one matching the current local hour. Evening starts at 17:00 local, same boundary either period's stems don't otherwise depend on. */
-function currentTimeOfDay(): TimeOfDay {
-  return new Date().getHours() >= 17 ? 'evening' : 'morning';
+/**
+ * The render path's own period read (issue 03, owner decision 2026-09-15):
+ * the highlighted sitting flips at the midpoint between the user's two
+ * configured notification times (`currentSitting.ts`), not at a hardcoded
+ * 17:00. Unlike `loadHomeStatus` this call is not behind the focus-effect
+ * try/catch, so it guards the settings read itself — settings unreadable
+ * (e.g. no DB in tests) must not crash the home screen (§13.4: a status
+ * nicety never blocks the screen); the fallback is the module's own
+ * hardcoded-17:00 rule via `currentSittingPeriod(undefined, undefined)`.
+ */
+function currentPeriodForRender(): TimeOfDay {
+  try {
+    const settings = getRepository().getSettings();
+    return currentSittingPeriod(settings.morning_notification_time, settings.evening_notification_time);
+  } catch {
+    return currentSittingPeriod(undefined, undefined);
+  }
 }
 
 interface HomeStatus {
@@ -48,7 +63,13 @@ function loadHomeStatus(): HomeStatus {
   const wasDue = isWeeklyReviewDue(repo.getLastReviewAt(), now.toISOString());
   const { at, offsetMin } = nowEventTime(now);
   const { current } = computeStreaks(repo.listSessionsForStats(), at, offsetMin);
-  const stemsReady = repo.getActiveStemsForTimeOfDay(currentTimeOfDay()).length;
+  // Same midpoint rule as the render path (`currentPeriodForRender`) — when
+  // settings read, the eyebrow's period and the stemsReady count always
+  // agree. A throw here is caught by the useFocusEffect's try/catch, which
+  // blanks the whole status block (no count without a DB to count from).
+  const settings = repo.getSettings();
+  const period = currentSittingPeriod(settings.morning_notification_time, settings.evening_notification_time, now);
+  const stemsReady = repo.getActiveStemsForTimeOfDay(period).length;
   return {
     weekCount: recent.length,
     reviewAvailable: wasDue && recent.length > 0,
@@ -125,7 +146,7 @@ export default function HomeScreen() {
     }, []),
   );
 
-  const currentPeriod = currentTimeOfDay();
+  const currentPeriod = currentPeriodForRender();
 
   const startSitting = (timeOfDay: TimeOfDay) => {
     router.push({ pathname: '/write', params: { timeOfDay } });
@@ -134,22 +155,26 @@ export default function HomeScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.content}>
-          <ThemedView style={styles.header}>
+        <View style={styles.content}>
+          <View style={styles.header}>
             <ThemedText type="title">Six Endings</ThemedText>
             <ThemedText type="default" themeColor="textSecondary">
               A quiet place to finish a sentence.
             </ThemedText>
-          </ThemedView>
+          </View>
 
           {/* The sitting card (layout audit 2026-09-15, cycle 1): the day's
               one dominant action, per the Revolut register anchor (H1). Eyebrow
               + count name the current-period sitting; both starts live inside
               the same card (morning/evening pivot, 2026-09-14 — both periods
-              stay reachable, but the one matching the current local hour gets
-              the primary button so the common case is a single tap); the old
+              stay reachable, but the current sitting period — midpoint of the
+              user's two notification times, `currentSitting.ts` — gets the
+              primary button so the common case is a single tap); the old
               centered loose status lines (H2) become a quiet left-aligned
-              stat row in the card's footer. */}
+              stat row in the card's footer. Inner rows are plain `View`s
+              (issue 03): `ThemedView` painted `theme.background` inside the
+              card's `backgroundElement` fill — the owner's "weird white
+              background" strips. */}
           <Card style={styles.sittingCard}>
             <ThemedText type="eyebrow">
               {currentPeriod === 'morning' ? 'Morning sitting' : 'Evening sitting'}
@@ -160,7 +185,7 @@ export default function HomeScreen() {
               </ThemedText>
             )}
 
-            <ThemedView style={styles.startRow}>
+            <View style={styles.startRow}>
               <Button
                 label="Morning session"
                 onPress={() => startSitting('morning')}
@@ -173,10 +198,10 @@ export default function HomeScreen() {
                 variant={currentPeriod === 'evening' ? 'primary' : 'secondary'}
                 style={styles.primaryButton}
               />
-            </ThemedView>
+            </View>
 
             {status && (status.weekCount > 0 || status.reviewAvailable || status.currentStreak >= 3) && (
-              <ThemedView style={styles.statusFooter}>
+              <View style={styles.statusFooter}>
                 {status.weekCount > 0 && (
                   <ThemedText type="small" themeColor="textSecondary">
                     {status.weekCount === 1 ? '1 session this week' : `${status.weekCount} sessions this week`}
@@ -204,11 +229,11 @@ export default function HomeScreen() {
                     <Ionicons name="chevron-forward-outline" size={16} color={theme.accent} />
                   </Link>
                 )}
-              </ThemedView>
+              </View>
             )}
           </Card>
 
-          <ThemedView style={styles.grid}>
+          <View style={styles.grid}>
             {SECONDARY_LINKS.map(({ href, label, icon, color, colorDark }) => (
               <Link
                 key={href}
@@ -226,7 +251,7 @@ export default function HomeScreen() {
                 <ThemedText type="default">{label}</ThemedText>
               </Link>
             ))}
-          </ThemedView>
+          </View>
 
           {__DEV__ && (
             <Link href="/debug" style={styles.navLink}>
@@ -243,9 +268,9 @@ export default function HomeScreen() {
             onPress={() => Linking.openURL('https://nicolobrandizzi.com/')}
             accessibilityRole="link"
           >
-            Created by Nicolò Brandizzi
+            Created by Nicolo' Brandizzi
           </ThemedText>
-        </ThemedView>
+        </View>
       </SafeAreaView>
     </ThemedView>
   );
