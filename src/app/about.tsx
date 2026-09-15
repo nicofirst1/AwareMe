@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
-import { Linking, Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '@/components/screen-header';
@@ -25,7 +26,18 @@ import { useTheme } from '@/hooks/use-theme';
  * the label itself reads as a primary row line rather than dim body text).
  * Rhythm aligned to LC3: 24pt section gap, 8pt row gap inside the links
  * block.
+ *
+ * Official-programme round (cycle c04, spec §5.1 2026-09-15 amendment,
+ * ADR-0005): adds the method framing (self-esteem + increased self-awareness),
+ * a link to the official programme page on nathanielbranden.com via
+ * `expo-linking`'s `openURL` (the app itself stays offline; this is the one
+ * user-initiated hop to the website), and the permission attribution
+ * crediting Leigh Branden — a §5.1 MUST. No new dependencies: expo-linking
+ * was already a hard runtime peer of expo-router (see DECISIONS.md).
  */
+
+const OFFICIAL_PROGRAMME_URL = 'https://nathanielbranden.com/sentence-completion-i/';
+
 export default function AboutScreen() {
   const router = useRouter();
   const theme = useTheme();
@@ -38,6 +50,12 @@ export default function AboutScreen() {
         <ThemedView style={styles.content}>
           <ThemedText type="default" themeColor="textSecondary">
             Six Endings is a quiet place to finish a sentence — no scoring, no feed, nothing leaving your device.
+          </ThemedText>
+
+          <ThemedText type="default" themeColor="textSecondary">
+            The method is sentence completion, developed by psychologist Nathaniel Branden as an exercise for
+            self-esteem and increased self-awareness. You finish sentence stems quickly, without pausing to judge
+            what comes out.
           </ThemedText>
 
           <ThemedText type="small" themeColor="textSecondary">
@@ -56,6 +74,16 @@ export default function AboutScreen() {
 
             <Pressable
               style={styles.linkRow}
+              onPress={() => Linking.openURL(OFFICIAL_PROGRAMME_URL)}
+              accessibilityRole="link"
+              accessibilityLabel="The official programme — opens the nathanielbranden.com website"
+            >
+              <ThemedText type="default">The official programme</ThemedText>
+              <Ionicons name="chevron-forward-outline" size={16} color={theme.accent} />
+            </Pressable>
+
+            <Pressable
+              style={styles.linkRow}
               onPress={() => Linking.openURL('https://nicolobrandizzi.com/')}
               accessibilityRole="link"
             >
@@ -63,6 +91,11 @@ export default function AboutScreen() {
               <Ionicons name="chevron-forward-outline" size={16} color={theme.accent} />
             </Pressable>
           </ThemedView>
+
+          <ThemedText type="small" themeColor="textSecondary">
+            The sentence completion programme is used with permission from Leigh Branden. Method and original
+            programme: Nathaniel Branden, nathanielbranden.com.
+          </ThemedText>
         </ThemedView>
       </SafeAreaView>
     </ThemedView>
