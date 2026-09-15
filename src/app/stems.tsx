@@ -4,10 +4,10 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BackHeader } from '@/components/back-header';
 import { Button } from '@/components/button';
 import { EmptyState } from '@/components/empty-state';
 import { FilterChip } from '@/components/filter-chip';
+import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CategoryColors, MinTouchTarget, Radius, Spacing, type CategoryName } from '@/constants/theme';
@@ -144,16 +144,20 @@ export default function StemsScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <BackHeader style={styles.backHeader} />
-        <ThemedView style={styles.headerRow}>
-          <ThemedText type="title" style={styles.title}>
-            Stems
-          </ThemedText>
-          <ThemedView style={styles.headerActions}>
-            <Button label="Import" onPress={() => router.push('/stem-import')} variant="text" />
-            <Button label="Add" onPress={() => router.push('/stem-edit')} variant="text" />
-          </ThemedView>
-        </ThemedView>
+        <ScreenHeader
+          title="Stems"
+          trailingAction={
+            <ThemedView style={styles.headerActions}>
+              <Button
+                label="Import"
+                onPress={() => router.push('/stem-import')}
+                variant="text"
+                style={styles.headerActionButton}
+              />
+              <Button label="Add" onPress={() => router.push('/stem-edit')} variant="text" style={styles.headerActionButton} />
+            </ThemedView>
+          }
+        />
 
         <ThemedView style={styles.controlsRow}>
           <TextInput
@@ -320,7 +324,7 @@ const StemRow = memo(function StemRow({
         accessibilityState={{ disabled: isDeleted, selected }}
         style={styles.rowMain}
       >
-        <ThemedText type="default">{item.text}</ThemedText>
+        <ThemedText type="stem">{item.text}</ThemedText>
         <ThemedView style={styles.rowMeta}>
           {categoryColors && isCategoryName(item.category) && (
             <ThemedView style={[styles.categoryChip, { backgroundColor: categoryColors.bg }]}>
@@ -342,22 +346,22 @@ const StemRow = memo(function StemRow({
           </ThemedText>
         </ThemedView>
       </Pressable>
-      {selectionMode ? (
-        selected && <Ionicons name="checkmark-circle" size={22} color={theme.accent} />
-      ) : (
-        !isDeleted && (
-          <Pressable
-            onPress={() => router.push({ pathname: '/stem-edit', params: { id: item.id } })}
-            accessibilityRole="button"
-            accessibilityLabel={`Edit: ${item.text}`}
-            style={styles.editLink}
-          >
-            <ThemedText type="small" themeColor="textSecondary">
-              Edit
-            </ThemedText>
-          </Pressable>
-        )
-      )}
+      <ThemedView style={styles.rowAction}>
+        {selectionMode ? (
+          selected && <Ionicons name="checkmark-circle" size={22} color={theme.accent} />
+        ) : (
+          !isDeleted && (
+            <Pressable
+              onPress={() => router.push({ pathname: '/stem-edit', params: { id: item.id } })}
+              accessibilityRole="button"
+              accessibilityLabel={`Edit: ${item.text}`}
+              style={styles.editButton}
+            >
+              <Ionicons name="create-outline" size={20} color={theme.textSecondary} />
+            </Pressable>
+          )
+        )}
+      </ThemedView>
     </ThemedView>
   );
 });
@@ -394,25 +398,20 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  backHeader: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.one,
-    flexGrow: 0,
-    flexShrink: 0,
-  },
   headerActions: {
     flexDirection: 'row',
     gap: Spacing.three,
   },
-  title: {
-    paddingTop: 0,
+  // `Button`'s default `paddingVertical: Spacing.three` (16) makes a
+  // text-variant button 56pt tall (its 24pt line height plus 32pt of
+  // padding), taller than `minHeight: 44` — which stretched ScreenHeader's
+  // title row and pushed "Stems" 6pt below stem-edit/stem-import's title
+  // (measured: 06-stems-light.axtree.json). Trimming the vertical padding
+  // here (Button-local, not the shared component) drops the intrinsic
+  // height below 44, so `Button`'s own `minHeight` — not this padding —
+  // decides the final 44pt, matching the title row's height exactly.
+  headerActionButton: {
+    paddingVertical: Spacing.two,
   },
   controlsRow: {
     flexDirection: 'row',
@@ -505,10 +504,14 @@ const styles = StyleSheet.create({
   // a hand-styled `ThemedView` rather than wrapping `Card` (ui-audit-2026-
   // 09-11.md cycle 2 done-criteria: bespoke is fine when a shared component
   // doesn't fit, don't force it).
+  // `alignItems: 'flex-start'` (not 'center'): T2's measured wobble was the
+  // stem-text first line centering against the row's full height, which
+  // varies 48–98pt with 1-line vs 2-line meta — top-anchoring keeps the
+  // first line's y constant regardless of how the meta line wraps.
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     padding: Spacing.three,
     borderRadius: Radius.medium,
     borderLeftWidth: 3,
@@ -532,9 +535,22 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     borderRadius: Radius.small,
   },
-  editLink: {
-    minHeight: MinTouchTarget,
-    paddingHorizontal: Spacing.two,
+  // Reserved right-hand action column (LC5): fixed 44pt regardless of
+  // selection state, so the row's right edge never shifts. Transparent
+  // (not `ThemedView`'s default `background` fill, which is white/black —
+  // that painted a mismatched box against the row's own `backgroundElement`
+  // grey, visible in 06-stems-light.png before this fix).
+  rowAction: {
+    width: MinTouchTarget,
+    height: MinTouchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  editButton: {
+    width: MinTouchTarget,
+    height: MinTouchTarget,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   notice: {

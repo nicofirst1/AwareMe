@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
 import { FilterChip } from '@/components/filter-chip';
+import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CategoryColors, Fonts, MaxContentWidth, Radius, Spacing, type CategoryName } from '@/constants/theme';
@@ -67,8 +68,8 @@ export default function StemImportScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
+        <ScreenHeader title="Import stems" backLabel="Close" />
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">Import stems</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             One stem per line.
           </ThemedText>
@@ -85,9 +86,7 @@ export default function StemImportScreen() {
             accessibilityLabel="Stems to import"
           />
 
-          <ThemedText type="small" themeColor="textSecondary">
-            Category (optional, applied to all)
-          </ThemedText>
+          <ThemedText type="eyebrow">Category (optional, applied to all)</ThemedText>
           <ThemedView style={styles.chipRow}>
             <FilterChip label="None" selected={category === null} onPress={() => setCategory(null)} />
             {CATEGORIES.map((c) => (
@@ -95,9 +94,7 @@ export default function StemImportScreen() {
             ))}
           </ThemedView>
 
-          <ThemedText type="small" themeColor="textSecondary">
-            Time of day (applied to all)
-          </ThemedText>
+          <ThemedText type="eyebrow">Time of day (applied to all)</ThemedText>
           <ThemedView style={styles.chipRow}>
             {TIME_OF_DAY_OPTIONS.map((o) => (
               <FilterChip
