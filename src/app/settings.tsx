@@ -3,72 +3,20 @@ import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BackHeader } from '@/components/back-header';
 import { FilterChip } from '@/components/filter-chip';
+import { ScreenHeader } from '@/components/screen-header';
 import { hexToRgba, SectionHeader } from '@/components/section-header';
+import { StepperRow } from '@/components/stepper-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
 import { getRepository, Settings } from '@/db';
 import { cancelAllPendingNotifications, rescheduleNotifications } from '@/notifications/scheduler';
-import { clampSetting, isValidHHMM, SETTINGS_RANGES } from '@/session/settingsValidation';
+import { isValidHHMM } from '@/session/settingsValidation';
 import { useTheme } from '@/hooks/use-theme';
 
 const THEMES = ['system', 'light', 'dark'] as const;
 const TERMINATORS = ['...', '—'] as const;
-
-/**
- * A number field with +/- steppers, clamped to spec §7's stated range. No
- * raw-integer TextInput: out-of-range values would otherwise need their own
- * error/warning UI, and a stepper makes the range self-evident.
- */
-function NumberStepper({
-  label,
-  value,
-  settingKey,
-  step = 1,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  settingKey: keyof typeof SETTINGS_RANGES;
-  step?: number;
-  onChange: (next: number) => void;
-}) {
-  const theme = useTheme();
-  const { min, max } = SETTINGS_RANGES[settingKey];
-  return (
-    <ThemedView style={styles.row}>
-      <ThemedView style={styles.rowLabel}>
-        <ThemedText type="default">{label}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {min}–{max}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepper}>
-        <Pressable
-          onPress={() => onChange(clampSetting(settingKey, value - step))}
-          style={[styles.stepperButton, { backgroundColor: theme.backgroundElement }]}
-          accessibilityRole="button"
-          accessibilityLabel={`Decrease ${label}`}
-        >
-          <ThemedText type="subtitle">−</ThemedText>
-        </Pressable>
-        <ThemedText type="subtitle" style={styles.stepperValue}>
-          {value}
-        </ThemedText>
-        <Pressable
-          onPress={() => onChange(clampSetting(settingKey, value + step))}
-          style={[styles.stepperButton, { backgroundColor: theme.backgroundElement }]}
-          accessibilityRole="button"
-          accessibilityLabel={`Increase ${label}`}
-        >
-          <ThemedText type="subtitle">+</ThemedText>
-        </Pressable>
-      </ThemedView>
-    </ThemedView>
-  );
-}
 
 function ChipToggle<T extends string>({
   label,
@@ -199,29 +147,31 @@ export default function SettingsScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <BackHeader style={styles.backHeader} />
+        <ScreenHeader title="Settings" />
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">Settings</ThemedText>
-
           <ThemedView style={[styles.group, { borderTopColor: hexToRgba(theme.accent, 0.3) }]}>
             <SectionHeader label="Session" />
 
-            <NumberStepper
-              label="Endings per session"
-              value={settings.endings_per_session}
-              settingKey="endings_per_session"
-              onChange={(v) => set('endings_per_session', v)}
-            />
-            <Hint>How many endings you write to the same stem before the session ends.</Hint>
+            <ThemedView style={styles.setting}>
+              <StepperRow
+                label="Endings per session"
+                value={settings.endings_per_session}
+                rangeKey="endings_per_session"
+                onChange={(v) => set('endings_per_session', v)}
+              />
+              <Hint>Endings you write to the same stem per session.</Hint>
+            </ThemedView>
 
-            <NumberStepper
-              label="Timer (seconds)"
-              value={settings.timer_seconds}
-              settingKey="timer_seconds"
-              step={10}
-              onChange={(v) => set('timer_seconds', v)}
-            />
-            <Hint>How long the whole session runs, from Start to timeout.</Hint>
+            <ThemedView style={styles.setting}>
+              <StepperRow
+                label="Timer (seconds)"
+                value={settings.timer_seconds}
+                rangeKey="timer_seconds"
+                step={10}
+                onChange={(v) => set('timer_seconds', v)}
+              />
+              <Hint>How long the session runs before timing out.</Hint>
+            </ThemedView>
 
             <ThemedView style={styles.section}>
               <ThemedText type="small" themeColor="textSecondary">
@@ -237,10 +187,10 @@ export default function SettingsScreen() {
                 onChange={(v) => set('stem_timer_enabled', v === 'on')}
               />
               {settings.stem_timer_enabled && (
-                <NumberStepper
+                <StepperRow
                   label="Seconds per stem"
                   value={settings.stem_timer_seconds}
-                  settingKey="stem_timer_seconds"
+                  rangeKey="stem_timer_seconds"
                   step={5}
                   onChange={(v) => set('stem_timer_seconds', v)}
                 />
@@ -292,43 +242,56 @@ export default function SettingsScreen() {
               )}
             </ThemedView>
 
-            <ChipToggle
-              label="Weekly review prompt"
-              options={['on', 'off'] as const}
-              value={settings.weekly_review_prompt ? 'on' : 'off'}
-              onChange={(v) => set('weekly_review_prompt', v === 'on')}
-            />
-            <Hint>Offer a review of the past week&apos;s writing once a week, in-app.</Hint>
+            <ThemedView style={styles.setting}>
+              <ChipToggle
+                label="Weekly review prompt"
+                options={['on', 'off'] as const}
+                value={settings.weekly_review_prompt ? 'on' : 'off'}
+                onChange={(v) => set('weekly_review_prompt', v === 'on')}
+              />
+              <Hint>Offer a review of the past week&apos;s writing once a week, in-app.</Hint>
+            </ThemedView>
           </ThemedView>
 
           <ThemedView style={[styles.group, { borderTopColor: hexToRgba(theme.accent, 0.3) }]}>
             <SectionHeader label="Writing" />
 
-            <ChipToggle
-              label="Uncensored mode"
-              options={['on', 'off'] as const}
-              value={settings.uncensored_mode ? 'on' : 'off'}
-              onChange={(v) => set('uncensored_mode', v === 'on')}
-            />
-            <Hint>
-              Backspace only erases the word you&apos;re on, and you can&apos;t edit an earlier ending in the same
-              session. This keeps the writing unfiltered — turn it off if that restriction feels intolerable.
-            </Hint>
+            <ThemedView style={styles.setting}>
+              <ChipToggle
+                label="Uncensored mode"
+                options={['on', 'off'] as const}
+                value={settings.uncensored_mode ? 'on' : 'off'}
+                onChange={(v) => set('uncensored_mode', v === 'on')}
+              />
+              <Hint>
+                Backspace only erases the word you&apos;re on, and you can&apos;t edit an earlier ending in the same
+                session. This keeps the writing unfiltered — turn it off if that restriction feels intolerable.
+              </Hint>
+            </ThemedView>
 
-            <ChipToggle label="Stem terminator" options={TERMINATORS} value={settings.stem_terminator as (typeof TERMINATORS)[number]} onChange={(v) => set('stem_terminator', v)} />
-            <Hint>The punctuation shown at the end of each stem.</Hint>
+            <ThemedView style={styles.setting}>
+              <ChipToggle
+                label="Stem terminator"
+                options={TERMINATORS}
+                value={settings.stem_terminator as (typeof TERMINATORS)[number]}
+                onChange={(v) => set('stem_terminator', v)}
+              />
+              <Hint>The punctuation shown at the end of each stem.</Hint>
+            </ThemedView>
           </ThemedView>
 
           <ThemedView style={[styles.group, { borderTopColor: hexToRgba(theme.accent, 0.3) }]}>
             <SectionHeader label="App" />
 
-            <ChipToggle
-              label="App lock"
-              options={['on', 'off'] as const}
-              value={settings.app_lock_enabled ? 'on' : 'off'}
-              onChange={(v) => set('app_lock_enabled', v === 'on')}
-            />
-            <Hint>Require your device passcode or biometrics to open the app.</Hint>
+            <ThemedView style={styles.setting}>
+              <ChipToggle
+                label="App lock"
+                options={['on', 'off'] as const}
+                value={settings.app_lock_enabled ? 'on' : 'off'}
+                onChange={(v) => set('app_lock_enabled', v === 'on')}
+              />
+              <Hint>Require your device passcode or biometrics to open the app.</Hint>
+            </ThemedView>
 
             <ChipToggle label="Theme" options={THEMES} value={settings.theme as (typeof THEMES)[number]} onChange={(v) => set('theme', v)} />
           </ThemedView>
@@ -368,10 +331,6 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  backHeader: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-  },
   scrollContent: {
     padding: Spacing.four,
     gap: Spacing.four,
@@ -379,32 +338,14 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  row: {
+  // One setting = control + its hint, held together by the 4pt
+  // label-to-control gap (LC3); settings sit 8pt apart inside a group (row
+  // gap), groups 24pt apart via scrollContent's gap (section gap).
+  setting: {
     gap: Spacing.one,
   },
-  rowLabel: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-  },
-  stepperButton: {
-    width: MinTouchTarget,
-    height: MinTouchTarget,
-    borderRadius: Spacing.two,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperValue: {
-    minWidth: 48,
-    textAlign: 'center',
-  },
   group: {
-    gap: Spacing.three,
+    gap: Spacing.two,
     paddingTop: Spacing.two,
     borderTopWidth: 1,
   },

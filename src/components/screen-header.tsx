@@ -32,7 +32,7 @@ export function ScreenHeader({
   title: string;
   /** Back-row label. Default `'Back'`; pass `'Close'` for modal-ish screens (e.g. stem-edit, stem-import). */
   backLabel?: string;
-  /** Rendered right-aligned in the title row, vertically centered — e.g. a `View` wrapping one or more `Button`s. Omitted when a screen has no header-level action. */
+  /** Rendered right-aligned in the title row, vertically centered — e.g. a `View` wrapping one or more `Button`s. Omitted when a screen has no header-level action. Keep children ≤44pt tall — taller children stretch the title row; trim vertical padding as in stems.tsx `headerActionButton`. */
   trailingAction?: ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {

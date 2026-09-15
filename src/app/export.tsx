@@ -3,14 +3,14 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BackHeader } from '@/components/back-header';
 import { Card } from '@/components/card';
+import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { CategoryColors, MaxContentWidth, Spacing } from '@/constants/theme';
 import { getDatabase } from '@/db';
 import { exportAndShare, ExportFormat } from '@/export/fileExport';
-import { useTheme } from '@/hooks/use-theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 // Outline Ionicons (2026-09-11, ui-audit-2026-09-11.md cycle 4), same sparse
 // decorative idiom as index.tsx's secondary tiles — a scan anchor per
@@ -39,8 +39,15 @@ const FORMATS: { format: ExportFormat; label: string; description: string; icon:
  * glue that calls them and shows in-progress/error state.
  */
 export default function ExportScreen() {
-  const theme = useTheme();
+  const scheme = useColorScheme();
   const [busy, setBusy] = useState<ExportFormat | null>(null);
+
+  // Icon color role per C5/E2 (layout audit 2026-09-15): the card icons
+  // inherit the screen's category hue — the same assertiveness hue Home's
+  // Export tile carries (color-audit-2026-09-11.md §2A, "distribution not
+  // invention") — instead of an unexplained third grey role. Contrast is
+  // documented in theme.ts (7.55:1 light / 8.95:1 dark, above AA).
+  const iconColor = CategoryColors.assertiveness[scheme === 'dark' ? 'dark' : 'light'].text;
 
   const runExport = async (format: ExportFormat) => {
     setBusy(format);
@@ -56,32 +63,33 @@ export default function ExportScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <BackHeader />
-        <ThemedText type="title">Export</ThemedText>
-        <ThemedText type="default" themeColor="textSecondary">
-          Your data stays open to analysis, always. Nothing is ever locked in.
-        </ThemedText>
+        <ScreenHeader title="Export" />
+        <ThemedView style={styles.content}>
+          <ThemedText type="default" themeColor="textSecondary">
+            Your data stays open to analysis, always. Nothing is ever locked in.
+          </ThemedText>
 
-        {FORMATS.map(({ format, label, description, icon }) => (
-          <Pressable
-            key={format}
-            onPress={() => runExport(format)}
-            disabled={busy !== null}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: busy !== null, busy: busy === format }}
-          >
-            <Card style={[styles.card, { opacity: busy !== null && busy !== format ? 0.5 : 1 }]}>
-              <ThemedView style={styles.cardHeader}>
-                <Ionicons name={icon} size={20} color={theme.textSecondary} />
-                <ThemedText type="subtitle">{label}</ThemedText>
-              </ThemedView>
-              <ThemedText type="small" themeColor="textSecondary">
-                {description}
-              </ThemedText>
-              {busy === format && <ActivityIndicator style={styles.spinner} />}
-            </Card>
-          </Pressable>
-        ))}
+          {FORMATS.map(({ format, label, description, icon }) => (
+            <Pressable
+              key={format}
+              onPress={() => runExport(format)}
+              disabled={busy !== null}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: busy !== null, busy: busy === format }}
+            >
+              <Card style={[styles.card, { opacity: busy !== null && busy !== format ? 0.5 : 1 }]}>
+                <ThemedView style={styles.cardHeader}>
+                  <Ionicons name={icon} size={20} color={iconColor} />
+                  <ThemedText type="subtitle">{label}</ThemedText>
+                </ThemedView>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {description}
+                </ThemedText>
+                {busy === format && <ActivityIndicator style={styles.spinner} />}
+              </Card>
+            </Pressable>
+          ))}
+        </ThemedView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -91,10 +99,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  // ScreenHeader carries the x24 column + top spacing itself (LC2), so the
+  // safe area stays paddingless and the content below insets itself; the
+  // inter-block rhythm is 24 throughout (LC3, fixes E3's 16pt gap).
   safeArea: {
     flex: 1,
-    gap: Spacing.three,
-    padding: Spacing.four,
+    gap: Spacing.four,
+  },
+  content: {
+    flex: 1,
+    gap: Spacing.four,
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.four,
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
