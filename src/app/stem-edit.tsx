@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
 import { FilterChip } from '@/components/filter-chip';
+import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CategoryColors, Fonts, MaxContentWidth, Radius, Spacing, type CategoryName } from '@/constants/theme';
@@ -68,9 +69,7 @@ export default function StemEditScreen() {
     return (
       <ThemedView style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
-          <ThemedText type="default" themeColor="textSecondary">
-            Stem not found.
-          </ThemedText>
+          <ScreenHeader title="Stem not found" backLabel="Close" />
         </SafeAreaView>
       </ThemedView>
     );
@@ -127,9 +126,8 @@ export default function StemEditScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
+        <ScreenHeader title={isEdit ? 'Edit stem' : 'Add a stem'} backLabel="Close" />
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">{isEdit ? 'Edit stem' : 'Add a stem'}</ThemedText>
-
           <TextInput
             value={text}
             onChangeText={(t) => {
@@ -153,9 +151,7 @@ export default function StemEditScreen() {
             </ThemedText>
           )}
 
-          <ThemedText type="small" themeColor="textSecondary">
-            Category (optional)
-          </ThemedText>
+          <ThemedText type="eyebrow">Category (optional)</ThemedText>
           <ThemedView style={styles.chipRow}>
             <FilterChip label="None" selected={category === null} onPress={() => setCategory(null)} />
             {CATEGORIES.map((c) => (
@@ -163,9 +159,7 @@ export default function StemEditScreen() {
             ))}
           </ThemedView>
 
-          <ThemedText type="small" themeColor="textSecondary">
-            Time of day
-          </ThemedText>
+          <ThemedText type="eyebrow">Time of day</ThemedText>
           <ThemedView style={styles.chipRow}>
             {TIME_OF_DAY_OPTIONS.map((o) => (
               <FilterChip
@@ -177,9 +171,7 @@ export default function StemEditScreen() {
             ))}
           </ThemedView>
 
-          <ThemedText type="small" themeColor="textSecondary">
-            How often
-          </ThemedText>
+          <ThemedText type="eyebrow">How often</ThemedText>
           <ThemedView style={styles.chipRow}>
             {(['less', 'normal', 'more'] as const).map((w) => (
               <FilterChip
