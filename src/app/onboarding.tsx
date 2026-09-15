@@ -12,12 +12,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
+import { StepperRow } from '@/components/stepper-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { requestNotificationPermission, rescheduleNotifications } from '@/notifications/scheduler';
-import { clampSetting, isValidHHMM, SETTINGS_RANGES } from '@/session/settingsValidation';
+import { isValidHHMM } from '@/session/settingsValidation';
 import { useTheme } from '@/hooks/use-theme';
 
 const STEP_COUNT = 4;
@@ -37,6 +38,13 @@ const STEP_COUNT = 4;
  * "Shown once" is `Repository.isOnboardingComplete()`
  * (`settings.onboarding_completed`) — checked by `_layout.tsx` before this
  * route is ever reached, not by this screen itself.
+ *
+ * Layout round 2026-09-15 (cycle 6, finding O1; M3/M2): step 4's private
+ * `PrefRow` is retired in favor of the shared `StepperRow` (cycle 5's
+ * component — one stepper anatomy app-wide, identical prop contract), and
+ * the step-4 form's field labels (Morning/Evening) use the `eyebrow` role
+ * per LC6 ("eyebrow = section and form labels", the M2 pattern stem-edit/
+ * stem-import already use).
  */
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -162,17 +170,23 @@ export default function OnboardingScreen() {
               You can change any of this later in Settings.
             </ThemedText>
 
-            <PrefRow
+            <StepperRow
               label="Endings per session"
               value={endingsPerSession}
               rangeKey="endings_per_session"
               onChange={setEndingsPerSession}
             />
-            <PrefRow label="Timer (seconds)" value={timerSeconds} rangeKey="timer_seconds" step={10} onChange={setTimerSeconds} />
+            <StepperRow
+              label="Timer (seconds)"
+              value={timerSeconds}
+              rangeKey="timer_seconds"
+              step={10}
+              onChange={setTimerSeconds}
+            />
 
             {notificationsEnabled && (
               <ThemedView style={styles.windowRow}>
-                <ThemedText type="default">Morning</ThemedText>
+                <ThemedText type="eyebrow">Morning</ThemedText>
                 <TextInput
                   value={morningTime}
                   onChangeText={setMorningTime}
@@ -181,7 +195,7 @@ export default function OnboardingScreen() {
                   style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
                   accessibilityLabel="Morning notification time"
                 />
-                <ThemedText type="default">Evening</ThemedText>
+                <ThemedText type="eyebrow">Evening</ThemedText>
                 <TextInput
                   value={eveningTime}
                   onChangeText={setEveningTime}
@@ -224,48 +238,6 @@ export default function OnboardingScreen() {
           </ThemedView>
         </ThemedView>
       </SafeAreaView>
-    </ThemedView>
-  );
-}
-
-function PrefRow({
-  label,
-  value,
-  rangeKey,
-  step = 1,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  rangeKey: keyof typeof SETTINGS_RANGES;
-  step?: number;
-  onChange: (next: number) => void;
-}) {
-  const theme = useTheme();
-  return (
-    <ThemedView style={styles.prefRow}>
-      <ThemedText type="default">{label}</ThemedText>
-      <ThemedView style={styles.stepper}>
-        <Pressable
-          onPress={() => onChange(clampSetting(rangeKey, value - step))}
-          style={[styles.stepperButton, { backgroundColor: theme.backgroundElement }]}
-          accessibilityRole="button"
-          accessibilityLabel={`Decrease ${label}`}
-        >
-          <ThemedText type="subtitle">−</ThemedText>
-        </Pressable>
-        <ThemedText type="subtitle" style={styles.stepperValue}>
-          {value}
-        </ThemedText>
-        <Pressable
-          onPress={() => onChange(clampSetting(rangeKey, value + step))}
-          style={[styles.stepperButton, { backgroundColor: theme.backgroundElement }]}
-          accessibilityRole="button"
-          accessibilityLabel={`Increase ${label}`}
-        >
-          <ThemedText type="subtitle">+</ThemedText>
-        </Pressable>
-      </ThemedView>
     </ThemedView>
   );
 }
@@ -315,27 +287,6 @@ const styles = StyleSheet.create({
   navLink: {
     minHeight: MinTouchTarget,
     textAlignVertical: 'center',
-  },
-  prefRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-  },
-  stepperButton: {
-    width: MinTouchTarget,
-    height: MinTouchTarget,
-    borderRadius: Spacing.two,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperValue: {
-    minWidth: 40,
-    textAlign: 'center',
   },
   windowRow: {
     flexDirection: 'row',

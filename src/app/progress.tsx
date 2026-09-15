@@ -3,8 +3,9 @@ import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BackHeader } from '@/components/back-header';
 import { BadgeCard } from '@/components/badge-card';
+import { ScreenHeader } from '@/components/screen-header';
+import { SectionHeader } from '@/components/section-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -40,6 +41,17 @@ function loadProgress(): ProgressData {
  * so this reads as "not yet" and never as a checklist of failures (§13.4).
  * No numeric "N/11 badges" counter, per the proposal's evaluation-free
  * posture — the grid itself is the only tally.
+ *
+ * Layout round 2026-09-15 (cycle 6, findings P1/P2; LC2/LC3/LC6/LC7):
+ * `ScreenHeader` replaces the old BackHeader+title pair; the stats block and
+ * the badge grid get `SectionHeader` eyebrows naming the screen's two
+ * sections ("Totals" — the audit's suggested "This week" doesn't fit
+ * all-time counts; "Badges"); stat values move from body-size `default` 16
+ * to the `subtitle` role — LC6 assigns `subtitle` to stat values and keeps
+ * `title` for ScreenHeader titles only — with the label as the dim element
+ * and the values' existing `accent` color untouched (the color rounds'
+ * work, P1). Copy stays descriptive (§13.4/§13.6): no counters, no
+ * evaluation, absence never called out.
  */
 export default function ProgressScreen() {
   const [data, setData] = useState<ProgressData | null>(null);
@@ -60,12 +72,11 @@ export default function ProgressScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <BackHeader style={styles.backHeader} />
+        <ScreenHeader title="Progress" />
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">Progress</ThemedText>
-
           {data && (
             <ThemedView style={styles.statsBlock}>
+              <SectionHeader label="Totals" />
               <StatLine label="Sessions" value={data.stats.totalSessions} />
               <StatLine label="Endings" value={data.stats.totalEndings} />
               <StatLine label="Stems written on" value={data.stats.distinctStemsUsed} />
@@ -76,12 +87,15 @@ export default function ProgressScreen() {
             </ThemedView>
           )}
 
-          <ThemedView style={styles.grid}>
-            {BADGES.map((badge) => (
-              <ThemedView key={badge.id} style={styles.gridItem}>
-                <BadgeCard badge={badge} earned={data?.earned.has(badge.id) ?? false} />
-              </ThemedView>
-            ))}
+          <ThemedView style={styles.badgesBlock}>
+            <SectionHeader label="Badges" />
+            <ThemedView style={styles.grid}>
+              {BADGES.map((badge) => (
+                <ThemedView key={badge.id} style={styles.gridItem}>
+                  <BadgeCard badge={badge} earned={data?.earned.has(badge.id) ?? false} />
+                </ThemedView>
+              ))}
+            </ThemedView>
           </ThemedView>
         </ScrollView>
       </SafeAreaView>
@@ -89,13 +103,18 @@ export default function ProgressScreen() {
   );
 }
 
+/**
+ * One stat row: dim `small` label left, confident `subtitle` (20/600)
+ * value right (layout audit 2026-09-15, P1 — values were body-size 16).
+ * Baseline-aligned so the 14pt label and the 20pt value share a text line.
+ */
 function StatLine({ label, value }: { label: string; value: string | number }) {
   return (
     <ThemedView style={styles.statLine}>
       <ThemedText type="small" themeColor="textSecondary">
         {label}
       </ThemedText>
-      <ThemedText type="default" themeColor="accent">
+      <ThemedText type="subtitle" themeColor="accent">
         {value}
       </ThemedText>
     </ThemedView>
@@ -105,10 +124,6 @@ function StatLine({ label, value }: { label: string; value: string | number }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  backHeader: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-  },
   scrollContent: {
     padding: Spacing.four,
     gap: Spacing.four,
@@ -116,12 +131,19 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
+  // Section internals at the row gap (LC3): eyebrow, then stat rows /
+  // badge grid 8pt apart. (Was a 4pt-pitch label:value list with no
+  // section headers — P2.)
   statsBlock: {
-    gap: Spacing.one,
+    gap: Spacing.two,
+  },
+  badgesBlock: {
+    gap: Spacing.two,
   },
   statLine: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'baseline',
   },
   grid: {
     flexDirection: 'row',
