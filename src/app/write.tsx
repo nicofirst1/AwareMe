@@ -1,14 +1,24 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import {
+  AccessibilityInfo,
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BadgeCard } from '@/components/badge-card';
 import { Button } from '@/components/button';
-import { ProgressBar } from '@/components/progress-bar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Fonts, MaxContentWidth, MinTouchTarget, PressureColors, Radius, Spacing } from '@/constants/theme';
+import { WriteActionBar } from '@/components/write-action-bar';
+import { WriteTimerStrip } from '@/components/write-timer-strip';
+import { MaxContentWidth, MinTouchTarget, PressureColors, Spacing } from '@/constants/theme';
 import { getRepository, type StemRow, type TimeOfDay } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
 import type { BadgeDef } from '@/session/badges';
@@ -183,18 +193,24 @@ export default function WriteScreen() {
   // Assembles the badge reveal once, when the *last* stem in the sitting
   // lands on 'done' — see badgeReveal.ts for why "before" is derived by
   // excluding this session's id rather than reading before the save (the
-  // save already happened by the time this phase renders).
+  // save already happened by the time this phase renders). `!awaitingStart`
+  // (W4's guard, generalized): the render right after the queue-advance
+  // effect increments `queueIndex` to the sitting's last position still
+  // carries `session.phase === 'done'` from the *previous* (non-final)
+  // stem for one commit — without this guard, that stale 'done' would read
+  // as "the sitting finished" one stem early.
   useEffect(() => {
-    if (session.phase !== 'done' || !session.sessionId || !isLastInQueue) return;
+    if (session.phase !== 'done' || !session.sessionId || !isLastInQueue || awaitingStart) return;
     setNewlyEarnedBadges(assembleNewlyEarnedBadges(getRepository(), session.sessionId));
-  }, [session.phase, session.sessionId, isLastInQueue]);
+  }, [session.phase, session.sessionId, isLastInQueue, awaitingStart]);
 
   // Drives the settle animation and, sequenced ~300ms later, the badge
   // reveal's fade+slide — only for the sitting's final 'done' (the one that
   // actually renders the completion block below). Reduced motion: skip
-  // straight to the final state, no animation at all.
+  // straight to the final state, no animation at all. Same `!awaitingStart`
+  // guard as the badge-assembly effect above, and for the same reason.
   useEffect(() => {
-    if (session.phase !== 'done' || !isLastInQueue) return;
+    if (session.phase !== 'done' || !isLastInQueue || awaitingStart) return;
     if (reduceMotion) {
       settleAnim.setValue(1);
       badgeRevealAnim.setValue(1);
@@ -218,7 +234,7 @@ export default function WriteScreen() {
       }).start();
     }, 300);
     return () => clearTimeout(badgeTimer);
-  }, [session.phase, isLastInQueue, reduceMotion, settleAnim, badgeRevealAnim]);
+  }, [session.phase, isLastInQueue, awaitingStart, reduceMotion, settleAnim, badgeRevealAnim]);
 
   useEffect(() => {
     if (session.phase === 'active') {
@@ -299,159 +315,147 @@ export default function WriteScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <KeyboardAvoidingView style={styles.flexOne} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           {/*
-            Only shown before a stem's Start is tapped: once writing is
-            under way, "Done" (below) is the single exit affordance (§10) —
-            it saves and finishes rather than leaving a session dangling
-            open, which an equally-visible second exit here would invite.
+            Pinned top strip (LC8/W1/W2): the sitting's position and the
+            running session timer, below the safe area and outside the
+            scrolling stack, so neither ever scrolls out of view. Doubles as
+            write's "header" (LC2) — the exit affordance below is only shown
+            before a stem's Start is tapped; once writing is under way,
+            "Done" (in the pinned bottom bar) is the single exit affordance
+            (§10), so an equally-visible second exit here would invite a
+            session left dangling open.
           */}
-          {awaitingStart && (
-            <ThemedView style={styles.exitRow}>
-              <Pressable
-                onPress={() => router.back()}
-                hitSlop={12}
-                style={styles.exitButton}
-                accessibilityRole="button"
-                accessibilityLabel="Exit session"
-              >
-                <ThemedText type="small" themeColor="textSecondary">
-                  Close
+          <ThemedView style={styles.topStrip}>
+            {awaitingStart && (
+              <ThemedView style={styles.exitRow}>
+                <Pressable
+                  onPress={() => router.back()}
+                  hitSlop={12}
+                  style={styles.exitButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Exit session"
+                >
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Close
+                  </ThemedText>
+                </Pressable>
+              </ThemedView>
+            )}
+            <WriteTimerStrip
+              positionLabel={queue.length > 1 ? `Stem ${queueIndex + 1} of ${queue.length}` : undefined}
+              progress={session.phase === 'active' ? progress : undefined}
+              timeLabel={session.phase === 'active' ? formatMMSS(session.remainingSeconds) : undefined}
+            />
+          </ThemedView>
+
+          <ScrollView
+            style={styles.flexOne}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <ThemedText type="stem">
+              {stemText}
+              {terminator}
+            </ThemedText>
+
+            {/*
+              Read-only text, not inputs: there is no control that lets the
+              user navigate back into an earlier ending (§6.3.6). Hidden
+              while `awaitingStart`: `session.state` still holds the *just-
+              finished* stem's endings until `start()` runs for the pending
+              one (W4) — showing them here would stack the previous stem's
+              writing under the next stem's Start gate.
+            */}
+            {!awaitingStart &&
+              submittedEndings.map((e) => (
+                <ThemedText
+                  key={e.ordinal}
+                  type="stem"
+                  themeColor="textSecondary"
+                  style={[styles.pastEnding, { borderTopColor: theme.border }]}
+                >
+                  {e.text}
                 </ThemedText>
-              </Pressable>
-            </ThemedView>
-          )}
-
-          {queue.length > 1 && (
-            <ThemedText type="small" themeColor="textSecondary">
-              Stem {queueIndex + 1} of {queue.length}
-            </ThemedText>
-          )}
-
-          <ThemedText type="stem">
-            {stemText}
-            {terminator}
-          </ThemedText>
-
-          {session.phase === 'active' && <ProgressBar progress={progress} accessibilityLabel="Time remaining" />}
+              ))}
+          </ScrollView>
 
           {/*
-            Read-only text, not inputs: there is no control that lets the
-            user navigate back into an earlier ending (§6.3.6).
+            Pinned bottom (LC8/W5): whichever control belongs to the current
+            moment — Start, the writing controls, or the completion block —
+            occupies this one fixed slot above the keyboard, never after the
+            scrolling stack.
           */}
-          {submittedEndings.map((e) => (
-            <ThemedText key={e.ordinal} type="stem" themeColor="textSecondary">
-              {e.text}
-            </ThemedText>
-          ))}
+          <ThemedView style={styles.bottomBar}>
+            {awaitingStart && <Button label="Start" onPress={startPendingStem} />}
 
-          {awaitingStart && <Button label="Start" onPress={startPendingStem} />}
-
-          {session.phase === 'active' && (
-            <>
-              <TextInput
-                ref={inputRef}
-                style={[styles.input, { color: theme.text }]}
+            {session.phase === 'active' && (
+              <WriteActionBar
+                inputRef={inputRef}
                 value={session.activeText}
                 onChangeText={handleChangeText}
                 onSubmitEditing={() => session.submitActive()}
-                returnKeyType="done"
-                multiline
-                blurOnSubmit={false}
-                contextMenuHidden
-                autoCorrect={false}
-                accessibilityLabel="Your ending"
-                placeholder="Keep the pen moving."
-                placeholderTextColor={theme.textSecondary}
+                stemProgress={stemProgress}
+                onSave={() => session.submitActive()}
+                saveLabel={buttonLabel}
+                savePressureColor={buttonBackgroundColor}
+                onDone={session.finishNow}
+                endingsWritten={submittedEndings.length}
+                endingsTarget={targetEndings}
               />
-              {stemProgress !== null && (
-                <ProgressBar progress={stemProgress} accessibilityLabel="Time remaining for this ending" />
-              )}
-              <Pressable
-                onPress={() => session.submitActive()}
-                accessibilityRole="button"
-                accessibilityLabel="Save this ending"
-              >
-                <Animated.View style={[styles.button, { backgroundColor: buttonBackgroundColor }]}>
-                  <ThemedText type="subtitle" style={styles.buttonLabelOnPressure}>
-                    {buttonLabel}
-                  </ThemedText>
-                </Animated.View>
-              </Pressable>
-              <Pressable
-                onPress={session.finishNow}
-                style={styles.exitButton}
-                accessibilityRole="button"
-                accessibilityLabel="Finish session"
-                hitSlop={12}
-              >
-                <ThemedText type="small" themeColor="textSecondary">
-                  Done
-                </ThemedText>
-              </Pressable>
-            </>
-          )}
+            )}
 
-          {session.phase === 'done' && isLastInQueue && (
-            <ThemedView style={styles.doneBlock}>
-              <Animated.View
-                style={{
-                  opacity: settleAnim,
-                  transform: [{ scale: settleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }],
-                }}
-              >
-                <ThemedText type="default" themeColor="textSecondary">
-                  Saved.
-                </ThemedText>
-                {session.state?.endedAt && (
-                  // Computed at read time from the session's own timestamps
-                  // (§13.7 — never store a derived value); quiet, descriptive,
-                  // no praise (§13.4).
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {sessionDurationLabel(session.state.startedAt, session.state.endedAt, submittedEndings.length)}
-                  </ThemedText>
-                )}
-              </Animated.View>
-
-              {/*
-                Badge reveal (gamification proposal §1.A/§1.B): only the
-                badges newly crossed by *this* completion, computed fresh
-                each render (§13.7) — reopening the app later shows nothing
-                here, which is correct, not a bug. Multiple new badges stack
-                vertically.
-              */}
-              {newlyEarnedBadges.length > 0 && (
+            {session.phase === 'done' && isLastInQueue && !awaitingStart && (
+              <ThemedView style={styles.doneBlock}>
                 <Animated.View
-                  style={[
-                    styles.badgeReveal,
-                    {
-                      opacity: badgeRevealAnim,
-                      transform: [
-                        { translateY: badgeRevealAnim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) },
-                      ],
-                    },
-                  ]}
+                  style={{
+                    opacity: settleAnim,
+                    transform: [{ scale: settleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }],
+                  }}
                 >
-                  {newlyEarnedBadges.map((badge) => (
-                    <BadgeCard key={badge.id} badge={badge} earned />
-                  ))}
+                  <ThemedText type="default" themeColor="textSecondary">
+                    Saved.
+                  </ThemedText>
+                  {session.state?.endedAt && (
+                    // Computed at read time from the session's own timestamps
+                    // (§13.7 — never store a derived value); quiet, descriptive,
+                    // no praise (§13.4).
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {sessionDurationLabel(session.state.startedAt, session.state.endedAt, submittedEndings.length)}
+                    </ThemedText>
+                  )}
                 </Animated.View>
-              )}
 
-              <Button label="Close" onPress={() => router.back()} />
-            </ThemedView>
-          )}
+                {/*
+                  Badge reveal (gamification proposal §1.A/§1.B): only the
+                  badges newly crossed by *this* completion, computed fresh
+                  each render (§13.7) — reopening the app later shows nothing
+                  here, which is correct, not a bug. Multiple new badges stack
+                  vertically.
+                */}
+                {newlyEarnedBadges.length > 0 && (
+                  <Animated.View
+                    style={[
+                      styles.badgeReveal,
+                      {
+                        opacity: badgeRevealAnim,
+                        transform: [
+                          { translateY: badgeRevealAnim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) },
+                        ],
+                      },
+                    ]}
+                  >
+                    {newlyEarnedBadges.map((badge) => (
+                      <BadgeCard key={badge.id} badge={badge} earned />
+                    ))}
+                  </Animated.View>
+                )}
 
-          {session.phase === 'active' && (
-            <ThemedText
-              type="small"
-              themeColor="textSecondary"
-              accessibilityLabel={`${submittedEndings.length} of ${targetEndings} endings written`}
-            >
-              {submittedEndings.length} of {targetEndings}
-            </ThemedText>
-          )}
-        </ScrollView>
+                <Button label="Close" onPress={() => router.back()} />
+              </ThemedView>
+            )}
+          </ThemedView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -464,9 +468,38 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
+  flexOne: {
+    flex: 1,
+  },
+  // Pinned top (LC8): horizontal inset matches the scroll column below so
+  // the strip's content lines up with the stem/endings edge (LC1's 24pt
+  // grid); the scroll column carries its own top padding, so this only
+  // needs bottom breathing room to separate from it.
+  topStrip: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.three,
+    gap: Spacing.two,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
+  },
   scrollContent: {
-    padding: Spacing.four,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
     gap: Spacing.three,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  // Pinned bottom (LC8): `SafeAreaView` already insets the home indicator;
+  // this only needs top breathing room to separate from the scroll column
+  // and the `KeyboardAvoidingView` above adds the rest when the keyboard
+  // shows.
+  bottomBar: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.three,
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
@@ -480,28 +513,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
-  input: {
-    fontFamily: Fonts.serif,
-    fontSize: 22,
-    lineHeight: 34,
-    minHeight: 80,
-  },
-  // Only the bespoke pressure-animated save button uses this now (Start/
-  // Close moved to the shared `Button`) — `Radius.small` matches `Button`'s
-  // own secondary/countdown radius so the two read as the same button family.
-  button: {
-    minHeight: MinTouchTarget,
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.four,
-    borderRadius: Radius.small,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Fixed white, not theme-driven: the pressure gradient (constants/theme.ts
-  // `PressureColors`) is itself fixed in both themes, and white stays
-  // >=4.5:1 across its full range (measured minimum 5.13:1).
-  buttonLabelOnPressure: {
-    color: '#ffffff',
+  // W3: each previously-written ending is its own dim, separated row — a
+  // hairline top divider (decorative-only `border` token, not a text
+  // pairing — see theme.ts) rather than color/weight, so the stack reads as
+  // ordered rows instead of one undifferentiated text block.
+  pastEnding: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Spacing.two,
   },
   doneBlock: {
     gap: Spacing.three,
