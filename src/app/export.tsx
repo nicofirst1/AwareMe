@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card } from '@/components/card';
@@ -78,10 +78,13 @@ export default function ExportScreen() {
               accessibilityState={{ disabled: busy !== null, busy: busy === format }}
             >
               <Card style={[styles.card, { opacity: busy !== null && busy !== format ? 0.5 : 1 }]}>
-                <ThemedView style={styles.cardHeader}>
+                {/* Plain View, not ThemedView: a ThemedView inside a Card
+                    would repaint the screen background over the card fill
+                    (expo-feedback 2026-09-15, issue 01). */}
+                <View style={styles.cardHeader}>
                   <Ionicons name={icon} size={20} color={iconColor} />
                   <ThemedText type="subtitle">{label}</ThemedText>
-                </ThemedView>
+                </View>
                 <ThemedText type="small" themeColor="textSecondary">
                   {description}
                 </ThemedText>

@@ -14,8 +14,9 @@ import { useTheme } from '@/hooks/use-theme';
  * light's accent, black on dark's accent — see theme.ts's `accent` comment
  * for why the label color has to flip, not just the fill). The one action
  * that matters on a screen (Home's "Start writing").
- * `secondary` — today's only existing treatment (`backgroundElement` fill,
- * default text color), now named rather than copy-pasted.
+ * `secondary` — `backgroundElement` fill + hairline `border` (the same
+ * decorative divider token `Card.bordered` uses), so it stays defined when
+ * placed on a backgroundElement surface (e.g. Home's sitting card).
  * `text` — no fill, no border: Close/Cancel/Skip-style affordances.
  */
 export type ButtonVariant = 'primary' | 'secondary' | 'text';
@@ -51,6 +52,7 @@ export function Button({
       style={[
         styles.base,
         { backgroundColor: fill, borderRadius: variant === 'primary' ? Radius.large : Radius.small },
+        variant === 'secondary' && { borderWidth: 1, borderColor: theme.border },
         disabled && styles.disabled,
         style,
       ]}

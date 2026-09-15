@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card } from '@/components/card';
@@ -71,10 +71,13 @@ export default function ImportScreen() {
             accessibilityState={{ disabled: busy !== null, busy: busy === 'merge' }}
           >
             <Card style={[styles.card, { opacity: busy !== null && busy !== 'merge' ? 0.5 : 1 }]}>
-              <ThemedView style={styles.cardHeader}>
+              {/* Plain View, not ThemedView: a ThemedView inside a Card
+                  would repaint the screen background over the card fill
+                  (expo-feedback 2026-09-15, issue 01). */}
+              <View style={styles.cardHeader}>
                 <Ionicons name="git-merge-outline" size={20} color={iconColor} />
                 <ThemedText type="subtitle">Merge</ThemedText>
-              </ThemedView>
+              </View>
               <ThemedText type="small" themeColor="textSecondary">
                 Adds rows from the file that aren&apos;t already here (matched by id). Nothing existing is changed or removed.
               </ThemedText>
@@ -89,10 +92,13 @@ export default function ImportScreen() {
             accessibilityState={{ disabled: busy !== null, busy: busy === 'replace' }}
           >
             <Card style={[styles.card, { opacity: busy !== null && busy !== 'replace' ? 0.5 : 1 }]}>
-              <ThemedView style={styles.cardHeader}>
+              {/* Plain View, not ThemedView: a ThemedView inside a Card
+                  would repaint the screen background over the card fill
+                  (expo-feedback 2026-09-15, issue 01). */}
+              <View style={styles.cardHeader}>
                 <Ionicons name="swap-horizontal-outline" size={20} color={iconColor} />
                 <ThemedText type="subtitle">Replace</ThemedText>
-              </ThemedView>
+              </View>
               <ThemedText type="small" themeColor="textSecondary">
                 Deletes everything currently in the app, then loads the file in its place.
               </ThemedText>
