@@ -1,15 +1,16 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
+import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BackHeader } from '@/components/back-header';
 import { Card } from '@/components/card';
 import { EmptyState } from '@/components/empty-state';
 import { FilterChip } from '@/components/filter-chip';
+import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { CategoryColors, Spacing, type CategoryName } from '@/constants/theme';
+import { CategoryColors, MinTouchTarget, Radius, Spacing, type CategoryName } from '@/constants/theme';
 import { EndingSearchResult, getRepository, HistorySessionRow } from '@/db';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
@@ -43,6 +44,15 @@ function dateFromForPreset(preset: DateRangePreset, now: Date): string | undefin
  * search already means "everywhere" while the filters mean "narrow the
  * list"; scoping search results is `history?dateFrom=`-shaped work no
  * ticket asked for.
+ *
+ * Layout (layout-audit-2026-09-15, Hy1/Hy2/Hy4): the date/category/stem
+ * filter rows collapse behind a "Filters" toggle — the exact pattern
+ * `stems.tsx` ships for the same control band — because with a real corpus
+ * the expanded wall consumed the whole viewport and left the session list
+ * zero height and unreachable. Default state: search + collapsed filters,
+ * list visible (LC7's one control-band anchor); `SessionRow` follows LC5
+ * (stem serif primary, one dim category line, the date — the list's
+ * ordering key — right-aligned in a reserved meta column).
  */
 export default function HistoryScreen() {
   const router = useRouter();
@@ -51,6 +61,7 @@ export default function HistoryScreen() {
   const [sessions, setSessions] = useState<HistorySessionRow[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [stemOptions, setStemOptions] = useState<{ id: string; text: string }[]>([]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'all' | string>('all');
@@ -95,22 +106,43 @@ export default function HistoryScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <BackHeader style={styles.backHeader} />
-        <ThemedText type="title" style={styles.title}>
-          History
-        </ThemedText>
+        <ScreenHeader title="History" />
 
-        <TextInput
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search what you've written"
-          placeholderTextColor={theme.textSecondary}
-          style={[styles.search, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-          accessibilityLabel="Search endings"
-        />
+        {/* The search + Filters control band (LC7's one anchor for this
+            screen), mirroring stems.tsx's row: same search paddings, same
+            icon-button pattern — Hy3's two-sizes problem is resolved here by
+            using the sibling's anatomy (a shared SearchField component stays
+            issue 07's job). The toggle hides while searching: search results
+            and filters are mutually exclusive (above), so an expanded
+            toggle would open a panel that can never show. */}
+        <ThemedView style={styles.controlsRow}>
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search what you've written"
+            placeholderTextColor={theme.textSecondary}
+            style={[styles.search, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+            accessibilityLabel="Search endings"
+          />
+          {!trimmedQuery && (
+            <Pressable
+              onPress={() => setFiltersOpen((v) => !v)}
+              accessibilityRole="button"
+              accessibilityLabel="Filters"
+              accessibilityState={{ expanded: filtersOpen }}
+              style={[styles.filtersButton, { backgroundColor: theme.backgroundElement }]}
+            >
+              <Ionicons name="options-outline" size={20} color={theme.text} />
+            </Pressable>
+          )}
+        </ThemedView>
 
-        {!trimmedQuery && (
-          <>
+        {/* Hy1's fix: the filter wall defaults to collapsed. With a real
+            corpus the three expanded rows consumed the whole viewport and
+            left the FlatList zero height — the list, not the filters, is
+            the screen's content. */}
+        {!trimmedQuery && filtersOpen && (
+          <ThemedView style={styles.filtersPanel}>
             <FilterRow
               label="Date range"
               options={[
@@ -141,22 +173,24 @@ export default function HistoryScreen() {
                 onChange={setStemFilter}
               />
             )}
-          </>
+          </ThemedView>
         )}
 
         {trimmedQuery ? (
           <FlatList<EndingSearchResult>
+            style={styles.list}
             data={searchResults}
             keyExtractor={(r) => r.endingId}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={styles.listContent}
             ListEmptyComponent={<EmptyState message="No matches." />}
             renderItem={renderSearchResultRow}
           />
         ) : (
           <FlatList<HistorySessionRow>
+            style={styles.list}
             data={sessions}
             keyExtractor={(s) => s.id}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={styles.listContent}
             ListEmptyComponent={<EmptyState message="Nothing here yet." />}
             renderItem={renderSessionRow}
           />
@@ -211,10 +245,25 @@ const SessionRow = memo(function SessionRow({
           drawn — the saturated stripe (D1 fix) reads as a slightly bolder
           scanning aid at this width (color-audit-2026-09-11.md). */}
       <Card style={[styles.row, accentColor !== undefined && { borderLeftWidth: 4 }]} accentColor={accentColor}>
-        <ThemedText type="stem">{item.stem_text_snapshot}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {[formatDate(item.started_at), item.category].filter(Boolean).join(' · ')}
-        </ThemedText>
+        {/* LC5 list-row anatomy (layout-audit-2026-09-15, Hy2): the stem is
+            the primary line, the category the one dim secondary line, and
+            the date — the list's ordering key — moves out of the old
+            `' · '`-joined string into a reserved, right-aligned meta
+            column. `flex-start` top-anchors the first line so 1-line and
+            2-line stems start at the same y (LC5). */}
+        <View style={styles.rowBody}>
+          <View style={styles.rowMain}>
+            <ThemedText type="stem">{item.stem_text_snapshot}</ThemedText>
+            {item.category && (
+              <ThemedText type="small" themeColor="textSecondary">
+                {item.category.replace(/_/g, ' ')}
+              </ThemedText>
+            )}
+          </View>
+          <ThemedText type="small" themeColor="textSecondary" style={styles.rowMeta}>
+            {formatRowDate(item.started_at)}
+          </ThemedText>
+        </View>
       </Card>
     </Pressable>
   );
@@ -222,6 +271,16 @@ const SessionRow = memo(function SessionRow({
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/**
+ * The SessionRow meta-column date (LC5): compact all-numeric day/month/year
+ * — "13.09.26"-shaped, ~56–60pt wide at `small` 14 (OCR-measured) — so the reserved 72pt column
+ * never wraps. Pure numerals also sidestep the locale-mixed month names the
+ * full `formatDate` can produce (audit C6, triaged separately as issue 07).
+ */
+function formatRowDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { year: '2-digit', month: '2-digit', day: '2-digit' });
 }
 
 function truncate(text: string, max: number): string {
@@ -240,11 +299,11 @@ function FilterRow<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <ThemedView style={styles.filterRow}>
+    <View style={styles.filterRow}>
       <ThemedText type="small" themeColor="textSecondary" style={styles.filterLabel}>
         {label}
       </ThemedText>
-      <ThemedView style={styles.filterOptions}>
+      <View style={styles.filterOptions}>
         {options.map((opt) => (
           <FilterChip
             key={opt.value}
@@ -254,8 +313,8 @@ function FilterRow<T extends string>({
             category={opt.category}
           />
         ))}
-      </ThemedView>
-    </ThemedView>
+      </View>
+    </View>
   );
 }
 
@@ -266,23 +325,40 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  backHeader: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-  },
-  title: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.one,
+  // Stems' control band, verbatim anatomy (component consistency — Hy1's
+  // fix is "the exact pattern stems.tsx already ships"): search + the
+  // Filters toggle in one row, pinned above the collapsible panel. The
+  // row can't grow (flexGrow/shrink 0) so the FlatList below always keeps
+  // its flex:1 share of the viewport.
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: Spacing.four,
+    marginTop: Spacing.two,
+    gap: Spacing.two,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   search: {
-    marginHorizontal: Spacing.four,
-    marginTop: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Spacing.two,
+    flex: 1,
+    padding: Spacing.two,
+    borderRadius: Radius.small,
+  },
+  filtersButton: {
+    minHeight: MinTouchTarget,
+    minWidth: MinTouchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.small,
+  },
+  filtersPanel: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.one,
+    gap: Spacing.one,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   filterRow: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
     gap: Spacing.one,
   },
   filterLabel: {
@@ -294,10 +370,29 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
   },
   list: {
+    flex: 1,
+  },
+  listContent: {
     padding: Spacing.four,
     gap: Spacing.two,
   },
   row: {
     gap: Spacing.half,
+  },
+  rowBody: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.two,
+  },
+  rowMain: {
+    flex: 1,
+    gap: Spacing.half,
+  },
+  // LC5's reserved right meta column: fixed ~72pt, right-aligned, `small` —
+  // reserved even when the compact date is short, so every row's content
+  // column ends at the same x.
+  rowMeta: {
+    width: 72,
+    textAlign: 'right',
   },
 });
