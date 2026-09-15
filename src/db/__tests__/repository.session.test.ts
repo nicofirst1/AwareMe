@@ -18,6 +18,13 @@ function firstStemId(repo: Repository): string {
   return repo.listActiveStems()[0].id;
 }
 
+// getRecentStemUsage filters on a rolling 14-day window, so hardcoded fixture
+// dates time-bomb once they age out ('2026-09-01' crossed the cutoff on
+// 2026-09-15 and broke every gate run). Recency fixtures must stay relative.
+function daysAgo(n: number): string {
+  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+}
+
 describe('Repository.getSettings', () => {
   it('returns spec §7 defaults after seeding', () => {
     const { repo } = freshRepository();
@@ -66,6 +73,9 @@ describe('Repository.getRecentStemUsage', () => {
     const category = (db.prepare('SELECT category FROM stems WHERE id = ?').get(stemId) as { category: string | null })
       .category;
 
+    const olderStartedAt = daysAgo(2);
+    const newerStartedAt = daysAgo(1);
+
     repo.createSession({
       stemId,
       stemTextSnapshot: 'snap',
@@ -73,7 +83,7 @@ describe('Repository.getRecentStemUsage', () => {
       targetEndings: 3,
       timerSeconds: 90,
       uncensoredMode: true,
-      startedAt: '2026-09-01T08:00:00.000Z',
+      startedAt: olderStartedAt,
       deviceLocale: 'en-US',
     });
     repo.createSession({
@@ -83,13 +93,13 @@ describe('Repository.getRecentStemUsage', () => {
       targetEndings: 3,
       timerSeconds: 90,
       uncensoredMode: true,
-      startedAt: '2026-09-05T08:00:00.000Z',
+      startedAt: newerStartedAt,
       deviceLocale: 'en-US',
     });
 
     const usage = repo.getRecentStemUsage();
     expect(usage).toHaveLength(2);
-    expect(usage[0].startedAt).toBe('2026-09-05T08:00:00.000Z');
+    expect(usage[0].startedAt).toBe(newerStartedAt);
     expect(usage[0].stemId).toBe(stemId);
     expect(usage[0].category).toBe(category);
   });
@@ -104,7 +114,7 @@ describe('Repository.getRecentStemUsage', () => {
       targetEndings: 3,
       timerSeconds: 90,
       uncensoredMode: true,
-      startedAt: '2026-09-05T08:00:00.000Z',
+      startedAt: daysAgo(1),
       deviceLocale: 'en-US',
     });
     db.prepare('UPDATE sessions SET deleted_at = ? WHERE id = ?').run('2026-09-06T00:00:00.000Z', sessionId);
