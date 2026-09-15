@@ -13,15 +13,18 @@
  *      `keystore.properties` at the repo root (prebuild-safe — the
  *      recommended location), then `android/keystore.properties`
  *      (legacy/alternate location). `storeFile` is resolved relative to the
- *      directory holding the properties file (or use an absolute path).
+ *      directory holding the properties file (or use an absolute path) —
+ *      ONE resolution, used identically by the existence check and the
+ *      `signingConfigs.release.storeFile` assignment.
  *   2. Wires those values into `signingConfigs.release` and points
  *      `buildTypes.release.signingConfig` at it. The block is appended last,
  *      so it overrides the template's debug-signed release buildType.
- *   3. Falls back to the standard debug keystore when `keystore.properties`
- *      is absent, so development and CI stay green with zero setup.
- *      If the file EXISTS but points at a missing/wrong `storeFile`, the
- *      build FAILS loudly instead of silently debug-signing — a half-set-up
- *      production keystore must never quietly produce a store artifact.
+ *   3. Falls back to the standard debug keystore when neither properties
+ *      file exists, so development and CI stay green with zero setup.
+ *      If a properties file EXISTS but names a missing/wrong `storeFile`,
+ *      the build FAILS loudly instead of silently debug-signing — a
+ *      half-set-up production keystore must never quietly produce a store
+ *      artifact.
  *
  * Hard rule (issue 05): NEVER commit a keystore or any password.
  * `keystore.properties` (root or android/) and every `*.jks`/`*.keystore`
@@ -55,12 +58,13 @@ const SIGNING_BLOCK = `
 //   1. keystore.properties at the REPO ROOT (survives 'expo prebuild', which
 //      clears the whole android/ directory — recommended location),
 //   2. keystore.properties next to this build.gradle (android/).
-// storeFile is resolved relative to the properties file's directory. When
+// storeFile is resolved against the properties file's directory. When
 // neither file exists, release falls back to the debug keystore (dev/CI
 // builds). NEVER commit keystore.properties, any .jks/.keystore file, or any
 // password.
 def sixEndingsKeystoreProperties = new Properties()
 def sixEndingsKeystoreBaseDir = null
+def sixEndingsStoreFile = null
 def sixEndingsKeystoreCandidates = [
     rootProject.file("../keystore.properties"),
     rootProject.file("keystore.properties"),
@@ -71,30 +75,31 @@ for (candidate in sixEndingsKeystoreCandidates) {
         candidate.withInputStream { stream ->
             sixEndingsKeystoreProperties.load(stream)
         }
+        sixEndingsStoreFile = new File(sixEndingsKeystoreProperties["storeFile"])
+        if (!sixEndingsStoreFile.isAbsolute()) {
+            sixEndingsStoreFile = new File(sixEndingsKeystoreBaseDir, sixEndingsKeystoreProperties["storeFile"])
+        }
+        if (!sixEndingsStoreFile.exists()) {
+            throw new GradleException(
+                "six-endings signing: keystore.properties exists but storeFile " +
+                "'" + sixEndingsKeystoreProperties["storeFile"] + "' was not found " +
+                "(resolved to " + sixEndingsStoreFile.getAbsolutePath() + "). " +
+                "Fix the path, or remove keystore.properties to fall back to debug signing."
+            )
+        }
+        println "six-endings release signing: production keystore (" + sixEndingsStoreFile.getName() + ")"
         break
     }
-}
-if (sixEndingsKeystoreBaseDir != null) {
-    def sixEndingsStoreFile = new File(sixEndingsKeystoreProperties["storeFile"])
-    if (!sixEndingsStoreFile.isAbsolute()) {
-        sixEndingsStoreFile = new File(sixEndingsKeystoreBaseDir, sixEndingsKeystoreProperties["storeFile"])
-    }
-    if (!sixEndingsStoreFile.exists()) {
-        throw new GradleException(
-            "six-endings signing: keystore.properties exists but storeFile " +
-            "'" + sixEndingsKeystoreProperties["storeFile"] + "' was not found " +
-            "(resolved to " + sixEndingsStoreFile.getAbsolutePath() + "). " +
-            "Fix the path, or remove keystore.properties to fall back to debug signing."
-        )
-    }
-    println "six-endings release signing: production keystore (" + sixEndingsStoreFile.getName() + ")"
 }
 
 android {
     signingConfigs {
         release {
-            if (sixEndingsKeystoreProperties["storeFile"]) {
-                storeFile rootProject.file(sixEndingsKeystoreProperties["storeFile"])
+            if (sixEndingsKeystoreBaseDir != null) {
+                // Same resolved file the existence check above used (relative
+                // paths resolve against the properties file's directory) —
+                // one resolution, no doc-vs-behavior drift.
+                storeFile sixEndingsStoreFile
                 storePassword sixEndingsKeystoreProperties["storePassword"]
                 keyAlias sixEndingsKeystoreProperties["keyAlias"]
                 keyPassword sixEndingsKeystoreProperties["keyPassword"]

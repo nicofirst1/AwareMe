@@ -38,7 +38,7 @@ The Android app asks only for the permissions its features need:
 - **Notifications** — so the reminder notifications you schedule can appear.
 - **Biometric authentication** — for the optional app lock.
 
-The Android build also declares a few framework-default permissions (INTERNET, VIBRATE and similar) that the underlying app framework includes whether or not an app uses them. This app performs no network communication of any kind — no browsing, no downloading, no uploading — which is why it works identically in airplane mode. The one thing that looks network-shaped is deliberate: the About screen offers a link to the developer's website, and tapping it opens your browser — your browser acting at your request, not the app communicating.
+The Android build also declares a few framework-default permissions (INTERNET, VIBRATE and similar) that the underlying app framework includes whether or not an app uses them. This app performs no network communication of any kind — no browsing, no downloading, no uploading — which is why it works identically in airplane mode. The one thing that looks network-shaped is deliberate: the Home footer and the About screen offer a link to the developer's website, and tapping either opens your browser — your browser acting at your request, not the app communicating.
 
 ## Deleting your data
 

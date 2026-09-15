@@ -64,9 +64,10 @@ available in Settings for anyone who shares a device.
 
 This app is built around sentence completion, a technique developed by
 the psychologist Nathaniel Branden and described at length in his own
-books. The sentences in this app are original material written in the
-spirit of his method, not excerpts from his work — if the practice is
-useful to you, his books are the place to go deeper.
+books. The sentences included with the app are the official Sentence
+Completion I programme, used with permission from Leigh Branden — method
+and original programme: Nathaniel Branden, nathanielbranden.com. If the
+practice is useful to you, his books are the place to go deeper.
 ```
 
 ## Keywords (App Store, comma-separated, 100-character limit)
