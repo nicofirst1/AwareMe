@@ -158,9 +158,11 @@ describe('ReviewScreen', () => {
     render(<ReviewScreen />);
     fireEvent.press(screen.getByLabelText('Continue'));
 
-    // Timer strip + pressure Save share the same MM:SS source (write.tsx's
-    // mechanism), the reflection input and Done are the pinned bar.
-    expect(screen.getAllByText('1:30')).toHaveLength(2);
+    // The timer strip's MM:SS — sole carrier of the countdown since the
+    // Save button's removal (2026-09-15 owner decision; the pressure cue
+    // now colors these numerals) — plus the reflection input and Done in
+    // the pinned bar.
+    expect(screen.getAllByText('1:30')).toHaveLength(1);
     expect(screen.getByLabelText('Your reflection')).toBeTruthy();
     expect(screen.getByLabelText('Finish session')).toBeTruthy();
   });

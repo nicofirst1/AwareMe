@@ -18,8 +18,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WriteActionBar } from '@/components/write-action-bar';
 import { WriteTimerStrip } from '@/components/write-timer-strip';
-import { MaxContentWidth, MinTouchTarget, PressureColors, Spacing } from '@/constants/theme';
+import { MaxContentWidth, MinTouchTarget, pressureColorAt, Spacing } from '@/constants/theme';
 import { getRepository, type StemRow, type TimeOfDay } from '@/db';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import type { BadgeDef } from '@/session/badges';
 import { assembleNewlyEarnedBadges } from '@/session/badgeReveal';
@@ -91,6 +92,10 @@ export default function WriteScreen() {
   }>();
   const router = useRouter();
   const theme = useTheme();
+  // The pressure cue's endpoints are per-theme tokens (see `pressureColorAt`)
+  // resolved once per render against the active color scheme. A hook, so it
+  // stays above the early returns alongside the rest.
+  const resolvedScheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const session = useWritingSession();
   const inputRef = useRef<TextInput>(null);
 
@@ -110,11 +115,6 @@ export default function WriteScreen() {
   // already-active session, and false once `start()` has been called for
   // the current index (whether still active or already 'done').
   const awaitingStart = pendingStem !== null && startedIndex < queueIndex;
-
-  // Pressure cue (§6.3.4/13.4, 2026-09-11 addition): the button gradient
-  // tracks the per-stem timer when it's on, else the session timer — an
-  // urgency cue only, never a numeral or shame copy.
-  const buttonPressure = useRef(new Animated.Value(0)).current;
 
   // Completion celebration (gamification proposal §1.A/§2, cycle 2): a
   // single calm settle on "Saved." — scale 0.92->1 + opacity 0->1, ~400ms,
@@ -251,13 +251,17 @@ export default function WriteScreen() {
     session.phase === 'active' && stemTimerSeconds && session.stemRemainingSeconds !== null
       ? Math.max(0, Math.min(1, session.stemRemainingSeconds / stemTimerSeconds))
       : null;
-  // The per-stem timer drives the button's urgency when it's on (it's the
+  // The per-stem timer drives the pressure cue when it's on (it's the
   // tighter, more immediate deadline); otherwise the session timer does.
   const pressureFraction = stemProgress ?? progress;
 
-  useEffect(() => {
-    buttonPressure.setValue(session.phase === 'active' ? 1 - pressureFraction : 0);
-  }, [buttonPressure, session.phase, pressureFraction]);
+  // §6.3.7's depleting-color cue (2026-09-15 owner decision, DECISIONS.md at
+  // merge): the top-strip MM:SS numerals carry the pressure gradient now
+  // that the countdown Save button is gone — ambient urgency only, no
+  // shaming copy (§13.4). Recomputed per render (the screen re-renders on
+  // every timer tick), so no Animated value is needed; `undefined` outside
+  // 'active' leaves the numerals in the theme's normal text color.
+  const pressureColor = session.phase === 'active' ? pressureColorAt(1 - pressureFraction, resolvedScheme) : undefined;
 
   if (queue !== null && queue.length === 0) {
     return (
@@ -281,21 +285,8 @@ export default function WriteScreen() {
 
   const stemText = awaitingStart ? (pendingStem?.text ?? '') : (session.stemText ?? '');
   const targetEndings = session.state?.config.targetEndings ?? 0;
-  const buttonBackgroundColor = buttonPressure.interpolate({
-    inputRange: [0, 1],
-    outputRange: [PressureColors.calm, PressureColors.urgent],
-  });
 
   const submittedEndings = session.state?.endings.filter((e) => e.submittedAt !== null) ?? [];
-
-  // Countdown button label (2026-09-11 addition, §6.3.4): the per-stem
-  // remaining time when that timer is on, else the session's — same
-  // urgency source the button's color gradient already tracks
-  // (`pressureFraction` above). Falls back to the static "Next" label if
-  // neither timer has a value to show (defensive; shouldn't happen while
-  // `session.phase === 'active'`).
-  const countdownSeconds = stemTimerSeconds ? session.stemRemainingSeconds : session.remainingSeconds;
-  const buttonLabel = countdownSeconds !== null ? formatMMSS(countdownSeconds) : 'Next';
 
   // Enter submits the ending (2026-09-11 addition, §6.3.4): the input is
   // `multiline` so it wraps a long sentence, which means the platform
@@ -346,6 +337,7 @@ export default function WriteScreen() {
               positionLabel={queue.length > 1 ? `Stem ${queueIndex + 1} of ${queue.length}` : undefined}
               progress={session.phase === 'active' ? progress : undefined}
               timeLabel={session.phase === 'active' ? formatMMSS(session.remainingSeconds) : undefined}
+              timeColor={pressureColor}
             />
           </ThemedView>
 
@@ -396,9 +388,6 @@ export default function WriteScreen() {
                 onChangeText={handleChangeText}
                 onSubmitEditing={() => session.submitActive()}
                 stemProgress={stemProgress}
-                onSave={() => session.submitActive()}
-                saveLabel={buttonLabel}
-                savePressureColor={buttonBackgroundColor}
                 onDone={session.finishNow}
                 endingsWritten={submittedEndings.length}
                 endingsTarget={targetEndings}
