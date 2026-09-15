@@ -1,20 +1,28 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BackHeader } from '@/components/back-header';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { EmptyState } from '@/components/empty-state';
 import { FilterChip } from '@/components/filter-chip';
-import { ProgressBar } from '@/components/progress-bar';
+import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
+import { WriteActionBar } from '@/components/write-action-bar';
+import { WriteTimerStrip } from '@/components/write-timer-strip';
+import { MaxContentWidth, PressureColors, Spacing } from '@/constants/theme';
 import { EndingRow, getRepository, SessionRow } from '@/db';
 import { nowEventTime } from '@/db/time';
 import { useTheme } from '@/hooks/use-theme';
+import { formatMMSS } from '@/session/sessionMachine';
 import {
   computeReviewPeriod,
   DEFAULT_REVIEW_PERIOD_DAYS,
@@ -30,13 +38,21 @@ type ReviewPhase = 'reread' | 'meta-stem' | 'done';
  * Review mode (§6.5, ticket 13): read back everything written in a
  * selectable recent period, read-only and quiet — no evaluation, no
  * scoring — then complete one meta-stem as a normal timed session
- * (`origin='review'`, default 180s). Available on demand from home
- * (`/review`, a plain link like History/Stems); "offered once a week" is a
- * single unemphasised line on this screen itself (§13.4/§13.6 — descriptive,
- * never a badge or a streak), not a separate prompt surface.
+ * (`origin='review'`, §6.5.2). "Offered once a week" is a single
+ * unemphasised line on this screen itself (§13.4/§13.6 — descriptive,
+ * never a badge or an obligation).
+ *
+ * Layout (layout-audit-2026-09-15, R1/R2): the period chips stay the
+ * screen's top anchor and "Continue" moves to a pinned bottom action
+ * position — it used to sit after the whole stream (~2,200pt down with a
+ * five-session period), effectively unreachable. Session cards carry an
+ * eyebrow header (date + ending count, descriptive only) and their endings
+ * render dim below the serif stem with hairline dividers (LC5, write's W3
+ * pattern) instead of differing from the stem by opacity alone.
  */
 export default function ReviewScreen() {
   const router = useRouter();
+  const theme = useTheme();
   const session = useWritingSession();
 
   const [phase, setPhase] = useState<ReviewPhase>('reread');
@@ -104,7 +120,7 @@ export default function ReviewScreen() {
     return (
       <ThemedView style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
-          <BackHeader style={styles.backHeader} />
+          <ScreenHeader title="Review" />
           <ScrollView contentContainerStyle={styles.scrollContent}>
             <ThemedText type="default" themeColor="textSecondary">
               Saved.
@@ -119,19 +135,19 @@ export default function ReviewScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <BackHeader style={styles.backHeader} />
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">Review</ThemedText>
-          {wasDue && (
-            <ThemedText type="small" themeColor="textSecondary">
-              It has been a week or more since your last review.
-            </ThemedText>
-          )}
-
-          <ThemedView style={styles.periodRow}>
-            {REVIEW_PERIOD_PRESETS.map((days) => (
-              <FilterChip key={days} label={`${days} days`} selected={days === periodDays} onPress={() => loadPeriod(days)} />
-            ))}
+        <ScreenHeader title="Review" />
+        <ScrollView style={styles.flexOne} contentContainerStyle={styles.scrollContent}>
+          <ThemedView style={styles.periodSection}>
+            {wasDue && (
+              <ThemedText type="small" themeColor="textSecondary">
+                It has been a week or more since your last review.
+              </ThemedText>
+            )}
+            <ThemedView style={styles.periodRow}>
+              {REVIEW_PERIOD_PRESETS.map((days) => (
+                <FilterChip key={days} label={`${days} days`} selected={days === periodDays} onPress={() => loadPeriod(days)} />
+              ))}
+            </ThemedView>
           </ThemedView>
 
           {reviewedSessions.length === 0 ? (
@@ -139,64 +155,119 @@ export default function ReviewScreen() {
           ) : (
             reviewedSessions.map(({ session: s, endings }) => (
               <Card key={s.id} style={styles.sessionBlock}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {formatDate(s.started_at)}
+                <ThemedText type="eyebrow">
+                  {formatDate(s.started_at)} · {endings.length === 1 ? '1 ending' : `${endings.length} endings`}
                 </ThemedText>
                 <ThemedText type="stem">{s.stem_text_snapshot}</ThemedText>
                 {endings.map((e) => (
-                  <ThemedText key={e.id} type="stem" style={styles.ending}>
+                  <ThemedText
+                    key={e.id}
+                    type="stem"
+                    themeColor="textSecondary"
+                    style={[styles.ending, { borderTopColor: theme.border }]}
+                  >
                     {e.text || '(nothing written)'}
                   </ThemedText>
                 ))}
               </Card>
             ))
           )}
-
-          <Button label="Continue" onPress={beginMetaStem} />
         </ScrollView>
+
+        {/*
+          Pinned bottom action (R1): the screen's one forward action, visible
+          on first paint — it used to render after the entire reread stream,
+          ~2.5 screens down. testID scopes the structural pinning assertion
+          in review.test.tsx; visibility itself is acceptance-measured via
+          frame dumps.
+        */}
+        <ThemedView style={styles.bottomBar} testID="review-bottom-bar">
+          <Button label="Continue" onPress={beginMetaStem} />
+        </ThemedView>
       </SafeAreaView>
     </ThemedView>
   );
 }
 
 /**
- * The meta-stem, presented exactly like a normal writing session (§6.5.2)
- * — same primitives as `write.tsx`, trimmed to what review needs: one
- * field, no "past endings" list (there's only ever one), no separate exit
- * beyond finishing or backing out early.
+ * The meta-stem, presented exactly like a normal writing session (§6.5.2) —
+ * the same pinned primitives as `write.tsx` (cycle 2's `WriteTimerStrip` /
+ * `WriteActionBar`), trimmed to what review needs: one field, no Start gate
+ * (the timer begins with `beginMetaStem`), no "past endings" list (there's
+ * only ever one), no per-stem counters, and no header exit while writing —
+ * finishing ("Done") or backing out early is the single exit, same rule as
+ * write's active session (§10/LC8).
  */
 function MetaStemSession({ session }: { session: ReturnType<typeof useWritingSession> }) {
-  const theme = useTheme();
   const timerSeconds = session.state?.config.timerSeconds ?? 1;
+  const stemTimerSeconds = session.state?.config.stemTimerSeconds ?? null;
   const progress = session.phase === 'active' ? Math.max(0, Math.min(1, session.remainingSeconds / timerSeconds)) : 0;
+  // The per-stem timer drives the button's urgency when it's on (settings
+  // apply to the meta-stem like any session); otherwise the session timer
+  // does — same `pressureFraction` rule as write.tsx.
+  const stemProgress =
+    session.phase === 'active' && stemTimerSeconds && session.stemRemainingSeconds !== null
+      ? Math.max(0, Math.min(1, session.stemRemainingSeconds / stemTimerSeconds))
+      : null;
+  const pressureFraction = stemProgress ?? progress;
+
+  // Pressure cue (§6.3.4): urgency gradient only, never a numeral or shame
+  // copy — identical to write.tsx's mechanism.
+  const buttonPressure = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    buttonPressure.setValue(session.phase === 'active' ? 1 - pressureFraction : 0);
+  }, [buttonPressure, session.phase, pressureFraction]);
+
+  const buttonBackgroundColor = buttonPressure.interpolate({
+    inputRange: [0, 1],
+    outputRange: [PressureColors.calm, PressureColors.urgent],
+  });
+
+  const countdownSeconds = stemTimerSeconds ? session.stemRemainingSeconds : session.remainingSeconds;
+  const saveLabel = countdownSeconds !== null ? formatMMSS(countdownSeconds) : 'Next';
+
+  // Enter submits the ending — same trailing-newline path as write.tsx
+  // (multiline field, so the return key usually arrives via onChangeText).
+  const handleChangeText = (nextText: string) => {
+    if (nextText.endsWith('\n')) {
+      session.submitActive(nextText.slice(0, -1));
+      return;
+    }
+    session.changeActiveText(nextText);
+  };
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <ThemedText type="stem">{session.stemText}</ThemedText>
+        <KeyboardAvoidingView style={styles.flexOne} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <ThemedView style={styles.topStrip}>
+            <WriteTimerStrip
+              progress={session.phase === 'active' ? progress : undefined}
+              timeLabel={session.phase === 'active' ? formatMMSS(session.remainingSeconds) : undefined}
+            />
+          </ThemedView>
 
-          {session.phase === 'active' && <ProgressBar progress={progress} accessibilityLabel="Time remaining" />}
+          <ScrollView style={styles.flexOne} contentContainerStyle={styles.metaScrollContent} keyboardShouldPersistTaps="handled">
+            <ThemedText type="stem">{session.stemText}</ThemedText>
+          </ScrollView>
 
           {session.phase === 'active' && (
-            <>
-              <TextInput
-                style={[styles.input, { color: theme.text }]}
+            <ThemedView style={styles.bottomBar}>
+              <WriteActionBar
                 value={session.activeText}
-                onChangeText={session.changeActiveText}
+                onChangeText={handleChangeText}
                 onSubmitEditing={() => session.submitActive()}
-                multiline
-                blurOnSubmit={false}
-                contextMenuHidden
-                autoCorrect={false}
-                accessibilityLabel="Your reflection"
+                inputAccessibilityLabel="Your reflection"
                 placeholder="Keep the pen moving."
-                placeholderTextColor={theme.textSecondary}
+                onSave={() => session.submitActive()}
+                saveLabel={saveLabel}
+                savePressureColor={buttonBackgroundColor}
+                onDone={session.finishNow}
               />
-              <Button label="Done" onPress={session.finishNow} variant="text" />
-            </>
+            </ThemedView>
           )}
-        </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -213,31 +284,61 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  backHeader: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
+  flexOne: {
+    flex: 1,
   },
+  // LC3 section rhythm: 24 between sections (period band, cards), 8 inside
+  // a card (LC4's internal gap).
   scrollContent: {
     padding: Spacing.four,
-    gap: Spacing.three,
+    gap: Spacing.four,
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
+  },
+  periodSection: {
+    gap: Spacing.one,
   },
   periodRow: {
     flexDirection: 'row',
     gap: Spacing.one,
   },
   sessionBlock: {
-    gap: Spacing.one,
+    gap: Spacing.two,
   },
+  // R2/LC5: an ending is a dim, separated row under the serif stem — the
+  // hairline top divider (decorative-only `border` token, see theme.ts)
+  // replaces the old opacity-only differentiation.
   ending: {
-    opacity: 0.85,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Spacing.two,
   },
-  input: {
-    fontFamily: Fonts.serif,
-    fontSize: 22,
-    lineHeight: 34,
-    minHeight: 80,
+  // Pinned bottom (R1), same anatomy as write.tsx's bottom bar: SafeAreaView
+  // insets the home indicator; this carries its own horizontal grid.
+  bottomBar: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.three,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  // Pinned top strip for the meta-stem (LC8), same anatomy as write's.
+  topStrip: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.three,
+    gap: Spacing.two,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  metaScrollContent: {
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+    gap: Spacing.three,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
   },
 });
