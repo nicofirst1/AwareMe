@@ -1,6 +1,6 @@
 # Gamification design proposal — 2026-09-11
 
-Status: draft for sign-off, pre-implementation. Reverses spec §13.4/§13.6's no-gamification rule per 2026-09-11 owner decision. Spec text itself is not yet amended — do that alongside implementation, not before.
+Status: signed off and shipped. Reversed spec §13.4/§13.6's no-gamification rule per the 2026-09-11 owner decision; spec text amended the same day, cycles 1–3 landed (see `.scratch/v1.1-feedback/issues/14`–`17`). Body below kept unchanged as the design record.
 
 Scope discipline: this proposal stays inside what's genuinely achievable from data the app already/inevitably has. No points, no levels, no leaderboards (still explicitly out of scope, §2 — gamification ≠ social features), no artificial scarcity, no push-to-return copy. "Badges and stuff" is read as: acknowledge real writing history at the one moment it's earned, quietly.
 

@@ -2,15 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: M1 complete — data foundation, no writing UI yet
+## Status: v1 feature-complete; v1.1 feedback batch + two owner pivots landed; ship-prep remains
 
-Scaffolded (ticket 01), schema + migrations (ticket 02), and seed content + repository + debug dump (ticket 03) are done: an installable, data-only build per spec §12's M1 exit criteria. `spec.md` remains the contract. M2 (the writing session) is next.
+All 20 tickets in `.scratch/six-endings-v1/` are implemented and post-reviewed; the 2026-09-11 v1.1 feedback batch (`.scratch/v1.1-feedback/`) is done, including the gamification pivot (spec §13.4/§13.6 reversed, bounded by `docs/design/gamification-proposal-2026-09-11.md`; cycles 1–3 shipped) and a 4-cycle UI redesign. The 2026-09-14 owner pivot (ADR-0004, migration 0003, schema v3) replaced random weighted stem draws with morning/evening sittings and two fixed daily notifications. Remaining: store assets + privacy declarations (ticket 20's `store/` groundwork is in, native manifests/submission are not) and M7 polish/ship. `spec.md` remains the contract.
 
 **`spec.md` is the contract.** Read it before doing anything. It uses RFC-2119 language: `MUST` is a hard constraint, `SHOULD` needs a justification in `DECISIONS.md` (create it) if you deviate. Do not add features it lists as out of scope (section 2) — no backend, accounts, sync, social, AI, analytics, or monetisation, and no stubs/toggles for them.
 
 ## Stack (from spec §3 — installed)
 
-Expo managed workflow, SDK 57 · TypeScript `strict: true`, no `any` in committed code · `expo-router` (file-based, rooted at `src/app`) · `expo-sqlite` · local-only `expo-notifications` · Zustand (not Redux) · `expo-file-system` · `expo-sharing` for export · `expo-local-authentication` for the optional lock · Jest (`jest-expo` preset) + `@testing-library/react-native`.
+Expo managed workflow, SDK 57 · TypeScript `strict: true`, no `any` in committed code · `expo-router` (file-based, rooted at `src/app`) · `expo-sqlite` · local-only `expo-notifications` · Zustand (present per spec §3, currently unused — session state is a plain hook per DECISIONS.md) · `expo-file-system` · `expo-sharing` for export · `expo-local-authentication` for the optional lock · Jest (`jest-expo` preset) + `@testing-library/react-native`.
 
 Two deps are installed beyond spec §3's list, both non-discretionary — see `DECISIONS.md`: `expo-linking` (hard runtime peer of `expo-router`) and `expo-crypto` (UUIDv7 needs real random bytes; Hermes doesn't polyfill `crypto.getRandomValues`).
 
@@ -18,10 +18,14 @@ The app **MUST function fully in airplane mode.** No network calls. No dependenc
 
 ### Real commands (package.json)
 
-- `npm start` / `npm run ios` / `npm run android` — `expo start` variants
+- `npm start` — `expo start` (Metro; the Expo Go day-to-day loop)
+- `npm run ios` / `npm run android` — native dev builds (`expo run:ios` / `expo run:android`; the `android/` native project is committed)
+- `./scripts/rebuild-android.sh` — local release APK for sideloading (`android/app/build/outputs/apk/release/app-release.apk`; a debug APK has no JS bundle and only runs tethered to Metro)
 - `npm test` — `jest` (preset `jest-expo`); `npx jest path/to/file.test.ts` for a single file
 - `npm run typecheck` — `tsc --noEmit`
 - `npm run lint` — `expo lint`
+
+Known environment quirk: `node_modules/expo-asset` (a transitive dependency of `expo`) repeatedly goes missing across `npm install` cycles, failing some Jest suites with `Cannot find module 'expo-asset'`. Remedy (see DECISIONS.md): `npm install expo-asset@57.0.16 --no-save --legacy-peer-deps` — never add it to `package.json`.
 
 ## Data layer (`src/db/`, ticket 02)
 
@@ -32,7 +36,7 @@ The app **MUST function fully in airplane mode.** No network calls. No dependenc
 - `uuidv7.ts` / `id.ts` — pure UUIDv7 generator + the one call site binding it to `expo-crypto`.
 - `fixtures/schema-vN.db` — a committed, real SQLite file per shipped version; `__tests__/migrate.test.ts` regenerates any missing one and asserts every fixture upgrades cleanly to current. Add a new fixture when you add a migration (see `fixtures/README.md`).
 - `testSupport/nodeSqliteExecutor.ts` — adapts Node's builtin `node:sqlite` to `SqlExecutor` so migration tests run against real SQLite without a device/simulator.
-- `repository.ts` — `Repository`: currently just `seedIfEmpty()` (first-launch seed insertion, idempotent) and `dumpAllTables()` (the debug screen's read). Add session/ending/review read-write methods here as M2+ tickets need them — don't pre-build them now.
+- `repository.ts` — `Repository`: the full read-write data surface (seed; session/ending lifecycle; stem CRUD, bulk import, archive/soft-delete, time-of-day; settings; history, FTS search, review and stats reads; notification bookkeeping). Add new methods here as tickets need them.
 - `seed/stems.ts`, `seed/settings.ts` — the 26 seed stems + 3 meta-stems (verbatim from spec §5.3–5.4, checked byte-for-byte against spec.md — don't retype from memory if you ever touch this file) and the spec §7 default settings.
 - `time.ts` — `nowEventTime()`: the UTC ISO-8601-ms + IANA tz + offset-minutes triple every user-event row needs (spec §4.1.3), via `Intl.DateTimeFormat` (no dependency).
 - `index.ts` — the module's public surface; import from `@/db`, not individual files, outside the `db/` directory itself.
@@ -49,13 +53,13 @@ Spec §4 is the part that is expensive to change later. The user is a data scien
 - **`schema_meta` single-row version table.** Every schema change needs a migration and a version bump — even in development (§13.8) — plus a committed fixture DB per version for the migration tests.
 - **`sessions.stem_text_snapshot`** is denormalised on purpose: stems are editable, so each session stores the exact stem text shown at start _and_ keeps the FK. Do not "fix" this into a plain join.
 
-Six tables: `stems`, `sessions`, `endings`, `reviews`, `settings`, `notification_schedule`, plus `schema_meta`. See §4.2 for the DDL.
+Six tables: `stems`, `sessions`, `endings`, `reviews`, `settings`, `notification_schedule`, plus `schema_meta` and the `endings_fts` FTS5 virtual table (migration 0002). Current schema version: 3 (0003 added `stems.time_of_day`). `notification_schedule` and `stems.weight` are vestigial since the 2026-09-14 pivot — kept, not dropped; see DECISIONS.md. See §4.2 for the DDL.
 
 ## Domain rules that aren't obvious from the schema
 
-- **Stem selection (§6.2)** must be a pure function of (candidates, history, time, seed) so it's deterministically testable. Weighted draw with a recency penalty; never hard-exclude (a user with 3 stems must still get one).
+- **Sessions are sittings (§6.2, ADR-0004 — 2026-09-14 pivot).** Starting a session loads every active stem tagged for the chosen period (`stems.time_of_day`: 'morning' | 'evening') and presents them one at a time; `write.tsx` owns the queue in component state (never persisted) while each stem still gets its own `sessions` row. No weighting, no randomness, no seed — the old weighted draw (`stemSelection.ts`) was deleted. Library starts on a single stem (`origin = 'manual'`) still bypass the queue.
 - **Uncensored writing mode (§6.3)** is the point of the app: backspace limited to the current word, no going back to earlier endings, no cut/select. On timeout, save whatever is on screen including a half-typed ending — nothing is ever discarded. Count backspaces even when the restriction is off.
-- **Notifications (§6.4)** fire at _uniformly random_ times within the user's window (min 90-min gap); randomness is a functional requirement, not a detail. Notification copy MUST NOT contain stem or user text (lock-screen privacy). iOS caps 64 pending — schedule ~10 days ahead and top up on foreground.
+- **Notifications (§6.4, post-2026-09-14 pivot)** are exactly two repeating daily local notifications — one per period, at user-set "HH:MM" times, via `expo-notifications`' native DAILY trigger. No in-app fire-time math, no randomness. Notification copy MUST NOT contain stem or user text (lock-screen privacy). (The old random-window scheduler — 90-minute gap, 64-pending cap, 10-day horizon — was deleted with the pivot; `notification_schedule` is vestigial.)
 - **No evaluation; gamification is sanctioned but bounded.** The app never scores, praises, or interprets the user's writing. Gamification (milestone badges, streak display, post-session celebration) is permitted per the 2026-09-11 pivot, scoped to `docs/design/gamification-proposal-2026-09-11.md`: computed at read time (§13.7 still binds — no stored derived values), shown only after a session completes, never during writing, and never shaming absence — no guilt copy, no broken-streak dramatics (§13.4, §13.6).
 - **Export is first-class (§8):** SQLite copy + JSON bundle + zipped CSV set, all lossless, reachable in two taps. A round-trip test (export→wipe→import→export, byte-identical modulo `exported_at`) MUST exist. Never normalise the user's text.
 
@@ -67,9 +71,9 @@ Seed stems must be **original text in the spirit of Branden's method**. Do NOT c
 
 M1 data foundation → M2 the writing session (the whole product in embryo; over-invest here) → M3 stem library → M4 notifications → M5 history + review → M6 export/import → M7 polish + ship. Each milestone ends with a working installable build.
 
-## Before starting M2
+## Where decisions live
 
-Spec §14's four open questions (resumable sessions, on-demand stem repeat, per-stem notes, review-period length) are already resolved — see `DECISIONS.md` and `docs/adr/0001`–`0003`.
+Spec §14's four open questions are resolved (`DECISIONS.md`; ADRs `docs/adr/0001`–`0003`), and both later pivots are recorded there too: the 2026-09-11 gamification reversal (§13.4/§13.6) and the 2026-09-14 morning/evening pivot (ADR-0004). Append every new deviation or pivot decision to `DECISIONS.md`; architecture decisions to `docs/adr/`.
 
 ## Agent skills
 

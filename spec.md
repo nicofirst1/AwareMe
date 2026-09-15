@@ -403,8 +403,8 @@ Restrained, text-first, and quiet. This app is used at odd hours by someone writ
 
 - Typography carries the design. One serif face for stems and endings, one neutral sans for interface chrome. Generous line height.
 - Dark mode is not an afterthought; assume heavy evening use.
-- No illustration, no mascot, no confetti, no achievement badges.
-- Motion is limited to fades and the timer's progress. Nothing bounces.
+- No illustration, no mascot, no confetti. Achievement badges exist only as bounded by §13.4 and `docs/design/gamification-proposal-2026-09-11.md` — quiet, post-session, never during writing.
+- Motion is limited to fades, the timer's progress, and the single sanctioned post-session completion settle (gamification proposal §1.A). Nothing bounces.
 - The writing screen has no navigation chrome at all beyond a single exit affordance.
 - Accessibility: full Dynamic Type support, VoiceOver labels on every control, minimum 4.5:1 contrast, and the timer must be announced as a non-alarming progress element rather than as a countdown.
 
