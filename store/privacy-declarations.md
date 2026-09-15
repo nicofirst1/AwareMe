@@ -7,7 +7,7 @@ Source of truth for what goes into the App Store's "App Privacy" (nutrition labe
 ## How this was verified, not just asserted
 
 - `grep -rn "fetch(\|XMLHttpRequest\|axios\|WebSocket\|http://\|https://" src/` finds no network call anywhere in the app's source — the one hit is a doc-comment URL in a code comment, not executable code.
-- Every dependency (see `dependency-audit.md` in this directory) is either a local-only Expo native module (crypto RNG, filesystem, local SQLite, local biometric auth, local notification scheduling, deep-link URL parsing, share sheet, splash screen, status bar) or a pure in-memory/layout library (`zustand`, `react-native-safe-area-context`, `react-native-screens`). None of them phone home.
+- Every dependency (see `dependency-audit.md` in this directory) is either a local-only Expo native module (crypto RNG, filesystem, local SQLite, local biometric auth, local notification scheduling, deep-link URL parsing, share sheet, splash screen, status bar) or a pure in-memory/layout library (`react-native-safe-area-context`, `react-native-screens`). None of them phone home.
 - `expo-notifications` is used only for `scheduleNotificationAsync`/`cancelScheduledNotificationAsync`/`getPermissionsAsync`/`requestPermissionsAsync` — all local scheduling APIs. The app never calls `getExpoPushTokenAsync`/`getDevicePushTokenAsync` or registers for remote push anywhere in `src/notifications/`.
 - There is no analytics SDK, no crash reporter, no attribution SDK, no ad SDK, no account system, and no backend of any kind (spec §2, §9 — explicitly out of scope).
 

@@ -63,7 +63,7 @@ Do not build these. Do not add stubs, dead settings toggles, or "coming soon" sc
 | Navigation    | `expo-router`                              | File-based routing                      |
 | Storage       | `expo-sqlite`                              | See section 4                           |
 | Notifications | `expo-notifications`, local only           | No push tokens, no remote notifications |
-| State         | Zustand, or React Context if simpler       | Do not add Redux                        |
+| State         | Plain React hooks / local component state  | Zustand removed 2026-09-15, never adopted (DECISIONS.md); do not add Redux |
 | Export/share  | `expo-file-system`, `expo-sharing`         | See section 8                           |
 | Lock          | `expo-local-authentication`                | Optional, off by default                |
 | Tests         | Jest + `@testing-library/react-native`     | See section 11                          |

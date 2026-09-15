@@ -10,7 +10,7 @@ All 20 tickets in `.scratch/six-endings-v1/` are implemented and post-reviewed; 
 
 ## Stack (from spec §3 — installed)
 
-Expo managed workflow, SDK 57 · TypeScript `strict: true`, no `any` in committed code · `expo-router` (file-based, rooted at `src/app`) · `expo-sqlite` · local-only `expo-notifications` · Zustand (present per spec §3, currently unused — session state is a plain hook per DECISIONS.md) · `expo-file-system` · `expo-sharing` for export · `expo-local-authentication` for the optional lock · Jest (`jest-expo` preset) + `@testing-library/react-native`.
+Expo managed workflow, SDK 57 · TypeScript `strict: true`, no `any` in committed code · `expo-router` (file-based, rooted at `src/app`) · `expo-sqlite` · local-only `expo-notifications` · `expo-file-system` · `expo-sharing` for export · `expo-local-authentication` for the optional lock · Jest (`jest-expo` preset) + `@testing-library/react-native`.
 
 Two deps are installed beyond spec §3's list, both non-discretionary — see `DECISIONS.md`: `expo-linking` (hard runtime peer of `expo-router`) and `expo-crypto` (UUIDv7 needs real random bytes; Hermes doesn't polyfill `crypto.getRandomValues`).
 
