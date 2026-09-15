@@ -5,6 +5,7 @@ import { Linking, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
+import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
@@ -34,6 +35,8 @@ interface HomeStatus {
   reviewAvailable: boolean;
   /** Current consecutive-day streak — shown only at 3+ (gamification proposal §1.B), same quiet treatment as the lines above. */
   currentStreak: number;
+  /** Active stems tagged for the current sitting's period — read at render time, never stored (§13.7). */
+  stemsReady: number;
 }
 
 /** Everything here is read at render time from existing rows — no derived value is ever stored (§13.7). */
@@ -45,7 +48,13 @@ function loadHomeStatus(): HomeStatus {
   const wasDue = isWeeklyReviewDue(repo.getLastReviewAt(), now.toISOString());
   const { at, offsetMin } = nowEventTime(now);
   const { current } = computeStreaks(repo.listSessionsForStats(), at, offsetMin);
-  return { weekCount: recent.length, reviewAvailable: wasDue && recent.length > 0, currentStreak: current };
+  const stemsReady = repo.getActiveStemsForTimeOfDay(currentTimeOfDay()).length;
+  return {
+    weekCount: recent.length,
+    reviewAvailable: wasDue && recent.length > 0,
+    currentStreak: current,
+    stemsReady,
+  };
 }
 
 // Ionicons outline glyphs (2026-09-11, ui-audit-2026-09-11.md cycle 2) — a
@@ -133,49 +142,71 @@ export default function HomeScreen() {
             </ThemedText>
           </ThemedView>
 
-          {/* Two clearly-labeled starts (morning/evening pivot, 2026-09-14):
-              both periods are always reachable, but the one matching the
-              current local hour gets the primary button so the common case
-              is a single tap. */}
-          <ThemedView style={styles.startRow}>
-            <Button
-              label="Morning session"
-              onPress={() => startSitting('morning')}
-              variant={currentPeriod === 'morning' ? 'primary' : 'secondary'}
-              style={styles.primaryButton}
-            />
-            <Button
-              label="Evening session"
-              onPress={() => startSitting('evening')}
-              variant={currentPeriod === 'evening' ? 'primary' : 'secondary'}
-              style={styles.primaryButton}
-            />
-          </ThemedView>
+          {/* The sitting card (layout audit 2026-09-15, cycle 1): the day's
+              one dominant action, per the Revolut register anchor (H1). Eyebrow
+              + count name the current-period sitting; both starts live inside
+              the same card (morning/evening pivot, 2026-09-14 — both periods
+              stay reachable, but the one matching the current local hour gets
+              the primary button so the common case is a single tap); the old
+              centered loose status lines (H2) become a quiet left-aligned
+              stat row in the card's footer. */}
+          <Card style={styles.sittingCard}>
+            <ThemedText type="eyebrow">
+              {currentPeriod === 'morning' ? 'Morning sitting' : 'Evening sitting'}
+            </ThemedText>
+            {status && (
+              <ThemedText type="subtitle">
+                {status.stemsReady === 1 ? '1 stem ready' : `${status.stemsReady} stems ready`}
+              </ThemedText>
+            )}
 
-          {status && (status.weekCount > 0 || status.reviewAvailable || status.currentStreak >= 3) && (
-            <ThemedView style={styles.statusBlock}>
-              {status.weekCount > 0 && (
-                <ThemedText type="small" themeColor="textSecondary">
-                  {status.weekCount === 1 ? '1 session this week' : `${status.weekCount} sessions this week`}
-                </ThemedText>
-              )}
-              {/* Descriptive only, never bold/colored/badged (§13.4/§13.6 as
-                  amended) — shown at 3+ so "1 day in a row" never reads as a
-                  demand (gamification proposal §1.B). */}
-              {status.currentStreak >= 3 && (
-                <ThemedText type="small" themeColor="textSecondary">
-                  {status.currentStreak} days in a row
-                </ThemedText>
-              )}
-              {status.reviewAvailable && (
-                <Link href="/review" style={styles.reviewLink}>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    Review available
-                  </ThemedText>
-                </Link>
-              )}
+            <ThemedView style={styles.startRow}>
+              <Button
+                label="Morning session"
+                onPress={() => startSitting('morning')}
+                variant={currentPeriod === 'morning' ? 'primary' : 'secondary'}
+                style={styles.primaryButton}
+              />
+              <Button
+                label="Evening session"
+                onPress={() => startSitting('evening')}
+                variant={currentPeriod === 'evening' ? 'primary' : 'secondary'}
+                style={styles.primaryButton}
+              />
             </ThemedView>
-          )}
+
+            {status && (status.weekCount > 0 || status.reviewAvailable || status.currentStreak >= 3) && (
+              <ThemedView style={styles.statusFooter}>
+                {status.weekCount > 0 && (
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {status.weekCount === 1 ? '1 session this week' : `${status.weekCount} sessions this week`}
+                  </ThemedText>
+                )}
+                {/* Descriptive only, never bold/colored/badged (§13.4/§13.6 as
+                    amended) — shown at 3+ so "1 day in a row" never reads as a
+                    demand (gamification proposal §1.B). */}
+                {status.currentStreak >= 3 && (
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {status.currentStreak} days in a row
+                  </ThemedText>
+                )}
+                {status.reviewAvailable && (
+                  <Link href="/review" style={styles.reviewRow}>
+                    {/* `textSecondary`, not `accent` (2026-09-15 review finding): `accent`
+                        text only clears AA against `background` (theme.ts's own comment),
+                        not against the sitting card's `backgroundElement` fill — 4.35:1 in
+                        light theme, under LC9's 4.5:1 floor. The chevron alone (a non-text
+                        UI component, 3:1 floor) stays accent-colored for the row's tappable
+                        affordance. */}
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Review available
+                    </ThemedText>
+                    <Ionicons name="chevron-forward-outline" size={16} color={theme.accent} />
+                  </Link>
+                )}
+              </ThemedView>
+            )}
+          </Card>
 
           <ThemedView style={styles.grid}>
             {SECONDARY_LINKS.map(({ href, label, icon, color, colorDark }) => (
@@ -241,6 +272,9 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
     alignItems: 'center',
   },
+  sittingCard: {
+    gap: Spacing.two,
+  },
   startRow: {
     gap: Spacing.two,
     width: '100%',
@@ -249,24 +283,32 @@ const styles = StyleSheet.create({
     minHeight: MinTouchTarget * 1.3,
     width: '100%',
   },
-  statusBlock: {
-    gap: Spacing.half,
-    alignItems: 'center',
+  statusFooter: {
+    gap: Spacing.one,
+    alignItems: 'flex-start',
   },
-  reviewLink: {
+  reviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
     minHeight: MinTouchTarget,
-    textAlignVertical: 'center',
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
   },
   tile: {
     minHeight: MinTouchTarget,
-    minWidth: '30%',
-    flexGrow: 1,
+    // Fixed (not min-) width with no flexGrow: a strict 3-column grid where
+    // every tile is the same width regardless of how many tiles land in the
+    // last row — the previous `minWidth: '30%'` + `flexGrow: 1` let a short
+    // last row stretch wider than the rows above it (measured 3-3-2 ragged
+    // grid, H3). 30% leaves room for the two 8pt row gaps within a 3-column
+    // row at any supported screen width.
+    width: '30%',
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.two,
     borderRadius: Radius.medium,
