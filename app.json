@@ -2,7 +2,7 @@
   "expo": {
     "name": "Six Endings",
     "slug": "six-endings",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "sixendings",
@@ -12,6 +12,7 @@
     },
     "android": {
       "package": "com.nicolobrandizzi.sixendings",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#F6EAE4",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -22,6 +23,7 @@
       "expo-router",
       "expo-notifications",
       "expo-local-authentication",
+      "./scripts/with-android-signing.js",
       [
         "expo-splash-screen",
         {
