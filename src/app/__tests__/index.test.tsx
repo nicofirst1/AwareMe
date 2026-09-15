@@ -18,7 +18,33 @@ jest.mock('expo-router', () => {
   };
 });
 
+// Same pattern as `progress.test.tsx`: a minimal repository stub so the
+// sitting card's read-time count and status footer (loadHomeStatus) have
+// something real to render, instead of silently catching a throw from a
+// real (unopenable-in-this-env) on-device DB.
+jest.mock('@/db', () => {
+  const actual = jest.requireActual('@/db');
+  return {
+    ...actual,
+    getRepository: () => ({
+      listSessionsForHistory: () => [{ id: 'session-1' }],
+      getLastReviewAt: () => '2000-01-01T00:00:00.000Z',
+      listSessionsForStats: () => [],
+      getActiveStemsForTimeOfDay: () => [{ id: 'stem-1' }],
+    }),
+  };
+});
+
 describe('HomeScreen', () => {
+  it('renders the sitting card with eyebrow, stem count, and a review row', () => {
+    render(<HomeScreen />);
+    // Eyebrow names whichever period is current — either is a valid render.
+    expect(screen.getByText(/^(Morning|Evening) sitting$/)).toBeTruthy();
+    expect(screen.getByText('1 stem ready')).toBeTruthy();
+    expect(screen.getByText('1 session this week')).toBeTruthy();
+    expect(screen.getByText('Review available')).toBeTruthy();
+  });
+
   it('renders the app name', () => {
     render(<HomeScreen />);
     expect(screen.getByText('Six Endings')).toBeTruthy();
