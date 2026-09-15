@@ -59,7 +59,7 @@ export default function AboutScreen() {
               onPress={() => Linking.openURL('https://nicolobrandizzi.com/')}
               accessibilityRole="link"
             >
-              <ThemedText type="default">Created by Nicolò Brandizzi</ThemedText>
+              <ThemedText type="default">Created by Nicolo&apos; Brandizzi</ThemedText>
               <Ionicons name="chevron-forward-outline" size={16} color={theme.accent} />
             </Pressable>
           </ThemedView>
