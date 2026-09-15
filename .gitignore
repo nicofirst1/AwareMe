@@ -41,3 +41,7 @@ example
 # generated native folders
 /ios
 /android
+
+# agent-orchestration scratch (layout round 2026-09-15)
+.coordination/
+.captures/
