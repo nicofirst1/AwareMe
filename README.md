@@ -46,7 +46,7 @@ The stems bundled with the app are the official Sentence Completion I programme,
 
 ## License and attribution
 
-This repository is licensed under the Apache License, Version 2.0; see [LICENSE](LICENSE). [NOTICE](NOTICE) records the provenance of the official programme, quoted from spec.md §5.1:
+This repository is licensed under the GNU General Public License, Version 3; see [LICENSE](LICENSE). [NOTICE](NOTICE) records the provenance of the official programme, quoted from spec.md §5.1:
 
 > the app now seeds the official Sentence Completion I programme — the thirty week blocks plus the weekly reflection stem — **verbatim**, by permission granted by Leigh Branden to Nicolo' Brandizzi (2026-09-15).
 
