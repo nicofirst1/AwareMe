@@ -14,9 +14,9 @@ Shared coordination for the layout-audit implementation cycles. Sources of truth
 
 | cycle | issue (`.scratch/layout-audit-2026-09-15/issues/`) | worktree | branch | impl | review | wave |
 |---|---|---|---|---|---|---|
-| 01 | `01-home-sitting-hero.md` | `/Users/nbrandizzi/repos/personal/six_endings-c01` | `layout/cycle-01` | c01-impl | c01-review | 1 |
-| 02 | `02-write-pinned-timer.md` | `/Users/nbrandizzi/repos/personal/six_endings-c02` | `layout/cycle-02` | c02-impl | c02-review | 1 |
-| 03 | `03-stems-serif-rows.md` | `/Users/nbrandizzi/repos/personal/six_endings-c03` | `layout/cycle-03` | c03-impl | c03-review | 1 |
+| 01 | `01-home-sitting-hero.md` | `~/repos/personal/six_endings-c01` | `layout/cycle-01` | c01-impl | c01-review | 1 |
+| 02 | `02-write-pinned-timer.md` | `~/repos/personal/six_endings-c02` | `layout/cycle-02` | c02-impl | c02-review | 1 |
+| 03 | `03-stems-serif-rows.md` | `~/repos/personal/six_endings-c03` | `layout/cycle-03` | c03-impl | c03-review | 1 |
 | 04 | `04-history-review-reachability.md` | wave 2 (created after c03 merges) | `layout/cycle-04` | c04-impl | c04-review | 2 |
 | 05 | `05-settings-export-import.md` | wave 2 (created after c03 merges) | `layout/cycle-05` | c05-impl | c05-review | 2 |
 | 06 | `06-progress-about-onboarding.md` | wave 3 (created after c05 merges) | `layout/cycle-06` | c06-impl | c06-review | 3 |
@@ -40,7 +40,7 @@ Frozen for the whole round (nobody touches): `src/constants/theme.ts` (color rou
 
 ## 3. Ground rules (all agents)
 
-- All work happens in YOUR worktree, on YOUR branch. Never commit to or push `main`; never touch another worktree; the main checkout (`/Users/nbrandizzi/repos/personal/six_endings`) is read-only for you except this `.coordination/` dir.
+- All work happens in YOUR worktree, on YOUR branch. Never commit to or push `main`; never touch another worktree; the main checkout (`~/repos/personal/six_endings`) is read-only for you except this `.coordination/` dir.
 - Gates per cycle: `npm run typecheck` AND `npm test` green. **Known-good baseline since 2026-09-15 ~10:30:** 276/277 — the single failure `Repository.getRecentStemUsage › returns sessions from the last 14 days…` (src/db/__tests__/repository.session.test.ts) is a pre-existing date-dependent time-bomb, reviewer-proven identical on main 52e6ba7; src/db/** is frozen this round, so treat 276/277-with-that-named-failure as green and flag any OTHER failure as blocking. **UPDATE 11:2x:** coordinator fixed the time-bomb on main (relative fixture dates); main is now 277/277. Branches cut before that fix (c02/c03) still show the named failure in their worktrees until merged — still green per this note. Branches cut after it (wave 2/3) must be fully green. Update tests only to reflect intentional changes — never to mask a regression. (`npm run lint` is optional this round: the committed lockfile has no eslint; do NOT install it — that would touch package.json.)
 - One clean commit per cycle — squash fixups before READY.
 - If you must deviate from a spec MUST or a constitution rule, append a `DECISIONS.md` entry on your branch explaining why.
