@@ -63,5 +63,18 @@ example
 # (spec §5.1, test-loaded). Untracked; kept on disk locally only.
 /.scratch/official-program/source-page-2026-09-15.html
 
+# Official programme content is owner-local only (issue 10, 2026-09-16 owner
+# decision): the licensed programme text is not published with the repo.
+# stems.content.ts holds the real corpus (see README, "Seed content"); the
+# committed stems.content.example.ts is the fallback. The verbatim snapshot
+# and the two historical issue docs quoting programme text stay on disk,
+# untracked. Byte-fidelity is proven by __tests__/programmeSeed.test.ts
+# whenever the private content + snapshot are on disk; without them the
+# affected tests skip (labeled).
+/src/db/seed/stems.content.ts
+/.scratch/official-program/official-program-verbatim.txt
+/.scratch/official-program/issues/01-data-seed.md
+/.scratch/official-program/issues/06-dogfood-e2e.md
+
 # Play Store submission materials — local-only (screenshots carry seed text visually)
 store/

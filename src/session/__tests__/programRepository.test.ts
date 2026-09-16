@@ -14,6 +14,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { migrate } from '../../db/migrate';
 import { nodeSqliteExecutor } from '../../db/testSupport/nodeSqliteExecutor';
 import { Repository } from '../../db/repository';
+import { PROGRAMME_SEED_STEMS, WEEKLY_META_STEM } from '../../db/seed/stems';
 import { readProgrammeWeek } from '../programRead';
 
 let nextRowId = 0;
@@ -110,21 +111,26 @@ function weeklyMetaStemId(repo: Repository): string {
 describe('programme repository reads', () => {
   it('seed provides the week-1 block in seed order and the weekly meta-stem', () => {
     const { repo } = makeDb();
+    // Issue 10: expectations derive from the loaded content module, so the
+    // pin holds under owner and example content alike.
+    const corpusWeek1 = PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === 1);
     const week1 = repo.getProgrammeStemsForWeek(1);
-    expect(week1.length).toBe(4);
-    expect(week1[0].text).toBe('If I bring more awareness to my life today');
+    expect(week1.length).toBe(corpusWeek1.length);
+    expect(week1.map((s) => s.text)).toEqual(corpusWeek1.map((s) => s.text));
     expect(week1[0].origin).toBe('seed');
     expect(repo.getProgrammeStemsForWeek(31)).toEqual([]);
     expect(repo.getProgrammeStemsForWeek(0)).toEqual([]);
-    expect(repo.getWeeklyMetaStem()?.text).toContain('If any of what I wrote this week is true');
+    expect(repo.getWeeklyMetaStem()?.text).toBe(WEEKLY_META_STEM);
   });
 
   it('listProgrammeStems returns every non-deleted programme stem ordered by week then seed order (resting included since issue 04)', () => {
     const { repo } = makeDb();
     const all = repo.listProgrammeStems();
-    expect(all.length).toBe(142);
-    expect(all[0].weekNumber).toBe(1);
-    expect(all[all.length - 1].weekNumber).toBe(30);
+    // Issue 10: week bounds derive from the loaded corpus (owner: 1–30).
+    const corpusWeeks = [...new Set(PROGRAMME_SEED_STEMS.map((s) => s.weekNumber))].sort((a, b) => a - b);
+    expect(all.length).toBe(PROGRAMME_SEED_STEMS.length);
+    expect(all[0].weekNumber).toBe(corpusWeeks[0]);
+    expect(all[all.length - 1].weekNumber).toBe(corpusWeeks[corpusWeeks.length - 1]);
     // Monotone non-decreasing weeks.
     for (let i = 1; i < all.length; i++) {
       expect(all[i].weekNumber).toBeGreaterThanOrEqual(all[i - 1].weekNumber);
@@ -136,7 +142,9 @@ describe('programme repository reads', () => {
     expect(repo.getFirstProgrammeSitting()).toBeNull();
 
     const userStem = insertStem(raw, { text: 'my own stem', origin: 'user', timeOfDay: null });
-    const programmeStem = repo.getProgrammeStemsForWeek(2)[0];
+    // Issue 10: the programme week is a corpus-derived pick (second week).
+    const scenarioWeek = [...new Set(PROGRAMME_SEED_STEMS.map((s) => s.weekNumber))].sort((a, b) => a - b)[1];
+    const programmeStem = repo.getProgrammeStemsForWeek(scenarioWeek)[0];
     insertCompletedSession(raw, userStem, '2026-08-15T10:00:00.000Z'); // earlier, but not a programme sitting
     insertCompletedSession(raw, programmeStem.id, '2026-09-01T06:00:00.000Z');
 
@@ -188,9 +196,13 @@ describe('programme repository reads', () => {
 
   it('listSessionsForProgrammeWeek scopes to the week’s stems, needs a non-deleted ending, orders chronologically', () => {
     const { raw, repo } = makeDb();
-    const w1a = repo.getProgrammeStemsForWeek(1)[0];
-    const w1b = repo.getProgrammeStemsForWeek(1)[1];
-    const w2 = repo.getProgrammeStemsForWeek(2)[0];
+    // Issue 10: both weeks are corpus-derived picks (first and second).
+    const corpusWeeks = [...new Set(PROGRAMME_SEED_STEMS.map((s) => s.weekNumber))].sort((a, b) => a - b);
+    const firstWeek = corpusWeeks[0];
+    const otherWeek = corpusWeeks[1];
+    const w1a = repo.getProgrammeStemsForWeek(firstWeek)[0];
+    const w1b = repo.getProgrammeStemsForWeek(firstWeek)[1];
+    const w2 = repo.getProgrammeStemsForWeek(otherWeek)[0];
 
     const later = insertCompletedSession(raw, w1b.id, '2026-09-03T08:00:00.000Z');
     const earlier = insertCompletedSession(raw, w1a.id, '2026-09-01T08:00:00.000Z');
@@ -201,7 +213,7 @@ describe('programme repository reads', () => {
     const deleted = insertCompletedSession(raw, w1a.id, '2026-09-05T08:00:00.000Z');
     raw.prepare('UPDATE sessions SET deleted_at = ? WHERE id = ?').run('2026-09-06T00:00:00.000Z', deleted);
 
-    const sessions = repo.listSessionsForProgrammeWeek(1);
+    const sessions = repo.listSessionsForProgrammeWeek(firstWeek);
     expect(sessions.map((r) => r.session.id)).toEqual([earlier, later]);
     expect(sessions[0].endings).toHaveLength(1);
   });

@@ -1,17 +1,24 @@
 /**
  * The anti-typo guard for the official programme seed (spec §5.1 as
- * amended 2026-09-15, ADR-0005).
+ * amended 2026-09-15, ADR-0005), with the issue-10 content overlay.
  *
- * Parses the committed verbatim snapshot with its OWN parser, independent
+ * Parses the canonical verbatim snapshot with its OWN parser, independent
  * of `seed/stems.ts` (separate file read, separate week-block logic), and
  * asserts the seed matches it byte-for-byte — text, week assignment, and
- * ordering within each week. Any hand-edit drift in the seed file fails
+ * ordering within each week. Any hand-edit drift in the seed content fails
  * here; conversely, a malformed snapshot fails the parser-sanity tests
  * below rather than silently comparing empty sets.
  *
- * The canonical snapshot is immutable round history: `.scratch/official-
- * program/official-program-verbatim.txt`. Seeds are transcribed from it,
- * never from the live page or memory.
+ * Issue 10 (programme text not published with the repo): the snapshot is
+ * owner-local and untracked, so the snapshot-dependent suites are gated on
+ * its presence and SKIP with a labeled reason without it (fresh clone, CI).
+ * Everything corpus-derived — seeding behaviour, tags, category resolution,
+ * structural pins — runs in BOTH modes against whatever content module the
+ * loader resolved (owner-local licensed text or the committed example).
+ *
+ * The snapshot lives at `.scratch/official-program/official-program-
+ * verbatim.txt` (untracked; kept on disk locally). Seeds are transcribed
+ * from it, never from the live page or memory.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -26,6 +33,15 @@ import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
 
 const SNAPSHOT_PATH = path.join(__dirname, '..', '..', '..', '.scratch', 'official-program', 'official-program-verbatim.txt');
 const TERMINATOR = '…'; // the snapshot's trailing ellipsis: a single U+2026 character
+
+/** Owner mode: the canonical snapshot is on disk (issue 10 — untracked, owner-local). */
+const SNAPSHOT_PRESENT = fs.existsSync(SNAPSHOT_PATH);
+
+/** Appended to gated suite names so a skip reason is visible in the jest output. */
+const SKIP_NOTE = SNAPSHOT_PRESENT ? '' : ' — SKIPPED: canonical snapshot not on disk (owner-local content; see README, "Seed content")';
+
+/** Snapshot-dependent suites run only in owner mode; the name carries the skip reason. */
+const describeWithSnapshot = SNAPSHOT_PRESENT ? describe : describe.skip;
 
 interface SnapshotWeek {
   week: number;
@@ -45,22 +61,27 @@ interface ParsedSnapshot {
  * terminator are stems. The first non-stem line after stems (the site
  * footer: "Home", "About", …) ends the programme for good — any later
  * stem-looking line is a parse error, not programme content.
+ *
+ * The instructions section's weekly reflection line is anchored
+ * structurally, not by quoting programme text (issue 10): before the first
+ * Week block the snapshot contains exactly two terminator-terminated lines
+ * — the method's worked example stem and the weekly reflection stem's
+ * introduction — and the weekly reflection is the LAST of them. The
+ * parser-sanity suite pins this shape; a snapshot that breaks it fails
+ * loudly here instead of comparing against a wrong anchor.
  */
 function parseSnapshot(raw: string): ParsedSnapshot {
   const weeks: SnapshotWeek[] = [];
   let current: SnapshotWeek | null = null;
   let footer = false;
   let weeklyReflection: string | null = null;
-  // Structural anchor for the weekly stem: the instructions line that
-  // introduces it ("...write a minimum of six endings for this stem:").
-  // The instructions also contain an EXAMPLE stem — "To me,
-  // self-responsibility means…" — which must not be mistaken for the
-  // weekly reflection, so "first stem-looking line" would be wrong.
-  let previousLine = '';
 
   for (const line of raw.split('\n')) {
     const header = /^Week (\d+)$/.exec(line);
     if (header) {
+      if (weeklyReflection === null) {
+        throw new Error('snapshot has no weekly reflection line before its first Week block');
+      }
       const week = Number(header[1]);
       const previous = weeks[weeks.length - 1];
       if (previous && week !== previous.week + 1) {
@@ -68,17 +89,13 @@ function parseSnapshot(raw: string): ParsedSnapshot {
       }
       current = { week, stems: [] };
       weeks.push(current);
-    } else if (
-      weeklyReflection === null &&
-      current === null &&
-      line.endsWith(TERMINATOR) &&
-      previousLine.endsWith('write a minimum of six endings for this stem:')
-    ) {
+    } else if (current === null && line.endsWith(TERMINATOR)) {
+      // Instructions section: the last terminator line before the first
+      // Week block is the weekly reflection stem (see doc comment).
       weeklyReflection = line.slice(0, -TERMINATOR.length);
     } else if (current !== null && !footer && line.trim() && !line.endsWith(TERMINATOR)) {
       footer = true; // first non-stem line inside a block: the site footer begins
     }
-    if (line.trim()) previousLine = line;
 
     if (current === null || footer) continue;
     if (!line.trim()) continue;
@@ -95,6 +112,15 @@ function expectedProgramme(parsed: ParsedSnapshot): { week: number; textWithTerm
   return parsed.weeks.flatMap((w) => w.stems.map((textWithTerminator) => ({ week: w.week, textWithTerminator })));
 }
 
+/** Memoized lazy parse: gated suites only touch the snapshot inside `it` bodies. */
+let cachedSnapshot: ParsedSnapshot | null = null;
+function snapshot(): ParsedSnapshot {
+  if (cachedSnapshot === null) {
+    cachedSnapshot = parseSnapshot(fs.readFileSync(SNAPSHOT_PATH, 'utf-8'));
+  }
+  return cachedSnapshot;
+}
+
 function freshDatabase(): { db: DatabaseSync; repo: Repository } {
   const raw = new DatabaseSync(':memory:');
   const executor = nodeSqliteExecutor(raw);
@@ -102,14 +128,14 @@ function freshDatabase(): { db: DatabaseSync; repo: Repository } {
   return { db: raw, repo: new Repository(executor) };
 }
 
-describe('programme snapshot parser (the guard must itself be sound)', () => {
+describeWithSnapshot(`programme snapshot parser (the guard must itself be sound)${SKIP_NOTE}`, () => {
   it('finds exactly weeks 1–30 in order', () => {
-    const parsed = parseSnapshot(fs.readFileSync(SNAPSHOT_PATH, 'utf-8'));
+    const parsed = snapshot();
     expect(parsed.weeks.map((w) => w.week)).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
   });
 
   it('finds 4–7 stems in every week block (the programme\'s documented shape; Week 30\'s synthesis week carries seven)', () => {
-    const parsed = parseSnapshot(fs.readFileSync(SNAPSHOT_PATH, 'utf-8'));
+    const parsed = snapshot();
     for (const week of parsed.weeks) {
       expect(week.stems.length).toBeGreaterThanOrEqual(4);
       expect(week.stems.length).toBeLessThanOrEqual(7);
@@ -121,28 +147,28 @@ describe('programme snapshot parser (the guard must itself be sound)', () => {
   });
 
   it('parses 142 programme stems in total', () => {
-    const parsed = parseSnapshot(fs.readFileSync(SNAPSHOT_PATH, 'utf-8'));
+    const parsed = snapshot();
     expect(expectedProgramme(parsed)).toHaveLength(142);
+  });
+
+  it('anchors the weekly reflection on a line that occurs exactly once in the snapshot', () => {
+    const parsed = snapshot();
+    expect(parsed.weeklyReflection.length).toBeGreaterThan(0);
+    const occurrences = fs
+      .readFileSync(SNAPSHOT_PATH, 'utf-8')
+      .split('\n')
+      .filter((line) => line === parsed.weeklyReflection + TERMINATOR);
+    expect(occurrences).toHaveLength(1);
   });
 });
 
-describe('programme seed transcription (byte-for-byte, spec §5.1 / ADR-0005)', () => {
-  const parsed = parseSnapshot(fs.readFileSync(SNAPSHOT_PATH, 'utf-8'));
-  const expected = expectedProgramme(parsed);
-
-  it('seeds exactly as many programme stems as the snapshot holds', () => {
-    expect(PROGRAMME_SEED_STEMS).toHaveLength(expected.length);
-  });
-
-  it('matches the snapshot byte-for-byte, week assignment and within-week order included', () => {
-    for (let i = 0; i < expected.length; i++) {
-      const seed = PROGRAMME_SEED_STEMS[i];
-      const want = expected[i];
-      // The exact byte-level statement: stored text + terminator == snapshot line.
-      expect(seed.text + TERMINATOR).toBe(want.textWithTerminator);
-      expect(seed.weekNumber).toBe(want.week);
-      expect(seed.text).toBe(want.textWithTerminator.slice(0, -TERMINATOR.length));
-    }
+describe('seed content module resolves (both modes — issue 10)', () => {
+  it('loads a non-empty corpus and weekly stem, whether owner-local or example', () => {
+    expect(PROGRAMME_SEED_STEMS.length).toBeGreaterThan(0);
+    expect(WEEKLY_META_STEM.length).toBeGreaterThan(0);
+    // The terminator is appended at render time; stored text never carries it.
+    expect(WEEKLY_META_STEM.endsWith(TERMINATOR)).toBe(false);
+    expect(WEEKLY_META_STEM).toBe(WEEKLY_META_STEM.trim());
   });
 
   it('stores programme stems without the terminator, whitespace, or newlines', () => {
@@ -157,16 +183,6 @@ describe('programme seed transcription (byte-for-byte, spec §5.1 / ADR-0005)', 
       expect(stem.weekNumber).toBeGreaterThanOrEqual(1);
       expect(stem.weekNumber).toBeLessThanOrEqual(30);
     }
-  });
-
-  it('covers every week 1–30 with no gaps', () => {
-    const weeks = new Set(PROGRAMME_SEED_STEMS.map((s) => s.weekNumber));
-    expect([...weeks].sort((a, b) => a - b)).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
-  });
-
-  it('seeds the weekly reflection stem exactly as the snapshot\'s instructions write it', () => {
-    expect(WEEKLY_META_STEM).toBe(parsed.weeklyReflection);
-    expect(WEEKLY_META_STEM).toBe('If any of what I wrote this week is true, it might be helpful if I');
   });
 
   it('ships the weekly stem exactly once across the whole seed module', () => {
@@ -189,10 +205,69 @@ describe('programme seed transcription (byte-for-byte, spec §5.1 / ADR-0005)', 
     const texts = new Set(RETIRED_SEED_STEMS.map((s) => s.text));
     expect(texts.size).toBe(26); // no duplicates
   });
+
+  it('every programme stem resolves to one of the six §5.2 categories (issue 04)', () => {
+    const valid = new Set(['awareness', 'self_acceptance', 'responsibility', 'assertiveness', 'purpose', 'integrity']);
+    for (const stem of PROGRAMME_SEED_STEMS) {
+      const category = programmeStemCategory(stem.weekNumber, stem.text);
+      expect(valid.has(category as StemCategory)).toBe(true);
+    }
+  });
 });
 
-describe('fresh-install seed lands the programme in the database', () => {
-  it('inserts the programme byte-for-byte in snapshot (insertion) order, tagged per week', () => {
+describeWithSnapshot(`programme seed transcription (byte-for-byte vs the canonical snapshot, spec §5.1 / ADR-0005)${SKIP_NOTE}`, () => {
+  it('seeds exactly as many programme stems as the snapshot holds', () => {
+    const expected = expectedProgramme(snapshot());
+    expect(PROGRAMME_SEED_STEMS).toHaveLength(expected.length);
+  });
+
+  it('matches the snapshot byte-for-byte, week assignment and within-week order included', () => {
+    const expected = expectedProgramme(snapshot());
+    for (let i = 0; i < expected.length; i++) {
+      const seed = PROGRAMME_SEED_STEMS[i];
+      const want = expected[i];
+      // The exact byte-level statement: stored text + terminator == snapshot line.
+      expect(seed.text + TERMINATOR).toBe(want.textWithTerminator);
+      expect(seed.weekNumber).toBe(want.week);
+      expect(seed.text).toBe(want.textWithTerminator.slice(0, -TERMINATOR.length));
+    }
+  });
+
+  it('seeds the weekly reflection stem exactly as the snapshot\'s instructions write it', () => {
+    expect(WEEKLY_META_STEM).toBe(snapshot().weeklyReflection);
+  });
+
+  it('covers every week 1–30 with no gaps', () => {
+    const weeks = new Set(PROGRAMME_SEED_STEMS.map((s) => s.weekNumber));
+    expect([...weeks].sort((a, b) => a - b)).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
+  });
+
+  it('the week→pillar mapping covers exactly weeks 1–30 (issue 04)', () => {
+    expect(Object.keys(PROGRAMME_WEEK_CATEGORY).map(Number).sort((a, b) => a - b)).toEqual(
+      Array.from({ length: 30 }, (_, i) => i + 1),
+    );
+  });
+
+  it('exactly the 9 exception stems whose category differs from their week default resolve away from it (issue 04)', () => {
+    // t04's exceptions table holds 10 keys covering 11 stems ("I am
+    // becoming aware" recurs in Weeks 11 and 23); two of the Week 30
+    // exceptions resolve to the same pillar as their week default, so the
+    // observable override count is 9 — pinned here against the snapshot
+    // corpus without quoting any programme text (issue 10).
+    const expected = expectedProgramme(snapshot());
+    const overridden = expected.filter(({ week, textWithTerminator }) => {
+      const text = textWithTerminator.slice(0, -TERMINATOR.length);
+      return programmeStemCategory(week, text) !== PROGRAMME_WEEK_CATEGORY[week];
+    });
+    expect(overridden).toHaveLength(9);
+    for (const { week, textWithTerminator } of overridden) {
+      expect(programmeStemCategory(week, textWithTerminator.slice(0, -TERMINATOR.length))).not.toBeNull();
+    }
+  });
+});
+
+describe('fresh-install seed lands the programme in the database (both modes)', () => {
+  it('inserts the programme in seed (insertion) order, tagged per week', () => {
     const { db, repo } = freshDatabase();
     repo.seedIfEmpty();
 
@@ -212,11 +287,10 @@ describe('fresh-install seed lands the programme in the database', () => {
       deleted_at: string | null;
     }[];
 
-    const expected = expectedProgramme(parseSnapshot(fs.readFileSync(SNAPSHOT_PATH, 'utf-8')));
-    expect(rows).toHaveLength(expected.length);
-    for (let i = 0; i < expected.length; i++) {
-      expect(rows[i].text + TERMINATOR).toBe(expected[i].textWithTerminator);
-      expect(rows[i].week_number).toBe(expected[i].week);
+    expect(rows).toHaveLength(PROGRAMME_SEED_STEMS.length);
+    for (let i = 0; i < PROGRAMME_SEED_STEMS.length; i++) {
+      expect(rows[i].text).toBe(PROGRAMME_SEED_STEMS[i].text);
+      expect(rows[i].week_number).toBe(PROGRAMME_SEED_STEMS[i].weekNumber);
       expect(rows[i].is_weekly_meta).toBe(0);
       expect(rows[i].origin).toBe('seed');
       // Issue 04: each programme stem carries its week's pillar (per-stem
@@ -270,8 +344,10 @@ describe('fresh-install seed lands the programme in the database', () => {
     expect(retired.map((r) => r.text)).toEqual(RETIRED_SEED_STEMS.map((s) => s.text));
     expect(retired.every((r) => r.active === 0 && r.deleted_at !== null)).toBe(true);
 
-    // Nothing else: 142 programme + 1 weekly + 2 evening metas + 26 retired.
-    expect((db.prepare('SELECT COUNT(*) AS c FROM stems').get() as { c: number }).c).toBe(142 + 1 + 2 + 26);
+    // Nothing else: the whole corpus + 1 weekly + 2 evening metas + 26 retired.
+    expect((db.prepare('SELECT COUNT(*) AS c FROM stems').get() as { c: number }).c).toBe(
+      PROGRAMME_SEED_STEMS.length + 1 + 2 + RETIRED_SEED_STEMS.length,
+    );
   });
 
   it('reaches schema version 5 on a fresh install', () => {
@@ -281,36 +357,22 @@ describe('fresh-install seed lands the programme in the database', () => {
     const meta = db.prepare('SELECT schema_version FROM schema_meta WHERE id = 1').get() as { schema_version: number };
     expect(meta.schema_version).toBe(5);
   });
+});
 
-  it('every programme stem resolves to one of the six §5.2 categories (issue 04)', () => {
-    const valid = new Set(['awareness', 'self_acceptance', 'responsibility', 'assertiveness', 'purpose', 'integrity']);
-    for (const stem of PROGRAMME_SEED_STEMS) {
-      const category = programmeStemCategory(stem.weekNumber, stem.text);
-      expect(valid.has(category as StemCategory)).toBe(true);
+describeWithSnapshot(`fresh-install seed is byte-identical to the canonical snapshot${SKIP_NOTE}`, () => {
+  it('inserts the programme byte-for-byte in snapshot (insertion) order', () => {
+    const { db, repo } = freshDatabase();
+    repo.seedIfEmpty();
+
+    const rows = db
+      .prepare(`SELECT text, week_number FROM stems WHERE week_number IS NOT NULL ORDER BY rowid`)
+      .all() as { text: string; week_number: number }[];
+
+    const expected = expectedProgramme(snapshot());
+    expect(rows).toHaveLength(expected.length);
+    for (let i = 0; i < expected.length; i++) {
+      expect(rows[i].text + TERMINATOR).toBe(expected[i].textWithTerminator);
+      expect(rows[i].week_number).toBe(expected[i].week);
     }
-  });
-
-  it('the week→pillar mapping covers exactly weeks 1–30 (issue 04)', () => {
-    expect(Object.keys(PROGRAMME_WEEK_CATEGORY).map(Number).sort((a, b) => a - b)).toEqual(
-      Array.from({ length: 30 }, (_, i) => i + 1),
-    );
-  });
-
-  it('the per-stem exceptions key on exact seed texts and resolve to their pillar (issue 04)', () => {
-    // Week 1's responsibility stem inside the awareness opener.
-    expect(programmeStemCategory(1, 'If I take more responsibility for my choices and actions today')).toBe('responsibility');
-    // "I am becoming aware" recurs verbatim in weeks 11 and 23 — a pure awareness stem in both.
-    expect(programmeStemCategory(11, 'I am becoming aware')).toBe('awareness');
-    expect(programmeStemCategory(23, 'I am becoming aware')).toBe('awareness');
-    // Week 16's responsibility stem inside the purpose block.
-    expect(programmeStemCategory(16, 'If I take more responsibility for fulfilling my wants')).toBe('responsibility');
-    // Week 30's synthesis: each stem names its pillar, all seven excepted.
-    expect(programmeStemCategory(30, 'If I bring 5 percent more awareness to my life')).toBe('awareness');
-    expect(programmeStemCategory(30, 'If I am 5 percent more self-accepting')).toBe('self_acceptance');
-    expect(programmeStemCategory(30, 'If I bring 5 percent more self-responsibility to my life')).toBe('responsibility');
-    expect(programmeStemCategory(30, 'If I operate 5 percent more self-assertively')).toBe('assertiveness');
-    expect(programmeStemCategory(30, 'If I live my life 5 percent more purposefully')).toBe('purpose');
-    expect(programmeStemCategory(30, 'If I bring 5 percent more integrity to my life')).toBe('integrity');
-    expect(programmeStemCategory(30, 'If I breathe deeply and allow myself to experience what self-esteem feels like')).toBe('self_acceptance');
   });
 });

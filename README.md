@@ -44,6 +44,14 @@ The app is built with Expo. `npm start` serves the day-to-day development loop; 
 
 The stems bundled with the app are the official Sentence Completion I programme, used with permission from Leigh Branden; the programme text is not included in this repository and is not licensed under its license. See [NOTICE](NOTICE).
 
+Because that text is licensed, it lives in an owner-local, gitignored module: `src/db/seed/stems.content.ts` (never committed). A fresh clone falls back to the committed `src/db/seed/stems.content.example.ts`, which carries original example content in the same shape, so the repo builds and tests without the licensed text. To work on a full example tree, copy the example over the private path:
+
+```sh
+cp src/db/seed/stems.content.example.ts src/db/seed/stems.content.ts
+```
+
+Until that file exists, jest and typecheck run against the example content (the snapshot-dependent tests skip with a labeled reason), but the Metro bundler needs the module present before the app can bundle. The byte-for-byte fidelity of the official programme is proven by `src/db/__tests__/programmeSeed.test.ts` whenever the owner-local content and the canonical snapshot (`.scratch/official-program/official-program-verbatim.txt`, also untracked) are on disk.
+
 ## License and attribution
 
 This repository is licensed under the GNU General Public License, Version 3; see [LICENSE](LICENSE). [NOTICE](NOTICE) records the provenance of the official programme, quoted from spec.md §5.1:

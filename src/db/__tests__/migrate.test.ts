@@ -5,10 +5,27 @@ import * as path from 'node:path';
 
 import { migrate } from '../migrate';
 import { MIGRATIONS, CURRENT_SCHEMA_VERSION } from '../migrations';
+import { MIGRATION_0004_OFFICIAL_PROGRAMME } from '../migrations/0004_official_programme';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
-import { PROGRAMME_SEED_STEMS, programmeStemCategory } from '../seed/stems';
+import { PROGRAMME_SEED_STEMS, programmeStemCategory, WEEKLY_META_STEM } from '../seed/stems';
 
 const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures');
+
+/** Owner mode (issue 10): the canonical snapshot is on disk — untracked, owner-local. */
+const SNAPSHOT_PRESENT = fs.existsSync(path.join(__dirname, '..', '..', '..', '.scratch', 'official-program', 'official-program-verbatim.txt'));
+const SKIP_NOTE = SNAPSHOT_PRESENT ? '' : ' — SKIPPED: canonical snapshot not on disk (owner-local content; see README, "Seed content")';
+const describeWithSnapshot = SNAPSHOT_PRESENT ? describe : describe.skip;
+
+/**
+ * The exact text migration 0004 tags the weekly meta row by, extracted from
+ * the shipped SQL constant itself (issue 10: no programme text is quoted in
+ * this tracked file). In owner mode it is additionally pinned to the seed
+ * module's weekly stem — the shipped migration and the live seed cannot
+ * disagree.
+ */
+const MIGRATION_0004_TAGGED_TEXT = /UPDATE stems SET is_weekly_meta = 1 WHERE origin = 'meta' AND text = '([^']+)';/.exec(
+  MIGRATION_0004_OFFICIAL_PROGRAMME,
+)?.[1];
 
 function fixturePath(version: number): string {
   return path.join(FIXTURES_DIR, `schema-v${version}.db`);
@@ -137,14 +154,28 @@ describe('migrate', () => {
     const raw = new DatabaseSync(scratch);
     const db = nodeSqliteExecutor(raw);
 
-    // Mimic a real v4 install: the 142 programme stems exist (seeded after
-    // migration 0004) with NULL categories, plus rows the backfill must
-    // never touch: a user stem, a programme stem whose category the user
-    // already chose, a soft-deleted programme stem, and a retired v1 row.
+    // Mimic a real v4 install: the whole programme corpus exists (seeded
+    // after migration 0004) with NULL categories, plus rows the backfill
+    // must never touch: a user stem, a programme stem whose category the
+    // user already chose, a soft-deleted programme stem, and a retired v1
+    // row. The scenario stems are deterministic picks from the loaded
+    // content module's second week (issue 10), so the scenario exercises
+    // identically under owner and example content.
+    const scenarioWeeks = [...new Set(PROGRAMME_SEED_STEMS.map((s) => s.weekNumber))].sort((a, b) => a - b);
+    expect(scenarioWeeks.length).toBeGreaterThanOrEqual(2);
+    const scenarioWeek = scenarioWeeks[1];
+    const presetStem = PROGRAMME_SEED_STEMS.find((s) => s.weekNumber === scenarioWeek);
+    const deletedStem = [...PROGRAMME_SEED_STEMS].reverse().find((s) => s.weekNumber === scenarioWeek);
+    expect(presetStem).toBeDefined();
+    expect(deletedStem).toBeDefined();
+    expect(presetStem!.text).not.toBe(deletedStem!.text); // distinct scenario rows
+    // A user-chosen category that differs from the week default: the
+    // backfill must preserve it even though the mapping disagrees.
+    const presetCategory = programmeStemCategory(presetStem!.weekNumber, presetStem!.text) === 'purpose' ? 'awareness' : 'purpose';
+    const presetIndex = PROGRAMME_SEED_STEMS.indexOf(presetStem!);
+    const presetId = `programme-${presetIndex.toString().padStart(3, '0')}`;
     for (const [index, stem] of PROGRAMME_SEED_STEMS.entries()) {
-      // The 5th stem (index 4, Week 2) simulates a user-chosen category: the
-      // backfill must preserve it even though the week default differs.
-      const preset = stem.weekNumber === 2 && stem.text.startsWith('If I bring 5 percent more awareness to my insecurities') ? 'purpose' : null;
+      const preset = index === presetIndex ? presetCategory : null;
       raw
         .prepare(
           `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
@@ -167,9 +198,9 @@ describe('migrate', () => {
     raw
       .prepare(
         `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta, deleted_at)
-         VALUES ('programme-deleted', 'If I bring 5 percent more awareness to my emotions', 'seed', NULL, 'en', 1.0, 0, '2026-01-01T00:00:00.000Z', 'UTC', 0, 'morning', 2, 0, '2026-01-02T00:00:00.000Z')`,
+         VALUES ('programme-deleted', ?, 'seed', NULL, 'en', 1.0, 0, '2026-01-01T00:00:00.000Z', 'UTC', 0, 'morning', ?, 0, '2026-01-02T00:00:00.000Z')`,
       )
-      .run();
+      .run(deletedStem!.text, scenarioWeek);
 
     migrate(db, '9.9.9');
 
@@ -178,15 +209,16 @@ describe('migrate', () => {
 
     // Every programme row's category must equal what fresh-install seeding
     // would have written: the frozen migration and the live seed mapping
-    // cannot drift, exceptions included, for the whole 142-stem corpus.
-    const rows = db.getAllSync<{ text: string; week_number: number; category: string | null }>(
-      'SELECT text, week_number, category FROM stems WHERE id LIKE \'programme-%\' ORDER BY rowid',
+    // cannot drift, exceptions included, for the whole corpus.
+    const rows = db.getAllSync<{ id: string; text: string; week_number: number; category: string | null }>(
+      'SELECT id, text, week_number, category FROM stems WHERE id LIKE \'programme-%\' ORDER BY rowid',
       [],
     );
     expect(rows).toHaveLength(PROGRAMME_SEED_STEMS.length + 1); // + the soft-deleted block stem
     for (const row of rows) {
-      if (row.category === 'purpose' && row.week_number === 2 && row.text.startsWith('If I bring 5 percent more awareness to my insecurities')) {
-        continue; // the user-chosen category survives untouched (§4.1)
+      if (row.id === presetId) {
+        expect(row.category).toBe(presetCategory); // the user-chosen category survives untouched (§4.1)
+        continue;
       }
       expect(row.category).toBe(programmeStemCategory(row.week_number, row.text));
     }
@@ -206,7 +238,7 @@ describe('migrate', () => {
       'SELECT category FROM stems WHERE id = ?',
       ['programme-deleted'],
     );
-    expect(softDeleted?.category).toBe('awareness');
+    expect(softDeleted?.category).toBe(programmeStemCategory(scenarioWeek, deletedStem!.text));
 
     raw.close();
     fs.rmSync(path.dirname(scratch), { recursive: true, force: true });
@@ -219,7 +251,10 @@ describe('migrate', () => {
     const db = nodeSqliteExecutor(raw);
 
     // Mimic a real v3 install: the v1 seed stems are present and active;
-    // the weekly reflection stem exists as an origin='meta' row.
+    // the weekly reflection stem exists as an origin='meta' row with the
+    // exact text migration 0004 tags by — extracted from the shipped SQL
+    // constant, not quoted here (issue 10).
+    expect(MIGRATION_0004_TAGGED_TEXT).toBeDefined();
     db.runSync(
       `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day)
        VALUES ('stem-v1-1', 'A pre-amendment stem', 'seed', 'awareness', 'en', 1.0, 1, '2026-01-01T00:00:00.000Z', 'UTC', 0, 'morning')`,
@@ -227,8 +262,8 @@ describe('migrate', () => {
     );
     db.runSync(
       `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min)
-       VALUES ('stem-meta-1', 'If any of what I wrote this week is true, it might be helpful if I', 'meta', NULL, 'en', 1.0, 0, '2026-01-01T00:00:00.000Z', 'UTC', 0)`,
-      [],
+       VALUES ('stem-meta-1', ?, 'meta', NULL, 'en', 1.0, 0, '2026-01-01T00:00:00.000Z', 'UTC', 0)`,
+      [MIGRATION_0004_TAGGED_TEXT!],
     );
 
     migrate(db, '9.9.9');
@@ -238,8 +273,8 @@ describe('migrate', () => {
 
     // ADR-0005 decision 6: the existing meta row is TAGGED, not duplicated.
     const weekly = db.getAllSync<{ id: string; is_weekly_meta: number }>(
-      "SELECT id, is_weekly_meta FROM stems WHERE text = 'If any of what I wrote this week is true, it might be helpful if I'",
-      [],
+      'SELECT id, is_weekly_meta FROM stems WHERE text = ?',
+      [MIGRATION_0004_TAGGED_TEXT!],
     );
     expect(weekly).toHaveLength(1);
     expect(weekly[0]).toEqual({ id: 'stem-meta-1', is_weekly_meta: 1 });
@@ -263,5 +298,15 @@ describe('migrate', () => {
 
     raw.close();
     fs.rmSync(path.dirname(scratch), { recursive: true, force: true });
+  });
+
+  // Issue 10: proves the shipped migration and the live seed agree on the
+  // weekly reflection stem without quoting programme text in this file.
+  // Only meaningful in owner mode (the example weekly stem legitimately
+  // differs from the real text the shipped 0004 SQL carries).
+  describeWithSnapshot(`migration 0004's tagged text matches the seed module's weekly stem${SKIP_NOTE}`, () => {
+    it('the shipped SQL and the live seed cannot disagree on the weekly reflection stem', () => {
+      expect(MIGRATION_0004_TAGGED_TEXT).toBe(WEEKLY_META_STEM);
+    });
   });
 });
