@@ -1,18 +1,11 @@
-Six Endings
-Copyright (c) 2026 Nicolo’ Brandizzi
+Six Endings Copyright (c) 2026 Nicolo’ Brandizzi
 
-This product is licensed under the Apache License, Version 2.0 (see the
-LICENSE file). It includes software developed by Nicolo’ Brandizzi
-(https://nicolobrandizzi.com/).
+This product is licensed under the Apache License, Version 2.0 (see the LICENSE file). It includes software developed by Nicolo’ Brandizzi (https://nicolobrandizzi.com/).
 
-Third-party content
--------------------
+Third-party content -------------------
 
-spec.md §5.1 records the provenance of the official sentence completion
-programme. The sentence below is quoted from it verbatim:
+spec.md §5.1 records the provenance of the official sentence completion programme. The sentence below is quoted from it verbatim:
 
-    the app now seeds the official Sentence Completion I programme — the thirty week blocks plus the weekly reflection stem — **verbatim**, by permission granted by Leigh Branden to Nicolo' Brandizzi (2026-09-15).
+the app now seeds the official Sentence Completion I programme — the thirty week blocks plus the weekly reflection stem — **verbatim**, by permission granted by Leigh Branden to Nicolo' Brandizzi (2026-09-15).
 
-The official Sentence Completion I programme text is not included in this
-repository and is not licensed or sublicensed under the Apache License,
-Version 2.0. The attribution above records the provenance of that programme.
+The official Sentence Completion I programme text is not included in this repository and is not licensed or sublicensed under the Apache License, Version 2.0. The attribution above records the provenance of that programme.
