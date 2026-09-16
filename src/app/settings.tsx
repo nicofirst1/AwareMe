@@ -328,7 +328,7 @@ export default function SettingsScreen() {
                 <ThemedText type="small" themeColor="textSecondary">
                   Notification times
                 </ThemedText>
-                <Hint>Daily reminders at exact times you choose — the book&apos;s own suggestion is start and end of day.</Hint>
+                <Hint>Daily reminders at exact times you choose: the book&apos;s own suggestion is start and end of day.</Hint>
                 <TimeField
                   label="Morning"
                   accessibilityLabel="Morning notification time"
@@ -353,7 +353,7 @@ export default function SettingsScreen() {
                   onChange={(v) => setEveningPractice(v === 'on')}
                 />
                 <Hint>
-                  An evening sitting — the morning&apos;s endings once more, then a reflection sentence. Off also removes
+                  An evening sitting: the morning&apos;s endings once more, then a reflection sentence. Off also removes
                   the evening reminder above.
                 </Hint>
               </ThemedView>
@@ -364,7 +364,7 @@ export default function SettingsScreen() {
                 <ThemedText type="small" themeColor="textSecondary">
                   Weekly reflection
                 </ThemedText>
-                <Hint>A weekly reminder to sit with the week&apos;s writing — one day, at an exact time.</Hint>
+                <Hint>A weekly reminder to sit with the week&apos;s writing, on one day at an exact time.</Hint>
                 <ChipToggle
                   options={WEEKDAY_NAMES}
                   value={settings.weekly_meta_day as (typeof WEEKDAY_NAMES)[number]}
@@ -404,7 +404,7 @@ export default function SettingsScreen() {
                 />
                 <Hint>
                   Backspace only erases the word you&apos;re on, and you can&apos;t edit an earlier ending in the same
-                  session. This keeps the writing unfiltered — turn it off if that restriction feels intolerable.
+                  session. This keeps the writing unfiltered. Turn it off if that restriction feels intolerable.
                 </Hint>
               </ThemedView>
 

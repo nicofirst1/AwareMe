@@ -19,7 +19,7 @@ const FORMATS: { format: ExportFormat; label: string; description: string; icon:
   {
     format: 'sqlite',
     label: 'SQLite database',
-    description: 'A direct copy of the app database. Highest fidelity — recommended for analysis.',
+    description: 'A direct copy of the app database. Highest fidelity: recommended for analysis.',
     icon: 'server-outline',
   },
   {

@@ -122,7 +122,7 @@ export default function OnboardingScreen() {
             <ThemedText type="title">Finish the sentence</ThemedText>
             <ThemedText type="default">
               You&apos;ll get the start of a sentence and finish it, several times, quickly. Write the first
-              thing that comes — don&apos;t judge it. Repetition or nonsense is fine; that&apos;s part of how it
+              thing that comes, without judging it. Repetition or nonsense is fine; that&apos;s part of how it
               works.
             </ThemedText>
           </ThemedView>
@@ -131,7 +131,7 @@ export default function OnboardingScreen() {
             <ThemedText type="title">About the method</ThemedText>
             <ThemedText type="default">
               This app is built on sentence completion, a technique from psychologist Nathaniel Branden. Nothing
-              here scores or interprets what you write — it just holds space for it.
+              here scores or interprets what you write. It just holds space for it.
             </ThemedText>
             <Link href="/about-method" style={styles.navLink}>
               <ThemedText type="default" themeColor="textSecondary">
@@ -143,12 +143,12 @@ export default function OnboardingScreen() {
           <ThemedView style={[styles.page, { width }]}>
             <ThemedText type="title">Reminders</ThemedText>
             <ThemedText type="default">
-              This app can nudge you twice a day, at a morning and an evening time you choose — the book&apos;s own
+              This app can nudge you twice a day, at a morning and an evening time you choose: the book&apos;s own
               suggestion is start and end of day. Notifications never show the sentence or your writing, even on
               the lock screen.
             </ThemedText>
             <ThemedText type="default" themeColor="textSecondary">
-              Say no and the app stays fully usable — you can always start a session yourself, and it won&apos;t
+              Say no and the app stays fully usable. You can always start a session yourself, and it won&apos;t
               ask again.
             </ThemedText>
             <ThemedView style={styles.buttonRow}>

@@ -178,7 +178,7 @@ export default function HomeScreen() {
             </ThemedText>
             {status && status.week.override !== null && (
               <ThemedText type="small" themeColor="textSecondary">
-                Your chosen week — it clears when its reflection completes.
+                Your chosen week: it clears when its reflection completes.
               </ThemedText>
             )}
             {status && (
@@ -285,7 +285,7 @@ export default function HomeScreen() {
               programme itself is complete (the line below covers that). */}
           {status?.nudge && !status.programmeComplete && (
             <ThemedText type="small" themeColor="textSecondary">
-              {`Week ${status.nudge.completedWeek} complete — Week ${status.nudge.nextWeek} is ready.`}
+              {`Week ${status.nudge.completedWeek} complete. Week ${status.nudge.nextWeek} is ready.`}
             </ThemedText>
           )}
 

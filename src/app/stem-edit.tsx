@@ -107,7 +107,7 @@ export default function StemEditScreen() {
     if (!existing) return;
     Alert.alert(
       'Delete this stem?',
-      'Past sessions written on this stem are unaffected and remain in your history — this only removes it from the library and future selection.',
+      'Past sessions written on this stem are unaffected and remain in your history. This only removes it from the library and future selection.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

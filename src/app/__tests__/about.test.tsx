@@ -58,7 +58,7 @@ describe('AboutScreen', () => {
     // The accessible label states that the row opens the website, per the
     // §5.1 amendment's acceptance bullet — not just "The official programme".
     const row = screen.getByRole('link', {
-      name: 'The official programme — opens the nathanielbranden.com website',
+      name: 'The official programme, opens the nathanielbranden.com website',
     });
     expect(row).toBeTruthy();
 

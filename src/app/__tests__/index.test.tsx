@@ -119,7 +119,7 @@ describe('HomeScreen', () => {
     mockRepository.getFirstProgrammeSitting = () => ({ startedAt: anchor.toISOString(), offsetMin });
     mockRepository.listCompletedWeeklyReflections = () => [{ startedAt: now.toISOString(), offsetMin }];
     render(<HomeScreen />);
-    expect(screen.getByText('Week 1 complete — Week 2 is ready.')).toBeTruthy();
+    expect(screen.getByText('Week 1 complete. Week 2 is ready.')).toBeTruthy();
 
     // No reflection this week → no nudge, no guilt about the missed one.
     mockRepository.listCompletedWeeklyReflections = () => [];
