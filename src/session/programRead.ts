@@ -50,6 +50,22 @@ export function readProgrammeWeek(repo: Repository, now: Date = new Date()): Pro
   return { derivedWeek, override, currentWeek: effectiveWeek(derivedWeek, override) };
 }
 
+/**
+ * Week-set activation (issue 04): the effective week's programme stems are
+ * the active ones — that week's stems active, every other programme week's
+ * stems resting, user stems and the weekly meta-stem untouched (they have no
+ * `week_number`). Called at every point the effective week can change:
+ * setting/clearing `program_week_override` (the programme page) and
+ * completing a weekly reflection (write.tsx — both the override-clear back
+ * to the derived week and a derived advance; coordinator-approved hub FLAG
+ * 2026-09-16). §4.1: `active` is the state column, so this is allowed state
+ * mutation — no history row is ever rewritten. Idempotent by construction.
+ */
+export function applyWeekSetActivation(repo: Repository, now: Date = new Date()): void {
+  const { currentWeek } = readProgrammeWeek(repo, now);
+  repo.setProgrammeWeekActive(currentWeek);
+}
+
 /** The morning sitting's queue (§6.2): every active programme stem of the effective week, seed order. */
 export function readMorningSittingQueue(repo: Repository, now: Date = new Date()): StemRow[] {
   const { currentWeek } = readProgrammeWeek(repo, now);

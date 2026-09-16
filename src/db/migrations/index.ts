@@ -2,6 +2,7 @@ import { MIGRATION_0001_INITIAL } from './0001_initial';
 import { MIGRATION_0002_ENDINGS_FTS } from './0002_endings_fts';
 import { MIGRATION_0003_STEMS_TIME_OF_DAY } from './0003_stems_time_of_day';
 import { MIGRATION_0004_OFFICIAL_PROGRAMME } from './0004_official_programme';
+import { MIGRATION_0005_STEM_CATEGORIES } from './0005_stem_categories';
 
 /** One numbered migration: `version` is the `schema_version` it upgrades to. */
 export interface Migration {
@@ -18,6 +19,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 2, sql: MIGRATION_0002_ENDINGS_FTS },
   { version: 3, sql: MIGRATION_0003_STEMS_TIME_OF_DAY },
   { version: 4, sql: MIGRATION_0004_OFFICIAL_PROGRAMME },
+  { version: 5, sql: MIGRATION_0005_STEM_CATEGORIES },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

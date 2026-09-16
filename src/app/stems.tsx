@@ -396,9 +396,8 @@ const StemRow = memo(function StemRow({
       >
         <ThemedText type="stem">{item.text}</ThemedText>
         <ThemedView style={styles.rowMeta}>
-          {/* Issue 04 forward hook: the category badge renders here once t04
-              populates programme stems with categories. No category UI added
-              in this cycle — the existing chip below is the slot. */}
+          {/* Issue 04: programme stems carry their §5.2 category (week→pillar
+              mapping), so this chip now lights up for them too. */}
           {stateBadge && (
             <ThemedView style={[styles.stateBadge, { backgroundColor: stateBadge.bg }]}>
               <ThemedText type="small" style={{ color: stateBadge.text }}>

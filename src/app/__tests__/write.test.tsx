@@ -69,6 +69,7 @@ const mockRepoState: {
   createdSessions: { origin: string; stemId: string }[];
   createdReviews: { input: Record<string, unknown> }[];
   settingWrites: [string, unknown][];
+  activationCalls: number[];
 } = {
   settings: {},
   openSession: null,
@@ -80,6 +81,7 @@ const mockRepoState: {
   createdSessions: [],
   createdReviews: [] as never as { input: Record<string, unknown> }[],
   settingWrites: [],
+  activationCalls: [],
 };
 
 // The issue's standing note: the @/db jest mock must carry every repository
@@ -99,6 +101,9 @@ jest.mock('@/db', () => {
       listCompletedEveningReflections: () => mockRepoState.eveningReflections,
       // Sittings
       getProgrammeStemsForWeek: (week: number) =>
+        week === 1 ? [mockStemA, mockStemB, mockStemC] : week === 2 ? [mockWeek2Stem] : [],
+      // One-off week visit (issue 04): the whole block, resting included.
+      getProgrammeWeekBlock: (week: number) =>
         week === 1 ? [mockStemA, mockStemB, mockStemC] : week === 2 ? [mockWeek2Stem] : [],
       listMetaStems: () => [mockWeeklyMeta, mockEveningA, mockEveningB],
       getWeeklyMetaStem: () => mockWeeklyMeta,
@@ -126,6 +131,9 @@ jest.mock('@/db', () => {
       setSetting: (key: string, value: unknown) => {
         mockRepoState.settingWrites.push([key, value]);
       },
+      setProgrammeWeekActive: (week: number) => {
+        mockRepoState.activationCalls.push(week);
+      },
       recordFirstKeypress: () => {},
       autosaveEndingText: () => {},
       submitEnding: () => {},
@@ -146,6 +154,7 @@ beforeEach(() => {
   mockRepoState.createdSessions = [];
   mockRepoState.createdReviews = [];
   mockRepoState.settingWrites = [];
+  mockRepoState.activationCalls = [];
 });
 
 describe('WriteScreen — sittings', () => {

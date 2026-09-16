@@ -32,7 +32,7 @@ export type StemCategory = 'awareness' | 'self_acceptance' | 'responsibility' | 
 /** Morning/evening pivot (migration 0003): which fixed daily notification a stem belongs to. Meta-stems (§5.4) carry `null` — never surfaced by a sitting draw. */
 export type TimeOfDay = 'morning' | 'evening';
 
-/** One official programme stem: its Week 1–30 block and its byte-exact text (no trailing terminator). */
+/** One official programme stem: its Week 1–30 block and its byte-exact text (no trailing terminator). Categories are NOT stored on the entries — they resolve through `programmeStemCategory` below, so this array stays byte-identical to the snapshot transcription. */
 export interface ProgrammeSeedStem {
   weekNumber: number;
   text: string;
@@ -234,6 +234,93 @@ export const META_STEMS: readonly string[] = [
 
 /** The official weekly reflection stem (§5.4 #1, ADR-0005): seeded once with `is_weekly_meta = 1`. */
 export const WEEKLY_META_STEM: string = META_STEMS[0];
+
+/**
+ * Week→pillar mapping (issue 04, 2026-09-16 owner feedback): each of the
+ * 30 programme weeks exercises one of §5.2's six categories, derived from
+ * the stem texts and ADR-0005's structure — Weeks 1–3 living consciously
+ * (awareness), 4–9 self-acceptance, 10–12 self-responsibility, 13–14
+ * self-assertiveness, 15–16 living purposefully, 17–18 personal integrity,
+ * 19–26 the child/teenage-self acceptance block, 27–28 conscious awareness
+ * of the parental inheritance, 29 psychological separation
+ * (self-assertiveness), 30 the synthesis (one stem per pillar, resolved
+ * per stem via the exceptions below). The full table is recorded in issue
+ * 04's Comments.
+ *
+ * Fresh-install seeding applies it (`seedIfEmpty`); migration 0005 carries
+ * a frozen copy for upgrading installs, pinned to this mapping by
+ * `__tests__/migrate.test.ts` so the two cannot drift.
+ */
+export const PROGRAMME_WEEK_CATEGORY: Readonly<Record<number, StemCategory>> = {
+  1: 'awareness',
+  2: 'awareness',
+  3: 'awareness',
+  4: 'self_acceptance',
+  5: 'self_acceptance',
+  6: 'self_acceptance',
+  7: 'self_acceptance',
+  8: 'self_acceptance',
+  9: 'self_acceptance',
+  10: 'responsibility',
+  11: 'responsibility',
+  12: 'responsibility',
+  13: 'assertiveness',
+  14: 'assertiveness',
+  15: 'purpose',
+  16: 'purpose',
+  17: 'integrity',
+  18: 'integrity',
+  19: 'self_acceptance',
+  20: 'self_acceptance',
+  21: 'self_acceptance',
+  22: 'self_acceptance',
+  23: 'self_acceptance',
+  24: 'self_acceptance',
+  25: 'self_acceptance',
+  26: 'self_acceptance',
+  27: 'awareness',
+  28: 'awareness',
+  29: 'assertiveness',
+  30: 'self_acceptance',
+};
+
+/**
+ * Per-stem exceptions to the week mapping: programme stems whose text
+ * exercises a pillar other than their week's. Keyed by the exact seed text
+ * (byte-for-byte, same discipline as the array above — the anti-typo guard
+ * in `__tests__/programmeSeed.test.ts` keeps these honest too, since a
+ * drift here would silently miss the exception).
+ *
+ * - Week 1's explicit responsibility stem, inside the awareness opener.
+ * - "I am becoming aware" (Weeks 11 and 23 both carry it verbatim): a pure
+ *   awareness stem planted inside the responsibility and self-acceptance
+ *   blocks.
+ * - Week 16's responsibility stem, inside the purpose block.
+ * - All seven Week 30 stems: the synthesis week names each pillar once —
+ *   the week default above is only its fallback.
+ */
+const PROGRAMME_STEM_CATEGORY_EXCEPTIONS: Readonly<Record<string, StemCategory>> = {
+  'If I take more responsibility for my choices and actions today': 'responsibility',
+  'I am becoming aware': 'awareness',
+  'If I take more responsibility for fulfilling my wants': 'responsibility',
+  'If I bring 5 percent more awareness to my life': 'awareness',
+  'If I am 5 percent more self-accepting': 'self_acceptance',
+  'If I bring 5 percent more self-responsibility to my life': 'responsibility',
+  'If I operate 5 percent more self-assertively': 'assertiveness',
+  'If I live my life 5 percent more purposefully': 'purpose',
+  'If I bring 5 percent more integrity to my life': 'integrity',
+  'If I breathe deeply and allow myself to experience what self-esteem feels like': 'self_acceptance',
+};
+
+/**
+ * A programme stem's category (issue 04): its week's pillar, overridden by
+ * the per-stem exceptions above. `null` only for a week outside 1–30, which
+ * the seed corpus never contains (pinned by the anti-typo guard); callers
+ * store the value as-is — `stems.category` is nullable (spec §4.2).
+ */
+export function programmeStemCategory(weekNumber: number, text: string): StemCategory | null {
+  return PROGRAMME_STEM_CATEGORY_EXCEPTIONS[text] ?? PROGRAMME_WEEK_CATEGORY[weekNumber] ?? null;
+}
 
 /** The two non-weekly review meta-stems — the evening reflection sitting's deterministic pair (§6.2, ADR-0005). */
 export const EVENING_META_STEMS: readonly string[] = META_STEMS.slice(1);

@@ -29,6 +29,7 @@ import type { BadgeDef } from '@/session/badges';
 import { assembleNewlyEarnedBadges } from '@/session/badgeReveal';
 import { PROGRAMME_WEEK_CAP, utcBoundsOfLocalDay } from '@/session/program';
 import {
+  applyWeekSetActivation,
   readEveningReflectionInputs,
   readMorningSittingQueue,
   readProgrammeWeek,
@@ -80,7 +81,10 @@ function resumeQueue(repo: ReturnType<typeof getRepository>, openStemId: string,
   if (index >= 0) return { queue: weekQueue, startIndex: index };
 
   if (weekParam !== null) {
-    const oneOff = repo.getProgrammeStemsForWeek(weekParam);
+    // One-off week sitting (issue 04): rebuild from the whole block, resting
+    // included — the visit is activation-state-agnostic, so the resumed
+    // queue matches the one it started from.
+    const oneOff = repo.getProgrammeWeekBlock(weekParam);
     const oneOffIndex = oneOff.findIndex((s) => s.id === openStemId);
     if (oneOffIndex >= 0) return { queue: oneOff, startIndex: oneOffIndex };
   }
@@ -301,9 +305,11 @@ export default function WriteScreen() {
       const weekNumber = parseWeekParam(week);
       if (weekNumber !== null) {
         // One-off sitting on another week's block (§6.2: origin='manual',
-        // never in any rotation).
+        // never in any rotation). Whole block, resting included: an explicit
+        // visit is activation-state-agnostic (issue 04, hub FLAG-ANSWER
+        // 2026-09-16) — week-set activation governs the rotation, not visits.
         setFlow(null);
-        setQueue(repo.getProgrammeStemsForWeek(weekNumber));
+        setQueue(repo.getProgrammeWeekBlock(weekNumber));
         setQueueIndex(0);
       } else if (stemId) {
         const solo = repo.listAllStems().find((s) => s.id === stemId && s.deleted_at === null);
@@ -369,6 +375,13 @@ export default function WriteScreen() {
       if (flow.clearOverride) {
         repo.setSetting('program_week_override', null);
       }
+      // Week-set activation (issue 04, coordinator-approved hub FLAG
+      // 2026-09-16): the effective week's stems are the active ones.
+      // Re-applied on every weekly completion — the override just cleared
+      // back to the derived week, or the derived week just advanced (no
+      // override set). Without it, one override cycle would leave every
+      // later derived week resting and the morning sitting queue empty.
+      applyWeekSetActivation(repo);
     } else {
       const { start, end } = utcBoundsOfLocalDay(new Date());
       repo.createReview({

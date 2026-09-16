@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { migrate } from '../migrate';
 import { MIGRATIONS, CURRENT_SCHEMA_VERSION } from '../migrations';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
+import { PROGRAMME_SEED_STEMS, programmeStemCategory } from '../seed/stems';
 
 const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures');
 
@@ -128,6 +129,87 @@ describe('migrate', () => {
     expect(byKey['weekly_meta_time']).toBe('"21:00"');
     expect(byKey['program_week_override']).toBe('null');
     raw.close();
+  });
+
+  it('migration 0005 (v4→v5) backfills programme-stem categories exactly as the seed mapping resolves them', () => {
+    const scratch = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'six-endings-migrate-')), 'copy.db');
+    fs.copyFileSync(fixturePath(4), scratch);
+    const raw = new DatabaseSync(scratch);
+    const db = nodeSqliteExecutor(raw);
+
+    // Mimic a real v4 install: the 142 programme stems exist (seeded after
+    // migration 0004) with NULL categories, plus rows the backfill must
+    // never touch: a user stem, a programme stem whose category the user
+    // already chose, a soft-deleted programme stem, and a retired v1 row.
+    for (const [index, stem] of PROGRAMME_SEED_STEMS.entries()) {
+      // The 5th stem (index 4, Week 2) simulates a user-chosen category: the
+      // backfill must preserve it even though the week default differs.
+      const preset = stem.weekNumber === 2 && stem.text.startsWith('If I bring 5 percent more awareness to my insecurities') ? 'purpose' : null;
+      raw
+        .prepare(
+          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
+           VALUES (?, ?, 'seed', ?, 'en', 1.0, 1, '2026-01-01T00:00:00.000Z', 'UTC', 0, 'morning', ?, 0)`,
+        )
+        .run(`programme-${index.toString().padStart(3, '0')}`, stem.text, preset, stem.weekNumber);
+    }
+    raw
+      .prepare(
+        `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min)
+         VALUES ('user-1', 'A user stem', 'user', NULL, 'en', 1.0, 1, '2026-01-01T00:00:00.000Z', 'UTC', 0)`,
+      )
+      .run();
+    raw
+      .prepare(
+        `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta, deleted_at)
+         VALUES ('retired-1', 'A retired v1 original', 'seed', 'awareness', 'en', 1.0, 0, '2026-01-01T00:00:00.000Z', 'UTC', 0, 'morning', NULL, 0, '2026-01-02T00:00:00.000Z')`,
+      )
+      .run();
+    raw
+      .prepare(
+        `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta, deleted_at)
+         VALUES ('programme-deleted', 'If I bring 5 percent more awareness to my emotions', 'seed', NULL, 'en', 1.0, 0, '2026-01-01T00:00:00.000Z', 'UTC', 0, 'morning', 2, 0, '2026-01-02T00:00:00.000Z')`,
+      )
+      .run();
+
+    migrate(db, '9.9.9');
+
+    const meta = db.getFirstSync<{ schema_version: number }>('SELECT schema_version FROM schema_meta WHERE id = 1', []);
+    expect(meta?.schema_version).toBe(5);
+
+    // Every programme row's category must equal what fresh-install seeding
+    // would have written: the frozen migration and the live seed mapping
+    // cannot drift, exceptions included, for the whole 142-stem corpus.
+    const rows = db.getAllSync<{ text: string; week_number: number; category: string | null }>(
+      'SELECT text, week_number, category FROM stems WHERE id LIKE \'programme-%\' ORDER BY rowid',
+      [],
+    );
+    expect(rows).toHaveLength(PROGRAMME_SEED_STEMS.length + 1); // + the soft-deleted block stem
+    for (const row of rows) {
+      if (row.category === 'purpose' && row.week_number === 2 && row.text.startsWith('If I bring 5 percent more awareness to my insecurities')) {
+        continue; // the user-chosen category survives untouched (§4.1)
+      }
+      expect(row.category).toBe(programmeStemCategory(row.week_number, row.text));
+    }
+
+    // Rows outside the programme are never in scope.
+    const untouched = db.getFirstSync<{ category: string | null }>('SELECT category FROM stems WHERE id = ?', [
+      'user-1',
+    ]);
+    expect(untouched?.category).toBeNull();
+    const retired = db.getFirstSync<{ category: string | null; active: number; deleted_at: string | null }>(
+      'SELECT category, active, deleted_at FROM stems WHERE id = ?',
+      ['retired-1'],
+    );
+    expect(retired).toEqual({ category: 'awareness', active: 0, deleted_at: '2026-01-02T00:00:00.000Z' });
+    // Soft-deleted programme stems are still programme provenance: filled too.
+    const softDeleted = db.getFirstSync<{ category: string | null }>(
+      'SELECT category FROM stems WHERE id = ?',
+      ['programme-deleted'],
+    );
+    expect(softDeleted?.category).toBe('awareness');
+
+    raw.close();
+    fs.rmSync(path.dirname(scratch), { recursive: true, force: true });
   });
 
   it('upgrading the v3 fixture tags the existing weekly meta-stem, inserts the new settings, and leaves other stems untouched', () => {

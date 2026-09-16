@@ -103,7 +103,7 @@ describe('Repository.seedIfEmpty', () => {
     }
   });
 
-  it('assigns one of the six spec categories, or null, to every seed stem (programme stems are uncategorised)', () => {
+  it('assigns one of the six spec categories, or null, to every seed stem (programme stems carry their week pillar)', () => {
     const { db, repo } = freshRepository();
     repo.seedIfEmpty();
 
@@ -125,13 +125,12 @@ describe('Repository.seedIfEmpty', () => {
     for (const s of stems) {
       expect(validCategories.has(s.category)).toBe(true);
     }
-    // Only the retired v1 originals carry categories; the official
-    // programme and the weekly meta-stem are uncategorised (spec §5.2's
-    // six buckets describe the v1 list, not the official programme). Of
-    // the 26 retired stems, 24 have a category and 2 (the "general" pair)
-    // are null — see DECISIONS.md.
-    expect(stems.filter((s) => s.category === null)).toHaveLength(PROGRAMME_SEED_STEMS.length + 1 + 2);
-    expect(stems.filter((s) => s.category !== null)).toHaveLength(24);
+    // Issue 04: every official programme stem is categorised via the
+    // week→pillar mapping; the weekly meta-stem has none. Of the 26 retired
+    // v1 stems, 24 have a category and 2 (the "general" pair) are null —
+    // see DECISIONS.md.
+    expect(stems.filter((s) => s.category === null)).toHaveLength(1 + 2);
+    expect(stems.filter((s) => s.category !== null)).toHaveLength(PROGRAMME_SEED_STEMS.length + 24);
   });
 
   it('has 3 meta-stems matching spec §5.4, used only at review time per §6.5', () => {

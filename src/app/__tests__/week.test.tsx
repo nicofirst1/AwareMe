@@ -18,31 +18,35 @@ jest.mock('expo-router', () => {
 
 const mockRouter = { push: jest.fn() };
 
-function makeWeekStem(week: number, index: number): StemRow & { weekNumber: number } {
+function makeWeekStem(week: number, index: number, category: string | null = null): StemRow & { weekNumber: number } {
   return {
     id: `w${week}-s${index}`,
     text: `Week ${week} stem ${index}`,
     origin: 'seed',
-    category: null,
+    category,
     weight: 1,
     time_of_day: 'morning',
     weekNumber: week,
   };
 }
 
-/** Two seeded weeks' worth — enough to prove grouping, ordering, and markers. */
+/** Two seeded weeks' worth — enough to prove grouping, ordering, and markers. Week 2's stems carry categories (issue 04), Week 1's don't. */
 const mockProgrammeStems = [
   ...Array.from({ length: 4 }, (_, i) => makeWeekStem(1, i)),
-  ...Array.from({ length: 4 }, (_, i) => makeWeekStem(2, i)),
+  ...Array.from({ length: 4 }, (_, i) =>
+    makeWeekStem(2, i, ['awareness', 'self_acceptance', 'purpose', 'integrity'][i]),
+  ),
 ];
 
 const mockRepoState: {
   settings: Partial<Settings>;
   settingWrites: [string, unknown][];
+  activationCalls: number[];
   firstSitting: { startedAt: string; offsetMin: number } | null;
 } = {
   settings: {},
   settingWrites: [],
+  activationCalls: [],
   firstSitting: null,
 };
 
@@ -57,6 +61,12 @@ jest.mock('@/db', () => {
       listCompletedWeeklyReflections: () => [],
       setSetting: (key: string, value: unknown) => {
         mockRepoState.settingWrites.push([key, value]);
+        // Persist like the real repo: applyWeekSetActivation re-reads the
+        // setting right after the write, so the mock must reflect it.
+        (mockRepoState.settings as Record<string, unknown>)[key] = value;
+      },
+      setProgrammeWeekActive: (week: number) => {
+        mockRepoState.activationCalls.push(week);
       },
     }),
   };
@@ -67,6 +77,7 @@ describe('ProgrammeScreen (week library)', () => {
     mockRouter.push.mockClear();
     mockRepoState.settings = {};
     mockRepoState.settingWrites = [];
+    mockRepoState.activationCalls = [];
     mockRepoState.firstSitting = null;
   });
 
@@ -96,6 +107,15 @@ describe('ProgrammeScreen (week library)', () => {
     expect(screen.getByText('Make this my week')).toBeTruthy();
   });
 
+  it('renders the category chip on expanded stems that carry one (issue 04)', () => {
+    render(<ProgrammeScreen />);
+    fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Collapsed.'));
+    expect(screen.getByText('awareness')).toBeTruthy();
+    expect(screen.getByText('self_acceptance')).toBeTruthy();
+    expect(screen.getByText('purpose')).toBeTruthy();
+    expect(screen.getByText('integrity')).toBeTruthy();
+  });
+
   it('one-off sitting routes to /write?week=N with manual origin semantics (never rotates)', () => {
     render(<ProgrammeScreen />);
     fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Collapsed.'));
@@ -109,6 +129,9 @@ describe('ProgrammeScreen (week library)', () => {
     fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Collapsed.'));
     fireEvent.press(screen.getByText('Make this my week'));
     expect(mockRepoState.settingWrites).toEqual([['program_week_override', 2]]);
+    // Week-set activation (issue 04) rides the same write: the chosen week
+    // becomes the active one.
+    expect(mockRepoState.activationCalls).toEqual([2]);
   });
 
   it('clears the override from the selected week card', () => {
@@ -121,6 +144,8 @@ describe('ProgrammeScreen (week library)', () => {
     fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Your week. Collapsed.'));
     fireEvent.press(screen.getByText('Clear my week selection'));
     expect(mockRepoState.settingWrites).toEqual([['program_week_override', null]]);
+    // Clearing restores the DERIVED week's stems (1 — no anchor in this mock).
+    expect(mockRepoState.activationCalls).toEqual([1]);
   });
 
   it('does not offer sitting actions on an empty week', () => {

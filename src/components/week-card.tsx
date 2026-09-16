@@ -4,13 +4,16 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MinTouchTarget, Radius, Spacing } from '@/constants/theme';
+import { CategoryColors, MinTouchTarget, Radius, Spacing, type CategoryName } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 
-/** One active programme stem as the week card shows it. */
+/** One programme stem as the week card shows it. */
 export interface WeekCardStem {
   id: string;
   text: string;
+  /** §5.2 category (issue 04's week→pillar mapping); null for the rare stem without one. */
+  category: string | null;
 }
 
 /**
@@ -47,6 +50,9 @@ export function WeekCard({
   onToggleMyWeek: () => void;
 }) {
   const theme = useTheme();
+  const dark = useColorScheme() === 'dark';
+
+  const isCategoryName = (c: string | null): c is CategoryName => c !== null && c in CategoryColors;
 
   // Marker precedence: the override's selection is the more informative
   // marker (it names the §6.2 state that clears on reflection completion),
@@ -90,11 +96,24 @@ export function WeekCard({
 
       {expanded && (
         <View style={styles.body}>
-          {stems.map((stem) => (
-            <ThemedText key={stem.id} type="stem">
-              {stem.text}
-            </ThemedText>
-          ))}
+          {stems.map((stem) => {
+            const colors = isCategoryName(stem.category) ? CategoryColors[stem.category][dark ? 'dark' : 'light'] : null;
+            return (
+              <View key={stem.id} style={styles.stemLine}>
+                <ThemedText type="stem">{stem.text}</ThemedText>
+                {/* Issue 04 (t03's forward hook): the stem's §5.2 category as a
+                    muted text chip — the label itself is the non-color cue, so
+                    no icon is duplicated from the library's richer chip. */}
+                {colors && (
+                  <View style={[styles.categoryChip, { backgroundColor: colors.bg }]}>
+                    <ThemedText type="small" style={{ color: colors.text }}>
+                      {stem.category}
+                    </ThemedText>
+                  </View>
+                )}
+              </View>
+            );
+          })}
           {stems.length > 0 ? (
             <View style={styles.actions}>
               <Button label="Write this week’s sitting" onPress={onSit} variant="secondary" style={styles.actionButton} />
@@ -130,6 +149,18 @@ const styles = StyleSheet.create({
   },
   headerText: {
     gap: Spacing.half,
+  },
+  stemLine: {
+    gap: Spacing.half,
+  },
+  categoryChip: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.half,
+    borderRadius: Radius.medium,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.half,
   },
   chevron: {
     width: MinTouchTarget,
