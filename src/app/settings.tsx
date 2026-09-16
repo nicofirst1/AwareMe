@@ -214,8 +214,8 @@ export default function SettingsScreen() {
                 Stem time limit
               </ThemedText>
               <Hint>
-                An optional per-stem countdown, separate from the session timer above. Off by default; the writing
-                screen does not use it yet.
+                An optional per-stem countdown, separate from the session timer above. Off by default; the
+                writing screen scopes it to the field you’re on.
               </Hint>
               <ChipToggle
                 options={['off', 'on'] as const}
