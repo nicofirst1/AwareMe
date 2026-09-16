@@ -62,3 +62,6 @@ example
 # redundant with the canonical byte source official-program-verbatim.txt
 # (spec §5.1, test-loaded). Untracked; kept on disk locally only.
 /.scratch/official-program/source-page-2026-09-15.html
+
+# Play Store submission materials — local-only (screenshots carry seed text visually)
+store/
