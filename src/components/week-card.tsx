@@ -97,7 +97,7 @@ export function WeekCard({
           ))}
           {stems.length > 0 ? (
             <View style={styles.actions}>
-              <Button label="Sit on this week" onPress={onSit} variant="secondary" style={styles.actionButton} />
+              <Button label="Write this week’s sitting" onPress={onSit} variant="secondary" style={styles.actionButton} />
               <Button
                 label={isSelected ? 'Clear my week selection' : 'Make this my week'}
                 onPress={onToggleMyWeek}

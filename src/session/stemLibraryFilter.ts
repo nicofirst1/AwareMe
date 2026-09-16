@@ -11,6 +11,8 @@ export interface FilterableStem {
   deleted_at: string | null;
   /** Morning/evening pivot (migration 0003): null for an untagged stem — matched by the 'all' filter only, never by 'morning'/'evening'. */
   time_of_day: string | null;
+  /** Programme week (migration 0004): 1–30 for seed programme stems, null otherwise. Optional so pre-0004 call sites/tests stay valid; a null/undefined week matches only the 'all' filter. */
+  weekNumber?: number | null;
 }
 
 export type ActiveFilter = 'active' | 'archived' | 'all';
@@ -24,6 +26,8 @@ export interface StemLibraryFilters {
   originFilter: string; // 'all' | a specific origin
   categoryFilter: string; // 'all' | a specific category
   timeOfDayFilter?: TimeOfDayFilter; // defaults to 'all'
+  /** Issue 03's week filter: 'all' | a programme week 1–30 (defaults to 'all'). */
+  weekFilter?: 'all' | number;
 }
 
 export function matchesStemFilters(stem: FilterableStem, filters: StemLibraryFilters): boolean {
@@ -41,6 +45,13 @@ export function matchesStemFilters(stem: FilterableStem, filters: StemLibraryFil
   if ((timeOfDayFilter === 'morning' || timeOfDayFilter === 'evening') && stem.time_of_day !== timeOfDayFilter) {
     return false;
   }
+
+  // Issue 03's week filter: a selected week shows every stem of that
+  // programme block — active, resting, and soft-deleted alike (state is
+  // the State filter's job). Stems outside the programme (null/undefined
+  // week) never match a week number.
+  const weekFilter = filters.weekFilter ?? 'all';
+  if (weekFilter !== 'all' && stem.weekNumber !== weekFilter) return false;
 
   const q = filters.query.trim().toLowerCase();
   if (q && !stem.text.toLowerCase().includes(q)) return false;

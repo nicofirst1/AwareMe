@@ -33,6 +33,8 @@ export interface LibraryStemRow extends StemRow {
   active: number; // 0/1
   deleted_at: string | null;
   created_at: string;
+  /** Programme week (migration 0004): 1–30 for seed programme stems, null otherwise. Read-path only (issue 03's week filter); never written here. */
+  weekNumber: number | null;
 }
 
 export interface SessionRow {
@@ -371,7 +373,10 @@ export class Repository {
    */
   listAllStems(): LibraryStemRow[] {
     return this.db.getAllSync<LibraryStemRow>(
-      "SELECT id, text, origin, category, weight, time_of_day, active, deleted_at, created_at FROM stems WHERE origin != 'meta' AND is_weekly_meta = 0 ORDER BY created_at DESC",
+      // week_number rides along (read-path, issue 03): the library's week
+      // filter buckets every row — resting and soft-deleted included — by
+      // its programme week. Schema untouched.
+      "SELECT id, text, origin, category, weight, time_of_day, active, deleted_at, created_at, week_number as weekNumber FROM stems WHERE origin != 'meta' AND is_weekly_meta = 0 ORDER BY created_at DESC",
       [],
     );
   }

@@ -15,6 +15,7 @@ import { getRepository, LibraryStemRow } from '@/db';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { canDeactivateStems, matchesStemFilters, type ActiveFilter, type TimeOfDayFilter } from '@/session/stemLibraryFilter';
+import { PROGRAMME_WEEK_CAP } from '@/session/program';
 
 function isCategoryName(c: string | null): c is CategoryName {
   return c !== null && c in CategoryColors;
@@ -35,8 +36,11 @@ const CATEGORY_ICON: Record<CategoryName, keyof typeof Ionicons.glyphMap> = {
 
 type OriginFilter = 'all' | LibraryStemRow['origin'];
 type CategoryFilter = 'all' | string;
+type WeekFilter = 'all' | number;
 type Theme = ReturnType<typeof useTheme>;
 type Router = ReturnType<typeof useRouter>;
+
+const ALL_WEEKS = Array.from({ length: PROGRAMME_WEEK_CAP }, (_, i) => i + 1);
 
 /**
  * The stem library (§6.6): every stem, filterable and searchable, with a
@@ -63,6 +67,8 @@ export default function StemsScreen() {
   const [originFilter, setOriginFilter] = useState<OriginFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [timeOfDayFilter, setTimeOfDayFilter] = useState<TimeOfDayFilter>('all');
+  // Issue 03: view one programme week's stems ('all' = every stem).
+  const [weekFilter, setWeekFilter] = useState<WeekFilter>('all');
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
 
   const categories = useMemo(
@@ -71,8 +77,23 @@ export default function StemsScreen() {
   );
 
   const filtered = useMemo(
-    () => stems.filter((s) => matchesStemFilters(s, { query, activeFilter, originFilter, categoryFilter, timeOfDayFilter })),
-    [stems, query, activeFilter, originFilter, categoryFilter, timeOfDayFilter],
+    () =>
+      stems.filter((s) =>
+        matchesStemFilters(s, { query, activeFilter, originFilter, categoryFilter, timeOfDayFilter, weekFilter }),
+      ),
+    [stems, query, activeFilter, originFilter, categoryFilter, timeOfDayFilter, weekFilter],
+  );
+
+  // Issue 03: the at-a-glance state counts, always visible above the list
+  // (§13.7: computed at read time, nothing stored). Deleted stems are
+  // neither active nor resting — they are out of the pool entirely and
+  // render with their own 'deleted' marker.
+  const { activeCount, restingCount } = useMemo(
+    () => ({
+      activeCount: stems.filter((s) => s.active && s.deleted_at === null).length,
+      restingCount: stems.filter((s) => !s.active && s.deleted_at === null).length,
+    }),
+    [stems],
   );
 
   // Selection mode (2026-09-11, replaces long-press-instant-toggle — see
@@ -201,6 +222,10 @@ export default function StemsScreen() {
           </Pressable>
         </ThemedView>
 
+        <ThemedText type="small" themeColor="textSecondary" style={styles.stateSummary}>
+          {`${activeCount} active · ${restingCount} resting`}
+        </ThemedText>
+
         {categories.length > 0 && (
           <ScrollView
             horizontal
@@ -223,11 +248,13 @@ export default function StemsScreen() {
 
         {moreFiltersOpen && (
           <ThemedView style={styles.moreFilters}>
+            <WeekFilterRow value={weekFilter} onChange={setWeekFilter} />
+
             <FilterRow
               label="State"
               options={[
                 { value: 'active', label: 'Active' },
-                { value: 'archived', label: 'Archived' },
+                { value: 'archived', label: 'Resting' },
                 { value: 'all', label: 'All' },
               ]}
               value={activeFilter}
@@ -238,7 +265,9 @@ export default function StemsScreen() {
               label="Origin"
               options={[
                 { value: 'all', label: 'All' },
-                { value: 'seed', label: 'Seed' },
+                // Display-only rename (issue 03): origin value stays 'seed'
+                // in DB, exports, and tests.
+                { value: 'seed', label: 'Programme' },
                 { value: 'user', label: 'Mine' },
                 { value: 'imported', label: 'Imported' },
               ]}
@@ -298,6 +327,21 @@ export default function StemsScreen() {
 const ACTIVE_EDGE = { light: '#8FBF93', dark: '#4A7A4E' };
 const INACTIVE_EDGE = { light: '#D9A3A0', dark: '#7A4A48' };
 
+// Issue 03: a state badge on every row, so active/resting is readable as
+// TEXT at all times, never only through the edge tint (which stays as the
+// calm per-row accent). Same hue families as the edges, one step darker
+// for the label (§10: tint, not traffic-light saturation).
+const STATE_BADGE = {
+  active: {
+    light: { bg: '#E4F0E5', text: '#3D6B43' },
+    dark: { bg: '#26372A', text: '#A6CFA9' },
+  },
+  resting: {
+    light: { bg: '#F6EAE9', text: '#7C4B47' },
+    dark: { bg: '#372A29', text: '#D0A09C' },
+  },
+} as const;
+
 const StemRow = memo(function StemRow({
   item,
   theme,
@@ -316,15 +360,19 @@ const StemRow = memo(function StemRow({
   onLongPress: (stem: LibraryStemRow) => void;
 }) {
   const scheme = useColorScheme();
+  const dark = scheme === 'dark';
   const isDeleted = item.deleted_at !== null;
-  const edgeColor = isDeleted ? 'transparent' : (item.active ? ACTIVE_EDGE : INACTIVE_EDGE)[scheme === 'dark' ? 'dark' : 'light'];
-  const categoryColors = isCategoryName(item.category) ? CategoryColors[item.category][scheme === 'dark' ? 'dark' : 'light'] : null;
+  const edgeColor = isDeleted ? 'transparent' : (item.active ? ACTIVE_EDGE : INACTIVE_EDGE)[dark ? 'dark' : 'light'];
+  const categoryColors = isCategoryName(item.category) ? CategoryColors[item.category][dark ? 'dark' : 'light'] : null;
+  const stateBadge = isDeleted ? null : (item.active ? STATE_BADGE.active : STATE_BADGE.resting)[dark ? 'dark' : 'light'];
 
+  // Issue 03: the state is named in the accessible label too, so it never
+  // depends on seeing the badge or the edge tint.
   const label = isDeleted
     ? item.text
     : selectionMode
       ? `${item.text}. ${selected ? 'Selected' : 'Not selected'}.`
-      : `Write on: ${item.text}. Long-press to select.`;
+      : `Write on: ${item.text}. ${item.active ? 'Active' : 'Resting'}. Long-press to select.`;
 
   return (
     <ThemedView
@@ -348,6 +396,16 @@ const StemRow = memo(function StemRow({
       >
         <ThemedText type="stem">{item.text}</ThemedText>
         <ThemedView style={styles.rowMeta}>
+          {/* Issue 04 forward hook: the category badge renders here once t04
+              populates programme stems with categories. No category UI added
+              in this cycle — the existing chip below is the slot. */}
+          {stateBadge && (
+            <ThemedView style={[styles.stateBadge, { backgroundColor: stateBadge.bg }]}>
+              <ThemedText type="small" style={{ color: stateBadge.text }}>
+                {item.active ? 'Active' : 'Resting'}
+              </ThemedText>
+            </ThemedView>
+          )}
           {categoryColors && isCategoryName(item.category) && (
             <ThemedView style={[styles.categoryChip, { backgroundColor: categoryColors.bg }]}>
               <Ionicons name={CATEGORY_ICON[item.category]} size={12} color={categoryColors.text} />
@@ -360,8 +418,8 @@ const StemRow = memo(function StemRow({
             {[
               categoryColors ? null : item.category, // shown as a colored chip instead, when we have one
               item.time_of_day,
-              item.origin,
-              isDeleted ? 'deleted' : !item.active ? 'archived' : null,
+              item.origin === 'seed' ? 'Programme' : item.origin, // display-only rename (issue 03)
+              isDeleted ? 'deleted' : null,
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -409,6 +467,33 @@ function FilterRow<T extends string>({
           <FilterChip key={opt.value} label={opt.label} selected={opt.value === value} onPress={() => onChange(opt.value)} />
         ))}
       </ThemedView>
+    </ThemedView>
+  );
+}
+
+// Issue 03's week filter: 'All' + weeks 1–30 as one horizontal chip row —
+// thirty wrapping chips would stack ~4 rows tall inside the filter panel,
+// so this row scrolls like the category row above instead. Fixed height
+// per the categoryScrollContainer note (an unbounded horizontal ScrollView
+// beside a flex:1 FlatList sibling collapses to zero).
+function WeekFilterRow({ value, onChange }: { value: WeekFilter; onChange: (v: WeekFilter) => void }) {
+  return (
+    <ThemedView style={styles.filterRow}>
+      <ThemedText type="small" themeColor="textSecondary" style={styles.filterLabel}>
+        Programme week
+      </ThemedText>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.weekScrollContent}
+        style={styles.weekScroll}
+        accessibilityLabel="Filter by programme week"
+      >
+        <FilterChip label="All" selected={value === 'all'} onPress={() => onChange('all')} />
+        {ALL_WEEKS.map((w) => (
+          <FilterChip key={w} label={String(w)} selected={value === w} onPress={() => onChange(w)} />
+        ))}
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -489,6 +574,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.four,
+    gap: Spacing.one,
+  },
+  weekScroll: {
+    height: MinTouchTarget,
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  weekScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.one,
   },
   moreFilters: {
@@ -574,6 +669,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.one,
     paddingVertical: 1,
     borderRadius: Radius.small,
+  },
+  // Same chip anatomy as `categoryChip`, state-tinted via the caller
+  // (STATE_BADGE), so the two read as one family.
+  stateBadge: {
+    paddingHorizontal: Spacing.one,
+    paddingVertical: 1,
+    borderRadius: Radius.small,
+  },
+  stateSummary: {
+    paddingHorizontal: Spacing.four,
+    marginTop: Spacing.two,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   // Reserved right-hand action column (LC5): fixed 44pt regardless of
   // selection state, so the row's right edge never shifts. Transparent
