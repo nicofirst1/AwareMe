@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import ProgrammeScreen from '@/app/week';
-import { DEFAULT_SETTINGS, type Settings, type StemRow } from '@/db';
+import { type Settings, type StemRow } from '@/db';
 
 // `useFocusEffect` no-ops without a real navigation tree (see
 // node_modules/expo-router/build/useFocusEffect.js); run the effect once on

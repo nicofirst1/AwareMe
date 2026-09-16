@@ -394,7 +394,6 @@ export function useWritingSession(): WritingSessionView {
   useEffect(() => {
     if (phase !== 'active' || !state?.config.stemTimerSeconds) return;
     setStemRemainingSeconds(state.config.stemTimerSeconds);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, state?.activeOrdinal, state?.config.stemTimerSeconds]);
 
   // Local per-stem countdown, independent of the session countdown above.

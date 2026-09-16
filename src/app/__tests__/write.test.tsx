@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import WriteScreen from '@/app/write';
-import { DEFAULT_SETTINGS, type Settings, type StemRow } from '@/db';
+import { type Settings, type StemRow } from '@/db';
 
 // Route params are per-test (morning sitting, evening/weekly reflection,
 // one-off week, solo write, bare deep link) — a mock-prefixed holder so

@@ -336,7 +336,7 @@ export default function HomeScreen() {
             onPress={() => Linking.openURL('https://nicolobrandizzi.com/')}
             accessibilityRole="link"
           >
-            Created by Nicolo' Brandizzi
+            Created by Nicolo’ Brandizzi
           </ThemedText>
         </View>
       </SafeAreaView>

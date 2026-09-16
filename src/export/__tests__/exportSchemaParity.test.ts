@@ -22,8 +22,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { migrate } from '../../db/migrate';
 import type { TableName } from '../../db/repository';
 import { nodeSqliteExecutor } from '../../db/testSupport/nodeSqliteExecutor';
-import { buildCsvFiles } from '../csvBundle';
-import { COLUMNS as CSV_COLUMNS, CSV_TABLES } from '../csvBundle';
+import { buildCsvFiles, COLUMNS as CSV_COLUMNS, CSV_TABLES } from '../csvBundle';
 import { COLUMNS as IMPORT_COLUMNS, IMPORT_TABLES } from '../importBundle';
 import type { TableDump } from '../jsonBundle';
 

@@ -80,7 +80,6 @@ export default function HistoryScreen() {
           dateFrom: dateFromForPreset(dateRange, new Date()),
         }),
       );
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [stemFilter, categoryFilter, dateRange]),
   );
 

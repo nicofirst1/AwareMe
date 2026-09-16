@@ -21,11 +21,6 @@ function rowId(prefix: string): string {
   return `${prefix}-${(++nextRowId).toString().padStart(4, '0')}`;
 }
 
-/** A §4.1.3 event triple for a Berlin-summer wall time (UTC+2). */
-function berlin(isoWallUtc: string): { at: string; tz: string; offsetMin: number } {
-  return { at: isoWallUtc, tz: 'Europe/Berlin', offsetMin: 120 };
-}
-
 interface SessionInsert {
   stemId: string;
   origin?: string;

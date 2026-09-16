@@ -174,6 +174,6 @@ describe('HomeScreen', () => {
 
   it('has a tappable creator footer', () => {
     render(<HomeScreen />);
-    expect(screen.getByText("Created by Nicolo' Brandizzi")).toBeTruthy();
+    expect(screen.getByText("Created by Nicolo’ Brandizzi")).toBeTruthy();
   });
 });

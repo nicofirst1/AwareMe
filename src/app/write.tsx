@@ -15,7 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BadgeCard } from '@/components/badge-card';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
-import { EmptyState } from '@/components/empty-state';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WriteActionBar } from '@/components/write-action-bar';
@@ -27,7 +26,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import type { BadgeDef } from '@/session/badges';
 import { assembleNewlyEarnedBadges } from '@/session/badgeReveal';
-import { PROGRAMME_WEEK_CAP } from '@/session/program';
+import { PROGRAMME_WEEK_CAP, utcBoundsOfLocalDay } from '@/session/program';
 import {
   readEveningReflectionInputs,
   readMorningSittingQueue,
@@ -35,7 +34,6 @@ import {
   readWeeklyReflectionInputs,
   shouldClearOverride,
 } from '@/session/programRead';
-import { utcBoundsOfLocalDay } from '@/session/program';
 import { formatMMSS, sessionDurationLabel } from '@/session/sessionMachine';
 import type { StemForSession } from '@/session/useWritingSession';
 import { useWritingSession } from '@/session/useWritingSession';
@@ -319,7 +317,6 @@ export default function WriteScreen() {
         setQueueIndex(0);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeOfDay, stemId, origin, week]);
 
   const isLastInQueue = queue !== null && queueIndex >= queue.length - 1;
