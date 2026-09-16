@@ -135,7 +135,11 @@ describe('Repository.seedIfEmpty', () => {
 
   it('has 3 meta-stems matching spec §5.4, used only at review time per §6.5', () => {
     expect(META_STEMS).toHaveLength(3);
-    expect(META_STEMS[0]).toBe('If any of what I wrote this week is true, it might be helpful if I');
+    // Issue 10: [0] is the official weekly reflection stem (licensed text,
+    // loaded from the content module); [1..2] are the app's original
+    // evening stems.
+    expect(META_STEMS[0]).toBe(WEEKLY_META_STEM);
+    expect(META_STEMS.slice(1)).toEqual([...EVENING_META_STEMS]);
   });
 
   it('seeds every default setting from spec §7 (including the 2026-09-15 additions)', () => {

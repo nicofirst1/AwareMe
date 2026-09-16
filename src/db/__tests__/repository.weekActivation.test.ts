@@ -17,6 +17,18 @@ import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
 import { applyWeekSetActivation, readMorningSittingQueue } from '../../session/programRead';
 import { PROGRAMME_SEED_STEMS } from '../seed/stems';
 
+// Issue 10: week choices and per-week counts derive from the loaded content
+// module, so the suite exercises identically under the owner's licensed
+// corpus and the committed example corpus. Intent is unchanged: distinct
+// in-corpus weeks with known stem counts.
+const CORPUS_WEEKS = [...new Set(PROGRAMME_SEED_STEMS.map((s) => s.weekNumber))].sort((a, b) => a - b);
+const weekA = CORPUS_WEEKS[0];
+const weekB = CORPUS_WEEKS[Math.min(2, CORPUS_WEEKS.length - 1)];
+const weekC = CORPUS_WEEKS[CORPUS_WEEKS.length - 1];
+const weekD = CORPUS_WEEKS[Math.min(4, CORPUS_WEEKS.length - 1)];
+const countOf = (week: number): number => PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === week).length;
+const allActive = (week: number): number[] => new Array(countOf(week)).fill(1);
+
 function makeDb(): { raw: DatabaseSync; repo: Repository } {
   const raw = new DatabaseSync(':memory:');
   const db = nodeSqliteExecutor(raw);
@@ -46,43 +58,43 @@ describe('setProgrammeWeekActive (issue 04 week-set activation)', () => {
   it('fresh install seeds every programme week active; activation then isolates exactly one week', () => {
     const { raw, repo } = makeDb();
 
-    // Before any activation write, the seed's own state: all 142 active.
+    // Before any activation write, the seed's own state: the whole corpus active.
     let byWeek = activeByWeek(raw);
-    expect(byWeek.get(1)).toBe(4); // weeks are keyed positive when active
-    expect(byWeek.get(-1)).toBeUndefined();
+    expect(byWeek.get(weekA)).toBe(countOf(weekA)); // weeks are keyed positive when active
+    expect(byWeek.get(-weekA)).toBeUndefined();
 
-    repo.setProgrammeWeekActive(3);
+    repo.setProgrammeWeekActive(weekB);
 
     byWeek = activeByWeek(raw);
-    expect(byWeek.get(3)).toBe(4);
-    // Every other week rests: 29 resting weeks hold the remaining stems.
+    expect(byWeek.get(weekB)).toBe(countOf(weekB));
+    // Every other week rests: all remaining weeks hold the remaining stems.
     const restingWeeks = [...byWeek.keys()].filter((k) => k < 0);
-    expect(restingWeeks).toHaveLength(29);
+    expect(restingWeeks).toHaveLength(CORPUS_WEEKS.length - 1);
     const restingStems = restingWeeks.reduce((sum, key) => sum + (byWeek.get(key) ?? 0), 0);
-    expect(restingStems).toBe(142 - 4);
+    expect(restingStems).toBe(PROGRAMME_SEED_STEMS.length - countOf(weekB));
   });
 
-  it('activates the target week and rests all others, both directions (set 12, then set 5)', () => {
+  it('activates the target week and rests all others, both directions (set one week, then another)', () => {
     const { raw, repo } = makeDb();
 
-    repo.setProgrammeWeekActive(12);
+    repo.setProgrammeWeekActive(weekC);
     let byWeek = activeByWeek(raw);
-    expect(byWeek.get(12)).toBe(4);
-    expect(byWeek.get(-12)).toBeUndefined();
-    expect([...byWeek.keys()].filter((k) => k > 0)).toEqual([12]);
+    expect(byWeek.get(weekC)).toBe(countOf(weekC));
+    expect(byWeek.get(-weekC)).toBeUndefined();
+    expect([...byWeek.keys()].filter((k) => k > 0)).toEqual([weekC]);
 
-    repo.setProgrammeWeekActive(5);
+    repo.setProgrammeWeekActive(weekD);
     byWeek = activeByWeek(raw);
-    expect(byWeek.get(5)).toBe(4);
-    expect(byWeek.get(12)).toBeUndefined();
-    expect(byWeek.get(-12)).toBe(4); // the previously active week rests too
+    expect(byWeek.get(weekD)).toBe(countOf(weekD));
+    expect(byWeek.get(weekC)).toBeUndefined();
+    expect(byWeek.get(-weekC)).toBe(countOf(weekC)); // the previously active week rests too
   });
 
   it('leaves user stems, the weekly meta-stem, the evening meta-stems and the retired originals untouched', () => {
     const { raw, repo } = makeDb();
     const userId = repo.addStem({ text: 'My own stem', category: 'purpose', origin: 'user' });
 
-    repo.setProgrammeWeekActive(7);
+    repo.setProgrammeWeekActive(weekD);
 
     const user = raw.prepare('SELECT active, deleted_at FROM stems WHERE id = ?').get(userId) as {
       active: number;
@@ -131,20 +143,20 @@ describe('setProgrammeWeekActive (issue 04 week-set activation)', () => {
 describe('getProgrammeWeekBlock (one-off visit read, activation-state-agnostic)', () => {
   it('returns the whole non-deleted block in seed order even when the week is resting', () => {
     const { repo } = makeDb();
-    repo.setProgrammeWeekActive(1); // week 3 now rests
+    repo.setProgrammeWeekActive(weekA); // weekB now rests
 
-    const block = repo.getProgrammeWeekBlock(3);
-    const seedWeek3 = PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === 3);
-    expect(block.map((s) => s.text)).toEqual(seedWeek3.map((s) => s.text));
+    const block = repo.getProgrammeWeekBlock(weekB);
+    const seedWeekB = PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === weekB);
+    expect(block.map((s) => s.text)).toEqual(seedWeekB.map((s) => s.text));
     expect(block.every((s) => s.origin === 'seed')).toBe(true);
   });
 
   it('excludes soft-deleted stems and rejects out-of-range weeks', () => {
     const { repo } = makeDb();
-    const victim = repo.getProgrammeWeekBlock(5)[0];
+    const victim = repo.getProgrammeWeekBlock(weekD)[0];
     repo.softDeleteStem(victim.id, '2026-09-16T00:00:00.000Z');
 
-    expect(repo.getProgrammeWeekBlock(5)).toHaveLength(PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === 5).length - 1);
+    expect(repo.getProgrammeWeekBlock(weekD)).toHaveLength(countOf(weekD) - 1);
     expect(repo.getProgrammeWeekBlock(0)).toEqual([]);
     expect(repo.getProgrammeWeekBlock(31)).toEqual([]);
   });
@@ -153,13 +165,13 @@ describe('getProgrammeWeekBlock (one-off visit read, activation-state-agnostic)'
 describe('listProgrammeStems (programme page read)', () => {
   it('includes resting stems after activation and still excludes soft-deleted ones', () => {
     const { repo } = makeDb();
-    repo.setProgrammeWeekActive(2);
-    const victim = repo.listProgrammeStems().find((s) => s.weekNumber === 9)!;
+    repo.setProgrammeWeekActive(weekD);
+    const victim = repo.listProgrammeStems().find((s) => s.weekNumber === weekB)!;
     repo.softDeleteStem(victim.id, '2026-09-16T00:00:00.000Z');
 
     const stems = repo.listProgrammeStems();
     expect(stems).toHaveLength(PROGRAMME_SEED_STEMS.length - 1);
-    expect(stems.filter((s) => s.weekNumber === 2)).toHaveLength(4); // resting week still listed
+    expect(stems.filter((s) => s.weekNumber === weekD)).toHaveLength(countOf(weekD)); // resting week still listed
     expect(stems.find((s) => s.id === victim.id)).toBeUndefined();
     // Ordered by week then seed order.
     for (let i = 1; i < stems.length; i++) {
@@ -182,37 +194,37 @@ describe('week-set activation end to end over the §6.2/§7 setting', () => {
     const { raw, repo } = makeDb();
 
     // The make-my-week flow (week.tsx): setting the override, then activation.
-    repo.setSetting('program_week_override', 12);
+    repo.setSetting('program_week_override', weekC);
     applyWeekSetActivation(repo);
-    expect(activeFlags(raw, 12)).toEqual([1, 1, 1, 1]);
+    expect(activeFlags(raw, weekC)).toEqual(allActive(weekC));
     expect(
       raw
-        .prepare('SELECT COUNT(*) as c FROM stems WHERE week_number IS NOT NULL AND week_number != 12 AND active = 1')
-        .get(),
+        .prepare('SELECT COUNT(*) as c FROM stems WHERE week_number IS NOT NULL AND week_number != ? AND active = 1')
+        .get(weekC),
     ).toEqual({ c: 0 });
     // The morning rotation reads the override week's active stems.
     expect(readMorningSittingQueue(repo).map((s) => s.text)).toEqual(
-      PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === 12).map((s) => s.text),
+      PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === weekC).map((s) => s.text),
     );
 
     // The clear path (card toggle or reflection completion): the derived week
-    // (1 — no anchor on a fresh corpus) takes over.
+    // (weekA — no anchor on a fresh corpus) takes over.
     repo.setSetting('program_week_override', null);
     applyWeekSetActivation(repo);
-    expect(activeFlags(raw, 1)).toEqual([1, 1, 1, 1]);
+    expect(activeFlags(raw, weekA)).toEqual(allActive(weekA));
     expect(
       raw
-        .prepare('SELECT COUNT(*) as c FROM stems WHERE week_number IS NOT NULL AND week_number != 1 AND active = 1')
-        .get(),
+        .prepare('SELECT COUNT(*) as c FROM stems WHERE week_number IS NOT NULL AND week_number != ? AND active = 1')
+        .get(weekA),
     ).toEqual({ c: 0 });
-    expect(readMorningSittingQueue(repo)).toHaveLength(4);
+    expect(readMorningSittingQueue(repo)).toHaveLength(countOf(weekA));
   });
 
   it('user stems and the weekly meta-stem stay out of the activation set entirely', () => {
     const { raw, repo } = makeDb();
     repo.addStem({ text: 'Manual stem', category: null, origin: 'user' });
 
-    repo.setSetting('program_week_override', 5);
+    repo.setSetting('program_week_override', weekD);
     applyWeekSetActivation(repo);
 
     const nonProgramme = raw

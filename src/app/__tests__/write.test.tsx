@@ -19,12 +19,12 @@ function makeStem(id: string, text: string, weekNumber: number): StemRow {
 
 // jest.mock()'s factory below can't close over module-scope variables unless
 // they're prefixed `mock*` — see jest's hoisting rule.
-const mockStemA = makeStem('stem-a', 'If I bring more awareness to my life today', 1);
-const mockStemB = makeStem('stem-b', 'If I take more responsibility for my choices and actions today', 1);
-const mockStemC = makeStem('stem-c', 'If I pay more attention to how I deal with people today', 1);
-const mockWeek2Stem = makeStem('stem-w2', 'If I bring 5 percent more awareness to my important relationships', 2);
+const mockStemA = makeStem('stem-a', 'If I give this mock sitting my full attention', 1);
+const mockStemB = makeStem('stem-b', 'If I treat this mock test stem responsibly', 1);
+const mockStemC = makeStem('stem-c', 'If I notice how this mock third stem reads', 1);
+const mockWeek2Stem = makeStem('stem-w2', 'If this mock week-two stem behaves in tests', 2);
 const mockUserStem = { ...makeStem('stem-user', 'My own made-up stem is', 0), origin: 'user' as const };
-const mockWeeklyMeta = makeStem('meta-weekly', 'If any of what I wrote this week is true, it might be helpful if I', 0);
+const mockWeeklyMeta = makeStem('meta-weekly', 'If this mock weekly reflection stem renders its review', 0);
 const mockEveningA = { ...makeStem('meta-evening-a', 'In my body right now I feel', 0), origin: 'meta' };
 const mockEveningB = { ...makeStem('meta-evening-b', 'Right now I am aware of', 0), origin: 'meta' };
 
@@ -170,7 +170,7 @@ describe('WriteScreen — sittings', () => {
     render(<WriteScreen />);
 
     await screen.findByText(/Stem 1 of 3/);
-    await screen.findByText(/If I bring more awareness to my life today/);
+    await screen.findByText(/If I give this mock sitting my full attention/);
     fireEvent.press(screen.getByText('Start'));
 
     const input = await screen.findByLabelText('Your ending');
@@ -182,7 +182,7 @@ describe('WriteScreen — sittings', () => {
     fireEvent.changeText(input, 'a stray thought I keep circling back to\n');
 
     await screen.findByText(/Stem 2 of 3/);
-    await screen.findByText(/If I take more responsibility for my choices and actions today/);
+    await screen.findByText(/If I treat this mock test stem responsibly/);
     expect(screen.getByText('Start')).toBeTruthy();
     expect(screen.queryByText('a stray thought I keep circling back to')).toBeNull();
   });
@@ -206,18 +206,18 @@ describe('WriteScreen — sittings', () => {
     mockParams.value = { timeOfDay: 'morning' };
     render(<WriteScreen />);
     expect(screen.getByText(/Stem 1 of 3/)).toBeTruthy();
-    expect(screen.getByText(/If I bring more awareness to my life today/)).toBeTruthy();
+    expect(screen.getByText(/If I give this mock sitting my full attention/)).toBeTruthy();
   });
 
   it('a bare /write defaults to the morning sitting instead of a blank screen', () => {
     render(<WriteScreen />);
-    expect(screen.getByText(/If I bring more awareness to my life today/)).toBeTruthy();
+    expect(screen.getByText(/If I give this mock sitting my full attention/)).toBeTruthy();
   });
 
   it('one-off week sitting: /write?week=2 loads that week’s block as manual sessions', () => {
     mockParams.value = { week: '2' };
     render(<WriteScreen />);
-    expect(screen.getByText(/If I bring 5 percent more awareness to my important relationships/)).toBeTruthy();
+    expect(screen.getByText(/If this mock week-two stem behaves in tests/)).toBeTruthy();
     expect(mockRepoState.createdSessions).toEqual([]); // nothing created before Start (§6.3.1)
     fireEvent.press(screen.getByText('Start'));
     expect(mockRepoState.createdSessions).toEqual([{ origin: 'manual', stemId: mockWeek2Stem.id }]);
@@ -229,7 +229,7 @@ describe('WriteScreen — sittings', () => {
     render(<WriteScreen />);
 
     await screen.findByText(/Stem 2 of 3/);
-    expect(screen.getByText(/If I take more responsibility for my choices and actions today/)).toBeTruthy();
+    expect(screen.getByText(/If I treat this mock test stem responsibly/)).toBeTruthy();
     // Resumed sessions are already active — no Start gate on a running timer.
     expect(screen.getByLabelText('Your ending')).toBeTruthy();
   });
@@ -246,7 +246,7 @@ describe('WriteScreen — evening reflection (§6.2/§6.5.2)', () => {
   function reviewedMorning() {
     return [
       {
-        session: { id: 'morning-1', started_at: '2026-09-16T06:00:00.000Z', stem_text_snapshot: 'If I bring more awareness to my life today' },
+        session: { id: 'morning-1', started_at: '2026-09-16T06:00:00.000Z', stem_text_snapshot: 'If I give this mock sitting my full attention' },
         endings: [{ id: 'e1', text: 'I noticed the light change on my desk' }],
       },
     ];
@@ -258,7 +258,7 @@ describe('WriteScreen — evening reflection (§6.2/§6.5.2)', () => {
     render(<WriteScreen />);
 
     // Reread phase: today's morning endings, read-only, then Continue.
-    await screen.findByText(/If I bring more awareness to my life today/);
+    await screen.findByText(/If I give this mock sitting my full attention/);
     expect(screen.getByText('I noticed the light change on my desk')).toBeTruthy();
     fireEvent.press(screen.getByText('Continue'));
 
@@ -306,7 +306,7 @@ describe('WriteScreen — weekly reflection (/write?origin=weekly, §6.5.1)', ()
   function reviewedWeek() {
     return [
       {
-        session: { id: 'week1-1', started_at: '2026-09-14T06:00:00.000Z', stem_text_snapshot: 'If I bring more awareness to my life today' },
+        session: { id: 'week1-1', started_at: '2026-09-14T06:00:00.000Z', stem_text_snapshot: 'If I give this mock sitting my full attention' },
         endings: [{ id: 'e1', text: 'I actually looked up from my screen at lunch' }],
       },
     ];
@@ -320,10 +320,10 @@ describe('WriteScreen — weekly reflection (/write?origin=weekly, §6.5.1)', ()
     render(<WriteScreen />);
 
     await screen.findByText(/Week 1 review/);
-    await screen.findByText(/If I bring more awareness to my life today/);
+    await screen.findByText(/If I give this mock sitting my full attention/);
     fireEvent.press(screen.getByText('Continue'));
 
-    await screen.findByText(/If any of what I wrote this week is true/);
+    await screen.findByText(/If this mock weekly reflection stem renders its review/);
     const input = await screen.findByLabelText('Your reflection');
     fireEvent.changeText(input, 'the week kept asking the same question\n');
 
@@ -383,7 +383,7 @@ describe('WriteScreen — open review sessions resume into their flow (c05-queue
     render(<WriteScreen />);
     // Still routed into the reflection flow — starting a fresh sitting
     // under the open row would orphan it (ADR-0001).
-    await screen.findByText(/If any of what I wrote this week is true/);
+    await screen.findByText(/If this mock weekly reflection stem renders its review/);
     expect(mockRepoState.createdSessions).toEqual([]);
   });
 });

@@ -6,6 +6,10 @@ import { nodeSqliteExecutor } from '../../db/testSupport/nodeSqliteExecutor';
 import { CURRENT_SCHEMA_VERSION } from '../../db/migrations';
 import { applyImport } from '../importBundle';
 import { buildJsonBundle, ExportBundle, serializeJsonBundle } from '../jsonBundle';
+import { PROGRAMME_SEED_STEMS } from '../../db/seed/stems';
+
+/** Issue 10: the activation scenario week derives from the loaded corpus (second week) so the round trip exercises identically under owner and example content. */
+const ACTIVATION_WEEK = [...new Set(PROGRAMME_SEED_STEMS.map((s) => s.weekNumber))].sort((a, b) => a - b)[1];
 
 /**
  * Spec §8's explicit test: "export, wipe, import, export again, assert
@@ -34,11 +38,12 @@ function exportNow(repo: Repository, exportedAt: string): ExportBundle {
 
 /** Writes a realistic, varied corpus: a user stem, a completed session with two endings (one containing quotes/commas/newlines — the CSV-hostile characters), a soft-deleted stem, a soft-deleted session, and a review. The corpus also exercises issue 04's state: week-set activation (one active week, others resting) and a `program_week_override` row, so categories and activation flags must survive the round trip unchanged. */
 function writeRealisticCorpus(repo: Repository): void {
-  // Week-set activation (issue 04): week 2 becomes the active programme
-  // week — every programme stem gains a category at seed time, and all
-  // non-2 weeks go inactive. Export must carry both columns' new states.
-  repo.setProgrammeWeekActive(2);
-  repo.setSetting('program_week_override', 2);
+  // Week-set activation (issue 04): the scenario week becomes the active
+  // programme week — every programme stem gains a category at seed time,
+  // and all other weeks go inactive. Export must carry both columns' new
+  // states. (Week derives from the corpus; see ACTIVATION_WEEK.)
+  repo.setProgrammeWeekActive(ACTIVATION_WEEK);
+  repo.setSetting('program_week_override', ACTIVATION_WEEK);
 
   const stemId = repo.listActiveStems()[0].id;
 
