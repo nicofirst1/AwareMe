@@ -15,16 +15,30 @@ import { rescheduleNotifications } from '@/notifications/scheduler';
  * once at first launch"): ONE question card — "Include an evening
  * practice?" — shown before anything else on first launch, upgraders
  * included (they carry `onboarding_completed` from v1 but have never been
- * asked). The recommended answer, include, is the primary button.
+ * asked).
+ *
+ * The default selection is the morning path, unconditionally (owner
+ * feedback 2026-09-16): "Start with the morning sitting" is the primary
+ * button and persists `evening_practice_enabled = false`, even when the
+ * user onboards in the evening. The default is never clock-sensitive —
+ * deliberately nothing here reads the time. "Include evening practice"
+ * is the explicit opt-in; "Skip for now" writes nothing (the §7 default
+ * `true` stands, stated on the card).
+ *
+ * The card carries the method's purpose, not just the mechanics (owner
+ * feedback 2026-09-16): the exercise exists to increase self-awareness,
+ * and self-esteem is the method's stated purpose — stated factually, no
+ * outcome promises (§10). It also says what the method asks and what the
+ * app adds: the original method is practised morning and evening, and
+ * this app also gives a weekly reflection.
  *
  * "Shown once" is `Repository.isIntroComplete()` (the `settings`-table
  * marker `intro_completed`, mirroring the documented `onboarding_completed`
  * pattern): the root layout's first-run gate routes here until the marker
  * exists, so the card also survives an app kill between answering and
- * onboarding completion. Both exits mark it complete — "Skip for now"
- * writes nothing (the §7 default `true` stands) while "Include evening
- * practice" persists the answer — so neither path can loop the user back
- * into this card. Everything else keeps defaults and lives in Settings.
+ * onboarding completion. All three exits mark it complete — so no path
+ * can loop the user back into this card. Everything else keeps defaults
+ * and lives in Settings.
  *
  * Ordered before onboarding (§6.1), not instead of it: after answering,
  * first launch continues into the existing 4-step onboarding (or Home for
@@ -47,6 +61,7 @@ export default function IntroScreen() {
 
   const exitTarget = () => (repo.isOnboardingComplete() ? '/' : '/onboarding');
 
+  // Both answers persist explicitly; only skip relies on the §7 default.
   const answer = (include: boolean) => {
     repo.setSetting('evening_practice_enabled', include);
     repo.setIntroComplete();
@@ -73,11 +88,17 @@ export default function IntroScreen() {
         <ThemedView style={styles.card}>
           <ThemedText type="title">Include an evening practice?</ThemedText>
           <ThemedText type="default">
-            It adds a short second sitting: the morning&apos;s endings shown once more, then one reflection
-            sentence to finish. The app works just as well without it.
+            The exercise is for self-awareness: finishing the beginnings of sentences about yourself, quickly
+            and without evaluation. Self-esteem is the method’s stated purpose.
+          </ThemedText>
+          <ThemedText type="default">
+            The original method is practised morning and evening, and this app also gives you a weekly
+            reflection. The evening practice adds a short second sitting: the morning’s endings shown once
+            more, then one reflection sentence to finish. The app works just as well without it.
           </ThemedText>
           <ThemedView style={styles.buttonRow}>
-            <Button label="Include evening practice" variant="primary" onPress={() => answer(true)} />
+            <Button label="Start with the morning sitting" variant="primary" onPress={() => answer(false)} />
+            <Button label="Include evening practice" variant="text" onPress={() => answer(true)} />
             <Button label="Skip for now" variant="text" onPress={skip} />
           </ThemedView>
           <ThemedText type="small" themeColor="textSecondary">
