@@ -21,7 +21,7 @@ export const COLUMNS: Record<(typeof CSV_TABLES)[number], readonly string[]> = {
   reviews: ['id', 'period_start', 'period_end', 'session_ids', 'reflection_text', 'meta_stem_text', 'created_at', 'tz', 'offset_min', 'deleted_at'],
 };
 
-const README = `# Six Endings export
+const README = `# AwareMe export
 
 One CSV file per table, RFC 4180 quoted (fields containing a comma, quote,
 or newline are double-quoted; a literal quote is doubled). One header row.

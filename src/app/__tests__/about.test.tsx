@@ -20,7 +20,7 @@ describe('AboutScreen', () => {
     render(<AboutScreen />);
 
     expect(screen.getByText('About')).toBeTruthy();
-    expect(screen.getByText(/Six Endings is a quiet place/)).toBeTruthy();
+    expect(screen.getByText(/AwareMe is a quiet place/)).toBeTruthy();
     expect(screen.getByText(/Version/)).toBeTruthy();
     expect(screen.getByText('About the method')).toBeTruthy();
     expect(screen.getByText('Created by Nicolo\' Brandizzi')).toBeTruthy();

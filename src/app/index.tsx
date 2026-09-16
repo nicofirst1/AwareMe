@@ -149,7 +149,7 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
           <View style={styles.header}>
-            <ThemedText type="title">Six Endings</ThemedText>
+            <ThemedText type="title">AwareMe</ThemedText>
             {/* Owner feedback 2026-09-16 (v12 issue 02): the old tagline read
                 as "finish sentences" with no stated purpose. This names the
                 practice's aim without hype (§10, §13.4); two alternatives are

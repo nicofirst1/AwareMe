@@ -49,7 +49,7 @@ export default function AboutScreen() {
         <ScreenHeader title="About" />
         <ThemedView style={styles.content}>
           <ThemedText type="default" themeColor="textSecondary">
-            Six Endings is a quiet place to finish a sentence — no scoring, no feed, nothing leaving your device.
+            AwareMe is a quiet place to finish a sentence — no scoring, no feed, nothing leaving your device.
           </ThemedText>
 
           <ThemedText type="default" themeColor="textSecondary">
