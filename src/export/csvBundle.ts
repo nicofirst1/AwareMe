@@ -7,11 +7,11 @@
 import { toCsv } from './csv';
 import type { TableDump } from './jsonBundle';
 
-const CSV_TABLES = ['stems', 'sessions', 'endings', 'reviews'] as const;
+export const CSV_TABLES = ['stems', 'sessions', 'endings', 'reviews'] as const;
 
 /** Column order per table, matching the DDL (migrations/0001_initial.ts) exactly — every column, nothing derived or dropped. */
-const COLUMNS: Record<(typeof CSV_TABLES)[number], readonly string[]> = {
-  stems: ['id', 'text', 'origin', 'category', 'language', 'weight', 'active', 'created_at', 'created_tz', 'created_offset_min', 'deleted_at', 'time_of_day'],
+export const COLUMNS: Record<(typeof CSV_TABLES)[number], readonly string[]> = {
+  stems: ['id', 'text', 'origin', 'category', 'language', 'weight', 'active', 'created_at', 'created_tz', 'created_offset_min', 'deleted_at', 'time_of_day', 'week_number', 'is_weekly_meta'],
   sessions: [
     'id', 'stem_id', 'stem_text_snapshot', 'origin', 'target_endings', 'timer_seconds', 'uncensored_mode',
     'started_at', 'first_keypress_at', 'ended_at', 'end_reason', 'notification_id', 'notified_at', 'opened_at',
