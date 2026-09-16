@@ -13,10 +13,19 @@ expo-env.d.ts
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
 *.mobileprovision
+
+# Release signing (issue 05: NEVER commit a keystore or any password).
+# keystore.properties is read by scripts/with-android-signing.js from the repo
+# root (prebuild-safe; android/ is wiped by `expo prebuild`) — explicit
+# entries keep both candidate paths ignored even if android/ is ever
+# committed. Generation + backup walkthrough: docs/release-android.md
+/keystore.properties
+/android/keystore.properties
 
 # Metro
 .metro-health-check*

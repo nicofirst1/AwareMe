@@ -38,9 +38,9 @@ What the app does:
 — Keeps a private record of everything you write, organized by date and
   by sentence.
 — Lets you write your own sentences, or import a list of your own.
-— Can send a quiet reminder once a day, at a random time within a window
-  you set — never the same time twice, and the reminder never shows what
-  the sentence is.
+— Can send a quiet reminder at the times you set each day, plus a reminder
+  for the weekly reflection — all local, on-device notifications. A reminder
+  never shows what the sentence is.
 — Offers a weekly review: reread what you wrote, then finish one more
   reflective sentence about it.
 — Exports everything — every sentence, every ending, including anything
@@ -52,8 +52,10 @@ What the app doesn't do:
 — No account, no sign-in, no cloud sync.
 — No network access at all — it works exactly the same in airplane mode.
 — No analytics, no tracking, no ads.
-— No scoring, no streaks to keep up, no badges, nothing to win or lose.
-  What you write is never evaluated, only kept.
+— No scoring, no evaluation, nothing to win or lose. What you write is
+  never judged, only kept. A quiet, descriptive note of milestones (your
+  first sessions, a week of mornings) appears only after a session has
+  ended — never while you are writing, and never a demand to return.
 — Nothing you write ever leaves your device unless you choose to export
   it yourself.
 
@@ -62,9 +64,10 @@ available in Settings for anyone who shares a device.
 
 This app is built around sentence completion, a technique developed by
 the psychologist Nathaniel Branden and described at length in his own
-books. The sentences in this app are original material written in the
-spirit of his method, not excerpts from his work — if the practice is
-useful to you, his books are the place to go deeper.
+books. The sentences included with the app are the official Sentence
+Completion I programme, used with permission from Leigh Branden — method
+and original programme: Nathaniel Branden, nathanielbranden.com. If the
+practice is useful to you, his books are the place to go deeper.
 ```
 
 ## Keywords (App Store, comma-separated, 100-character limit)
