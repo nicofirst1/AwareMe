@@ -4,7 +4,7 @@ import { AppState } from 'react-native';
 
 import type { TimeOfDay } from '@/db';
 import { getNotifications } from './notificationsModule';
-import { rescheduleNotifications, NOTIFICATION_DATA_KIND } from './scheduler';
+import { rescheduleNotifications, NOTIFICATION_DATA_KIND, WEEKLY_NOTIFICATION_DATA_PERIOD } from './scheduler';
 
 /**
  * Foreground presentation: notification content is already neutral (§6.4),
@@ -49,12 +49,15 @@ export function useNotificationScheduler(): void {
 }
 
 /**
- * Tapping a notification deep-links straight into that period's writing
- * sitting (§6.4, morning/evening pivot): the tap's silent `data.timeOfDay`
- * payload (not stem or user text — §6.4's lock-screen privacy rule) says
- * which of the two fixed daily notifications fired, and `/write` loads every
- * active stem for that period itself (§6.2). `origin='notification'` on each
- * resulting session comes from the `/write` route params this pushes.
+ * Tapping a notification deep-links into the sitting it announced (§6.4):
+ * the tap's silent `data` payload (not stem or user text — §6.4's lock-screen
+ * privacy rule) says which fired. The two daily notifications carry
+ * `timeOfDay` and push `/write?timeOfDay=<period>&origin=notification` —
+ * `/write` loads every active stem for that period itself (§6.2). The weekly
+ * reflection notification (§6.4 2026-09-15 amendment, ADR-0005) carries
+ * `period: 'weekly'` and targets c02's weekly route contract exactly:
+ * `/write?origin=weekly` — the route loads the weekly review itself; this
+ * payload adds nothing textual.
  *
  * Installs nothing where the native module isn't available (Expo Go).
  */
@@ -67,13 +70,21 @@ export function useNotificationTapRouting(): void {
     if (!Notifications) return;
 
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { kind?: string; timeOfDay?: TimeOfDay } | undefined;
-      if (data?.kind !== NOTIFICATION_DATA_KIND || !data.timeOfDay) return;
+      const data = response.notification.request.content.data as
+        | { kind?: string; timeOfDay?: TimeOfDay; period?: string }
+        | undefined;
+      if (data?.kind !== NOTIFICATION_DATA_KIND) return;
 
       const osIdentifier = response.notification.request.identifier;
       if (handledIds.current.has(osIdentifier)) return;
       handledIds.current.add(osIdentifier);
 
+      if (data.period === WEEKLY_NOTIFICATION_DATA_PERIOD) {
+        router.push({ pathname: '/write', params: { origin: 'weekly' } });
+        return;
+      }
+
+      if (!data.timeOfDay) return;
       router.push({
         pathname: '/write',
         params: { timeOfDay: data.timeOfDay, origin: 'notification' },

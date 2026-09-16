@@ -8,22 +8,33 @@ import { useNotificationScheduler, useNotificationTapRouting } from '@/notificat
 import { useAppLock } from '@/session/useAppLock';
 
 /**
- * Gates every route behind onboarding (§6.1, ticket 17: "shown once")
- * except `/onboarding` itself. Lives in the root layout, not `index.tsx`,
- * because `index.test.tsx` is a bare `render(<HomeScreen />)` with no
- * navigation context — touching `@/db`/`expo-sqlite` or `useRouter` from
- * that screen at render time would break it (see DECISIONS.md's ticket-06
- * and ticket-13 entries for the same constraint on other screens). The
- * root layout is never rendered by that test, so the check is safe here.
+ * Gates every route behind the first-run flow, in two stages, except the
+ * stage's own route. Stage 1: the one-question introduction (§7, ADR-0005:
+ * evening practice "asked once at first launch") — before anything else, on
+ * every launch until answered; upgraders included, since they carry
+ * `onboarding_completed` from v1 but have never been asked (exactly why the
+ * gate keys on the intro marker, not on onboarding). Stage 2: the existing
+ * 4-step onboarding (§6.1, ticket 17: "shown once").
+ *
+ * Lives in the root layout, not `index.tsx`, because `index.test.tsx` is a
+ * bare `render(<HomeScreen />)` with no navigation context — touching
+ * `@/db`/`expo-sqlite` or `useRouter` from that screen at render time would
+ * break it (see DECISIONS.md's ticket-06 and ticket-13 entries for the same
+ * constraint on other screens). The root layout is never rendered by that
+ * test, so the check is safe here.
  */
-function useOnboardingGate(): void {
+function useFirstRunGate(): void {
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
+    const repo = getRepository();
+    if (!repo.isIntroComplete()) {
+      if (segments[0] !== 'intro') router.replace('/intro');
+      return;
+    }
     const onOnboardingRoute = segments[0] === 'onboarding';
-    const complete = getRepository().isOnboardingComplete();
-    if (!complete && !onOnboardingRoute) {
+    if (!repo.isOnboardingComplete() && !onOnboardingRoute) {
       router.replace('/onboarding');
     }
   }, [router, segments]);
@@ -34,7 +45,7 @@ export default function RootLayout() {
   const theme = colorScheme === 'dark' ? DarkTheme : DefaultTheme;
   useNotificationScheduler();
   useNotificationTapRouting();
-  useOnboardingGate();
+  useFirstRunGate();
   const lock = useAppLock();
 
   return (
