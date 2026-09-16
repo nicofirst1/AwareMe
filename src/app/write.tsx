@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   TextInput,
+  useAnimatedValue,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -176,11 +177,11 @@ export default function WriteScreen() {
   // single calm settle on "Saved." — scale 0.92->1 + opacity 0->1, ~400ms,
   // friction-tuned to land without overshoot ("settle, don't bounce").
   // Shown once, after the whole sitting completes — never between stems.
-  const settleAnim = useRef(new Animated.Value(0)).current;
+  const settleAnim = useAnimatedValue(0);
   // Badge reveal: fade + 8px upward slide, shared by every stacked badge
   // card (proposal §2) — they appear together, sequenced only against the
   // settle animation above, not staggered against each other.
-  const badgeRevealAnim = useRef(new Animated.Value(0)).current;
+  const badgeRevealAnim = useAnimatedValue(0);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [newlyEarnedBadges, setNewlyEarnedBadges] = useState<BadgeDef[]>([]);
 
