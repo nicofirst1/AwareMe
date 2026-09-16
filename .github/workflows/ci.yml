@@ -1,0 +1,67 @@
+# Continuous integration for Six Endings.
+#
+# Mirrors the local gate trio (typecheck / jest / expo lint) on a fresh clone
+# of the repo. The workflow assumes nothing about the machine it runs on: no
+# private content, no local paths, no secrets. Files that are gitignored
+# locally never exist here, and the suite is expected to be green without them.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same branch or pull request.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: typecheck, jest, lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        # Plain `npm ci` fails on the committed lockfile: expo@57 widened the
+        # peer set and the resolution predates it. `npm install` with legacy
+        # peer deps is the repo remedy (DECISIONS.md, environment quirks).
+        run: npm install --legacy-peer-deps
+
+      - name: Restore missing expo-asset (known npm quirk; DECISIONS.md 2026-09-16)
+        # node_modules/expo-asset repeatedly vanishes across npm install
+        # cycles, after which Jest fails with: Cannot find module expo-asset.
+        # This step only fires when the check finds the module absent, then
+        # reinstalls it without saving: expo-asset is never added to
+        # package.json. When the module is present the step is a no-op.
+        run: |
+          if [ ! -d node_modules/expo-asset ]; then
+            echo "expo-asset missing after install (known quirk): applying remedy"
+            npm install expo-asset@57.0.16 --no-save --legacy-peer-deps
+          else
+            echo "expo-asset present: no remedy needed"
+          fi
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npx jest
+
+      - name: Lint
+        # Baseline is 0 errors and 16 warnings. Warnings do not fail the run;
+        # any error does (default eslint exit behaviour).
+        run: npx expo lint
