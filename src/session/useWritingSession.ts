@@ -92,8 +92,14 @@ export function useWritingSession(): WritingSessionView {
   }, [sessionId]);
 
   const finalize = useCallback(
-    (reason: 'timeout' | 'user_done' | 'abandoned') => {
-      const current = stateRef.current;
+    (reason: 'timeout' | 'user_done' | 'abandoned', overrideState?: SessionState) => {
+      // `overrideState`: the just-computed state when finalize is called from
+      // the same handler that produced it (submitActive's completion path) —
+      // `stateRef.current` only syncs after commit, so reading it there would
+      // finalize the PRE-submit state and drop the final ending's text from
+      // the in-memory record (the DB rows were already correct; the loss
+      // surfaced in the reflection flows' `reviews.reflection_text`).
+      const current = overrideState ?? stateRef.current;
       const id = sessionIdRef.current;
       if (!current || !id || current.endedAt) return;
 
@@ -338,7 +344,7 @@ export function useWritingSession(): WritingSessionView {
       setState(next);
 
       if (isComplete(next)) {
-        finalize('user_done');
+        finalize('user_done', next);
       }
     },
     [repo, finalize],
