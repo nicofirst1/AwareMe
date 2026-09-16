@@ -54,3 +54,6 @@ example
 # agent-orchestration scratch (layout round 2026-09-15)
 .coordination/
 .captures/
+
+# herdr delegation round worktrees (coordinator, 2026-09-16)
+.worktrees/
