@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { migrate } from '../migrate';
 import { Repository } from '../repository';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
+import { EVENING_META_STEMS, PROGRAMME_SEED_STEMS, RETIRED_SEED_STEMS, WEEKLY_META_STEM } from '../seed/stems';
 
 function freshRepository(): { db: DatabaseSync; repo: Repository } {
   const raw = new DatabaseSync(':memory:');
@@ -42,7 +43,10 @@ describe('Repository.listStemTexts', () => {
   it('returns every non-deleted stem text, for duplicate checking', () => {
     const { db, repo } = freshRepository();
     const texts = repo.listStemTexts();
-    expect(texts.length).toBe(26);
+    // 142 programme stems + the weekly meta-stem (origin='seed' since
+    // migration 0004; its text should block verbatim duplicates too).
+    // The 26 retired originals are soft-deleted at seed — excluded.
+    expect(texts.length).toBe(PROGRAMME_SEED_STEMS.length + 1);
 
     const id = repo.addStem({ text: 'Freshly added', category: null, origin: 'user' });
     expect(repo.listStemTexts()).toContain('Freshly added');
@@ -53,16 +57,18 @@ describe('Repository.listStemTexts', () => {
 });
 
 describe('Repository.listMetaStems', () => {
-  it('returns the 3 meta-stems with real ids, excluded from listActiveStems/listAllStems/listStemTexts', () => {
+  it('returns all 3 §5.4 meta-stems — the weekly one (origin=seed, is_weekly_meta=1) plus the 2 evening ones — excluded from listActiveStems/listAllStems', () => {
     const { repo } = freshRepository();
     const metaStems = repo.listMetaStems();
     expect(metaStems).toHaveLength(3);
-    expect(metaStems.every((s) => s.origin === 'meta')).toBe(true);
+    // Seeded order preserved: the weekly stem first (created first), then
+    // the two evening meta-stems.
+    expect(metaStems[0].text).toBe(WEEKLY_META_STEM);
+    expect(metaStems.slice(1).map((s) => s.text).sort()).toEqual([...EVENING_META_STEMS].sort());
 
     const metaIds = new Set(metaStems.map((s) => s.id));
     expect(repo.listActiveStems().some((s) => metaIds.has(s.id))).toBe(false);
     expect(repo.listAllStems().some((s) => metaIds.has(s.id))).toBe(false);
-    expect(metaStems.some((s) => repo.listStemTexts().includes(s.text))).toBe(false);
   });
 });
 
@@ -72,9 +78,13 @@ describe('Repository.getActiveStemsForTimeOfDay', () => {
 
     const morning = repo.getActiveStemsForTimeOfDay('morning');
     const evening = repo.getActiveStemsForTimeOfDay('evening');
+    // The official programme (ADR-0005) is mornings-only: every programme
+    // stem is tagged 'morning'; the evening meta-stems and the weekly
+    // meta-stem carry time_of_day = NULL; the retired originals are
+    // soft-deleted at seed. A fresh seed therefore has no evening stems.
     expect(morning.length).toBeGreaterThan(0);
-    expect(evening.length).toBeGreaterThan(0);
-    expect(morning.length + evening.length).toBe(26); // all 26 seed stems; the 3 meta-stems carry time_of_day = NULL
+    expect(morning.length + evening.length).toBe(PROGRAMME_SEED_STEMS.length);
+    expect(evening).toHaveLength(0);
     expect(morning.some((s) => evening.some((e) => e.id === s.id))).toBe(false);
 
     // A newly added stem has no time_of_day (NULL) and never surfaces here.
@@ -88,7 +98,7 @@ describe('Repository.getActiveStemsForTimeOfDay', () => {
     expect(repo.getActiveStemsForTimeOfDay('morning').some((s) => s.id === morningId)).toBe(false);
 
     // Soft-deleting removes it too.
-    const eveningId = evening[0].id;
+    const eveningId = repo.addStem({ text: 'An evening stem', category: null, origin: 'user', timeOfDay: 'evening' });
     db.prepare("UPDATE stems SET deleted_at = '2026-09-14T00:00:00.000Z' WHERE id = ?").run(eveningId);
     expect(repo.getActiveStemsForTimeOfDay('evening').some((s) => s.id === eveningId)).toBe(false);
   });
@@ -113,7 +123,7 @@ describe('Repository.bulkImportStems', () => {
   it('is a no-op for an empty list', () => {
     const { repo } = freshRepository();
     expect(repo.bulkImportStems([], null)).toBe(0);
-    expect(repo.listAllStems()).toHaveLength(26);
+    expect(repo.listAllStems()).toHaveLength(PROGRAMME_SEED_STEMS.length + RETIRED_SEED_STEMS.length);
   });
 });
 

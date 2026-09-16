@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { migrate } from '../migrate';
 import { Repository } from '../repository';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
+import { PROGRAMME_SEED_STEMS, RETIRED_SEED_STEMS } from '../seed/stems';
 import { computeReturnAction } from '@/session/sessionMachine';
 
 function freshRepository(): { db: DatabaseSync; repo: Repository } {
@@ -36,14 +37,17 @@ describe('Repository.getSettings', () => {
 });
 
 describe('Repository.listActiveStems', () => {
-  it('excludes archived and deleted stems', () => {
+  it('excludes archived and deleted stems (and the weekly meta-stem)', () => {
     const { db, repo } = freshRepository();
     const activeBefore = repo.listActiveStems();
-    expect(activeBefore.length).toBe(26);
+    // 142 programme stems; the weekly meta-stem (active, is_weekly_meta=1)
+    // is review machinery and excluded here, the retired originals are
+    // soft-deleted at seed, the evening meta-stems are inactive.
+    expect(activeBefore.length).toBe(PROGRAMME_SEED_STEMS.length);
 
     const someId = activeBefore[0].id;
     db.prepare('UPDATE stems SET active = 0 WHERE id = ?').run(someId);
-    expect(repo.listActiveStems().length).toBe(25);
+    expect(repo.listActiveStems().length).toBe(PROGRAMME_SEED_STEMS.length - 1);
   });
 });
 
@@ -56,8 +60,10 @@ describe('Repository.listAllStems', () => {
     db.prepare("UPDATE stems SET deleted_at = '2026-09-06T00:00:00.000Z' WHERE id = ?").run(otherId);
 
     const all = repo.listAllStems();
-    expect(all).toHaveLength(26);
-    expect(repo.listActiveStems().length).toBe(24);
+    // Programme (all 142, whatever their flags) + the 26 retired originals;
+    // never the weekly meta-stem or the evening meta-stems.
+    expect(all).toHaveLength(PROGRAMME_SEED_STEMS.length + RETIRED_SEED_STEMS.length);
+    expect(repo.listActiveStems().length).toBe(PROGRAMME_SEED_STEMS.length - 2);
 
     const archived = all.find((s) => s.id === someId)!;
     expect(archived.active).toBe(0);

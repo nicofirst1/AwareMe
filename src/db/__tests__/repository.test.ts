@@ -4,7 +4,7 @@ import { migrate } from '../migrate';
 import { Repository, ALL_TABLES } from '../repository';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
 import { DEFAULT_SETTINGS } from '../seed/settings';
-import { META_STEMS } from '../seed/stems';
+import { EVENING_META_STEMS, META_STEMS, PROGRAMME_SEED_STEMS, RETIRED_SEED_STEMS, WEEKLY_META_STEM } from '../seed/stems';
 
 function freshRepository(): { db: DatabaseSync; repo: Repository } {
   const raw = new DatabaseSync(':memory:');
@@ -14,19 +14,62 @@ function freshRepository(): { db: DatabaseSync; repo: Repository } {
 }
 
 describe('Repository.seedIfEmpty', () => {
-  it('inserts all 26 seed stems with origin=seed', () => {
+  it('seeds the official programme corpus (spec §5.3 as amended, ADR-0005)', () => {
     const { db, repo } = freshRepository();
     repo.seedIfEmpty();
 
-    const stems = db.prepare("SELECT * FROM stems WHERE origin = 'seed'").all() as { text: string; category: string | null }[];
-    expect(stems).toHaveLength(26);
-    for (const s of stems) {
-      expect(typeof s.text).toBe('string');
-      expect(s.text.length).toBeGreaterThan(0);
+    // 142 programme stems (byte-check lives in programmeSeed.test.ts) +
+    // 1 weekly meta-stem + 26 soft-deleted retired originals, all
+    // origin='seed'; plus the 2 evening meta-stems (origin='meta').
+    const seedRows = (db.prepare("SELECT COUNT(*) as c FROM stems WHERE origin = 'seed'").get() as { c: number }).c;
+    expect(seedRows).toBe(PROGRAMME_SEED_STEMS.length + 1 + RETIRED_SEED_STEMS.length);
+    const texts = (db.prepare("SELECT text FROM stems WHERE origin = 'seed'").all() as { text: string }[]).map((r) => r.text);
+    for (const t of texts) {
+      expect(typeof t).toBe('string');
+      expect(t.length).toBeGreaterThan(0);
+    }
+    // Programme stems are active morning stems of their week block.
+    const programme = db
+      .prepare('SELECT week_number, active, deleted_at, time_of_day FROM stems WHERE week_number IS NOT NULL')
+      .all() as { week_number: number; active: number; deleted_at: string | null; time_of_day: string | null }[];
+    expect(programme).toHaveLength(PROGRAMME_SEED_STEMS.length);
+    for (const row of programme) {
+      expect(row.active).toBe(1);
+      expect(row.deleted_at).toBeNull();
+      expect(row.time_of_day).toBe('morning');
+      expect(row.week_number).toBeGreaterThanOrEqual(1);
+      expect(row.week_number).toBeLessThanOrEqual(30);
     }
   });
 
-  it('also inserts the 3 meta-stems (§5.4), as inactive stems rows with origin=meta', () => {
+  it('seeds the weekly reflection stem once, active, tagged is_weekly_meta = 1 (ADR-0005 decision 6)', () => {
+    const { db, repo } = freshRepository();
+    repo.seedIfEmpty();
+
+    const weekly = db
+      .prepare('SELECT text, origin, active, week_number, time_of_day, is_weekly_meta, deleted_at FROM stems WHERE is_weekly_meta = 1')
+      .all() as {
+      text: string;
+      origin: string;
+      active: number;
+      week_number: number | null;
+      time_of_day: string | null;
+      is_weekly_meta: number;
+      deleted_at: string | null;
+    }[];
+    expect(weekly).toHaveLength(1);
+    expect(weekly[0]).toMatchObject({
+      text: WEEKLY_META_STEM,
+      origin: 'seed',
+      active: 1,
+      week_number: null,
+      time_of_day: null,
+      is_weekly_meta: 1,
+      deleted_at: null,
+    });
+  });
+
+  it('seeds the 2 evening-review meta-stems as inactive stems rows with origin=meta (§5.4)', () => {
     const { db, repo } = freshRepository();
     repo.seedIfEmpty();
 
@@ -35,17 +78,32 @@ describe('Repository.seedIfEmpty', () => {
       active: number;
       category: string | null;
     }[];
-    expect(metaRows).toHaveLength(3);
-    expect(metaRows.map((r) => r.text).sort()).toEqual([...META_STEMS].sort());
+    expect(metaRows).toHaveLength(2);
+    expect(metaRows.map((r) => r.text).sort()).toEqual([...EVENING_META_STEMS].sort());
     for (const r of metaRows) {
-      // Never selectable by the weighted rotation (§6.2) or shown in the
+      // Never selectable by the sitting draws (§6.2) or shown in the
       // library — they're a distinct concept from stems (CONTEXT.md).
       expect(r.active).toBe(0);
       expect(r.category).toBeNull();
     }
   });
 
-  it('assigns one of the six spec categories, or null, to every seed stem', () => {
+  it('seeds the 26 retired v1 originals soft-deleted and inactive (spec §5.3, struck 2026-09-15)', () => {
+    const { db, repo } = freshRepository();
+    repo.seedIfEmpty();
+
+    const retired = db
+      .prepare('SELECT text, active, deleted_at FROM stems WHERE deleted_at IS NOT NULL')
+      .all() as { text: string; active: number; deleted_at: string | null }[];
+    expect(retired).toHaveLength(26);
+    expect(retired.map((r) => r.text).sort()).toEqual(RETIRED_SEED_STEMS.map((s) => s.text).sort());
+    for (const r of retired) {
+      expect(r.active).toBe(0);
+      expect(r.deleted_at).toBeTruthy();
+    }
+  });
+
+  it('assigns one of the six spec categories, or null, to every seed stem (programme stems are uncategorised)', () => {
     const { db, repo } = freshRepository();
     repo.seedIfEmpty();
 
@@ -60,16 +118,20 @@ describe('Repository.seedIfEmpty', () => {
     ]);
     // origin != 'meta': meta-stems (§5.4) are a distinct concept from
     // stems (see the dedicated test above) and have no category by
-    // construction, which would otherwise inflate the "exactly two" count
-    // below.
-    const stems = db.prepare("SELECT category FROM stems WHERE origin != 'meta'").all() as {
+    // construction.
+    const stems = db.prepare('SELECT category FROM stems WHERE origin != \'meta\'').all() as {
       category: string | null;
     }[];
     for (const s of stems) {
       expect(validCategories.has(s.category)).toBe(true);
     }
-    // exactly two stems (spec's "general" heading, §5.3) have no category
-    expect(stems.filter((s) => s.category === null)).toHaveLength(2);
+    // Only the retired v1 originals carry categories; the official
+    // programme and the weekly meta-stem are uncategorised (spec §5.2's
+    // six buckets describe the v1 list, not the official programme). Of
+    // the 26 retired stems, 24 have a category and 2 (the "general" pair)
+    // are null — see DECISIONS.md.
+    expect(stems.filter((s) => s.category === null)).toHaveLength(PROGRAMME_SEED_STEMS.length + 1 + 2);
+    expect(stems.filter((s) => s.category !== null)).toHaveLength(24);
   });
 
   it('has 3 meta-stems matching spec §5.4, used only at review time per §6.5', () => {
@@ -77,7 +139,7 @@ describe('Repository.seedIfEmpty', () => {
     expect(META_STEMS[0]).toBe('If any of what I wrote this week is true, it might be helpful if I');
   });
 
-  it('seeds every default setting from spec §7', () => {
+  it('seeds every default setting from spec §7 (including the 2026-09-15 additions)', () => {
     const { db, repo } = freshRepository();
     repo.seedIfEmpty();
 
@@ -96,7 +158,7 @@ describe('Repository.seedIfEmpty', () => {
 
     const stemCount = (db.prepare('SELECT COUNT(*) as c FROM stems').get() as { c: number }).c;
     const settingsCount = (db.prepare('SELECT COUNT(*) as c FROM settings').get() as { c: number }).c;
-    expect(stemCount).toBe(26 + META_STEMS.length);
+    expect(stemCount).toBe(PROGRAMME_SEED_STEMS.length + 1 + EVENING_META_STEMS.length + RETIRED_SEED_STEMS.length);
     expect(settingsCount).toBe(Object.keys(DEFAULT_SETTINGS).length);
   });
 
@@ -108,6 +170,7 @@ describe('Repository.seedIfEmpty', () => {
     for (const text of texts) {
       expect(text.endsWith('...')).toBe(false);
       expect(text.endsWith('—')).toBe(false);
+      expect(text.endsWith('…')).toBe(false);
     }
   });
 
@@ -143,7 +206,7 @@ describe('Repository.dumpAllTables', () => {
     repo.seedIfEmpty();
     const dump = repo.dumpAllTables();
 
-    expect(dump.stems).toHaveLength(26 + META_STEMS.length);
+    expect(dump.stems).toHaveLength(PROGRAMME_SEED_STEMS.length + 1 + EVENING_META_STEMS.length + RETIRED_SEED_STEMS.length);
     expect(dump.settings).toHaveLength(Object.keys(DEFAULT_SETTINGS).length);
   });
 });

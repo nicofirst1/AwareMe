@@ -14,8 +14,13 @@ function freshRepository(): { db: DatabaseSync; repo: Repository } {
 }
 
 function stemWithCategory(repo: Repository, category: string): { id: string; text: string } {
-  const stem = repo.listActiveStems().find((s) => s.category === category)!;
-  return { id: stem.id, text: stem.text };
+  // The official programme seed (ADR-0005) is uncategorised and the v1
+  // originals are retired (soft-deleted at seed), so no ACTIVE seeded stem
+  // carries a category any more — history tests write their own user stem
+  // instead of leaning on seed shape.
+  const text = `A ${category} stem for this history test`;
+  const id = repo.addStem({ text, category, origin: 'user' });
+  return { id, text };
 }
 
 describe('Repository.listSessionsForHistory', () => {

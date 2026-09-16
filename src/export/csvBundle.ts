@@ -7,11 +7,11 @@
 import { toCsv } from './csv';
 import type { TableDump } from './jsonBundle';
 
-const CSV_TABLES = ['stems', 'sessions', 'endings', 'reviews'] as const;
+export const CSV_TABLES = ['stems', 'sessions', 'endings', 'reviews'] as const;
 
 /** Column order per table, matching the DDL (migrations/0001_initial.ts) exactly — every column, nothing derived or dropped. */
-const COLUMNS: Record<(typeof CSV_TABLES)[number], readonly string[]> = {
-  stems: ['id', 'text', 'origin', 'category', 'language', 'weight', 'active', 'created_at', 'created_tz', 'created_offset_min', 'deleted_at', 'time_of_day'],
+export const COLUMNS: Record<(typeof CSV_TABLES)[number], readonly string[]> = {
+  stems: ['id', 'text', 'origin', 'category', 'language', 'weight', 'active', 'created_at', 'created_tz', 'created_offset_min', 'deleted_at', 'time_of_day', 'week_number', 'is_weekly_meta'],
   sessions: [
     'id', 'stem_id', 'stem_text_snapshot', 'origin', 'target_endings', 'timer_seconds', 'uncensored_mode',
     'started_at', 'first_keypress_at', 'ended_at', 'end_reason', 'notification_id', 'notified_at', 'opened_at',
@@ -59,6 +59,12 @@ One row per stem, seed or user-authored.
 - \`time_of_day\` (text, nullable) — \`morning\` or \`evening\`; which fixed
   daily notification this stem belongs to. Null for meta-stems and any
   pre-pivot row never backfilled.
+- \`week_number\` (integer, nullable) — the official programme block
+  (1–30) this stem belongs to (2026-09-15, ADR-0005). Null for
+  non-programme stems.
+- \`is_weekly_meta\` (integer, 0/1) — 1 for the official weekly reflection
+  stem (§5.4 #1), the one the scheduled weekly reflection uses. 0 for
+  everything else.
 
 ## sessions.csv
 One row per writing session (a stem shown once, with one or more endings).
