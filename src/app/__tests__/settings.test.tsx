@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
 import SettingsScreen from '@/app/settings';
 import { DEFAULT_SETTINGS, type Settings } from '@/db';
+import { rescheduleNotifications } from '@/notifications/scheduler';
 
 const mockSetSetting = jest.fn();
 // Reassignable per test — the screen reads settings once on mount, so the
@@ -31,12 +32,14 @@ jest.mock('@/db', () => {
 jest.mock('@/notifications/scheduler', () => ({
   cancelAllPendingNotifications: jest.fn().mockResolvedValue(undefined),
   rescheduleNotifications: jest.fn().mockResolvedValue(undefined),
+  WEEKDAY_NAMES: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
 }));
 
 describe('SettingsScreen', () => {
   beforeEach(() => {
     mockSettings = { ...DEFAULT_SETTINGS };
     mockSetSetting.mockClear();
+    jest.mocked(rescheduleNotifications).mockClear();
   });
 
   it('renders the ScreenHeader title, all four group eyebrows, and the destructive block', () => {
@@ -79,5 +82,65 @@ describe('SettingsScreen', () => {
     mockSettings = { ...DEFAULT_SETTINGS, stem_timer_enabled: true };
     render(<SettingsScreen />);
     expect(screen.getByLabelText('Increase Seconds per stem')).toBeTruthy();
+  });
+
+  it('persists the evening practice toggle one key at a time and reschedules (the gate is notification-relevant)', () => {
+    render(<SettingsScreen />);
+
+    // ThemedView nesting wraps the section label in its own View — climb to
+    // the ancestor that actually holds this section's chips.
+    let section = screen.getByText('Evening practice').parent!;
+    while (!within(section).queryByText('off')) section = section.parent!;
+    fireEvent.press(within(section).getByText('off'));
+
+    expect(mockSetSetting).toHaveBeenCalledWith('evening_practice_enabled', false);
+    expect(rescheduleNotifications).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers all seven lowercase weekdays for the weekly reflection and reschedules on change', () => {
+    render(<SettingsScreen />);
+
+    for (const day of ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']) {
+      expect(screen.getByText(day)).toBeTruthy();
+    }
+
+    fireEvent.press(screen.getByText('monday'));
+    expect(mockSetSetting).toHaveBeenCalledWith('weekly_meta_day', 'monday');
+    expect(rescheduleNotifications).toHaveBeenCalledTimes(1);
+  });
+
+  it('validates the weekly time like the existing two: invalid HH:MM rejected, valid persisted + rescheduled', () => {
+    render(<SettingsScreen />);
+
+    const input = screen.getByLabelText('Weekly notification time');
+    fireEvent.changeText(input, '25:99');
+    fireEvent(input, 'blur');
+    expect(screen.getByText('Enter a valid time (HH:MM).')).toBeTruthy();
+    expect(mockSetSetting).not.toHaveBeenCalledWith('weekly_meta_time', '25:99');
+
+    fireEvent.changeText(input, '07:30');
+    fireEvent(input, 'blur');
+    expect(mockSetSetting).toHaveBeenCalledWith('weekly_meta_time', '07:30');
+    expect(rescheduleNotifications).toHaveBeenCalledTimes(1);
+  });
+
+  it('round-trips a persisted weekly time: saved value is shown on the next mount', () => {
+    const first = render(<SettingsScreen />);
+    const input = screen.getByLabelText('Weekly notification time');
+    fireEvent.changeText(input, '07:30');
+    fireEvent(input, 'blur');
+    expect(mockSetSetting).toHaveBeenCalledWith('weekly_meta_time', '07:30');
+    first.unmount();
+
+    mockSettings = { ...DEFAULT_SETTINGS, weekly_meta_time: '07:30' };
+    render(<SettingsScreen />);
+    expect(screen.getByLabelText('Weekly notification time').props.value).toBe('07:30');
+  });
+
+  it('exposes no program_week_override control — the library owns it (c02 contract)', () => {
+    render(<SettingsScreen />);
+
+    expect(screen.queryByText(/programme week/i)).toBeNull();
+    expect(screen.queryByText(/program week/i)).toBeNull();
   });
 });

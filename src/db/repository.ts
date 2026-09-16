@@ -235,14 +235,15 @@ export class Repository {
 
   /**
    * All §7 settings, decoded, falling back to spec defaults for any key not
-   * yet seeded. Excludes `onboarding_completed` — that key lives in the same
-   * table (see `isOnboardingComplete`) but is app-internal state, not one of
-   * §7's user-facing tunables, so it must never appear on the typed
-   * `Settings` object callers destructure.
+   * yet seeded. Excludes the app-internal UI-state keys `onboarding_completed`
+   * and `intro_completed` (see `isOnboardingComplete`/`isIntroComplete`) —
+   * they live in the same table but are not §7's user-facing tunables, so
+   * they must never appear on the typed `Settings` object callers
+   * destructure.
    */
   getSettings(): Settings {
     const rows = this.db.getAllSync<{ key: string; value: string }>(
-      "SELECT key, value FROM settings WHERE key != 'onboarding_completed'",
+      "SELECT key, value FROM settings WHERE key NOT IN ('onboarding_completed', 'intro_completed')",
       [],
     );
     const values = Object.fromEntries(rows.map((r) => [r.key, JSON.parse(r.value)]));
@@ -285,6 +286,38 @@ export class Repository {
       [at],
     );
   }
+
+  // ── c03 (official-programme round): intro-completion marker ────────────
+  // Coordinator-approved out-of-map excursion (hub FLAG 2026-09-16, APPROVED
+  // 09:54): additive only, byte-for-byte the documented `onboarding_completed`
+  // pattern above — a plain settings-table row, deliberately outside the §7
+  // `Settings` interface, riding §8 export/import the same way. Gates the
+  // first-run introduction (§7, ADR-0005: evening practice "asked once at
+  // first launch"), which must be shown once — never derived from
+  // `evening_practice_enabled`, whose default equals one of its answers.
+
+  /**
+   * Whether the one-question first-run introduction (§7, ADR-0005) has
+   * already been answered or skipped. Stored as a plain `settings` row
+   * (`intro_completed`) — the same app-internal "has this run once" pattern
+   * as `onboarding_completed`, not one of §7's tunables. Both first-run
+   * stages must be tracked independently: an upgrader completes onboarding
+   * in a previous app version but still gets asked the intro question once.
+   */
+  isIntroComplete(): boolean {
+    const row = this.db.getFirstSync<{ value: string }>("SELECT value FROM settings WHERE key = 'intro_completed'", []);
+    return row ? JSON.parse(row.value) === true : false;
+  }
+
+  setIntroComplete(): void {
+    const { at } = nowEventTime();
+    this.db.runSync(
+      `INSERT INTO settings (key, value, updated_at) VALUES ('intro_completed', 'true', ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      [at],
+    );
+  }
+  // ── end c03 intro-completion marker ────────────────────────────────────
 
   /**
    * The one legitimate hard wipe (spec §9, §13.5): deletes every row of

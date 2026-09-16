@@ -11,7 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
 import { getRepository, Settings } from '@/db';
-import { cancelAllPendingNotifications, rescheduleNotifications } from '@/notifications/scheduler';
+import { cancelAllPendingNotifications, rescheduleNotifications, WEEKDAY_NAMES } from '@/notifications/scheduler';
 import { isValidHHMM } from '@/session/settingsValidation';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -60,9 +60,15 @@ function Hint({ children }: { children: string }) {
  * Settings (§7): every tunable, its stated range, persisted one key at a
  * time via `Repository.setSetting` (JSON-encoded in the `settings` table,
  * `updated_at` stamped per write — the existing settings-table pattern, no
- * schema change). Changing a notification time calls `rescheduleNotifications()`
- * on save (morning/evening pivot, 2026-09-14): it cancels and recreates the
- * app's two daily triggers from the freshly saved settings.
+ * schema change). Changing a notification time — or the evening-practice
+ * gate, or the weekly reflection day/time — calls `rescheduleNotifications()`
+ * on save (2026-09-14 pivot + §6.4's 2026-09-15 amendment): it cancels and
+ * recreates the app's triggers from the freshly saved settings, scheduling
+ * the evening one only when `evening_practice_enabled` is true.
+ *
+ * `program_week_override` (§7, ADR-0005) deliberately has no control here —
+ * it belongs to the stem library's week pages ("make this my week"), which
+ * own that setting.
  */
 export default function SettingsScreen() {
   const theme = useTheme();
@@ -70,8 +76,10 @@ export default function SettingsScreen() {
   const [settings, setSettings] = useState<Settings>(() => repo.getSettings());
   const [morningTime, setMorningTime] = useState(settings.morning_notification_time);
   const [eveningTime, setEveningTime] = useState(settings.evening_notification_time);
+  const [weeklyTime, setWeeklyTime] = useState(settings.weekly_meta_time);
   const [morningError, setMorningError] = useState<string | null>(null);
   const [eveningError, setEveningError] = useState<string | null>(null);
+  const [weeklyError, setWeeklyError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
   const [wiping, setWiping] = useState(false);
 
@@ -100,6 +108,33 @@ export default function SettingsScreen() {
     }
     setEveningError(null);
     set('evening_notification_time', eveningTime);
+    rescheduleNotifications().catch((error) => {
+      if (__DEV__) console.warn('Notification reschedule failed:', error);
+    });
+  };
+
+  /** The evening toggle changes whether the evening notification exists at all (§7 gates it, with the sitting), so it reschedules too. */
+  const setEveningPractice = (enabled: boolean) => {
+    set('evening_practice_enabled', enabled);
+    rescheduleNotifications().catch((error) => {
+      if (__DEV__) console.warn('Notification reschedule failed:', error);
+    });
+  };
+
+  const setWeeklyDay = (day: string) => {
+    set('weekly_meta_day', day);
+    rescheduleNotifications().catch((error) => {
+      if (__DEV__) console.warn('Notification reschedule failed:', error);
+    });
+  };
+
+  const saveWeeklyTime = () => {
+    if (!isValidHHMM(weeklyTime)) {
+      setWeeklyError('Enter a valid time (HH:MM).');
+      return;
+    }
+    setWeeklyError(null);
+    set('weekly_meta_time', weeklyTime);
     rescheduleNotifications().catch((error) => {
       if (__DEV__) console.warn('Notification reschedule failed:', error);
     });
@@ -136,6 +171,7 @@ export default function SettingsScreen() {
       setSettings(fresh);
       setMorningTime(fresh.morning_notification_time);
       setEveningTime(fresh.evening_notification_time);
+      setWeeklyTime(fresh.weekly_meta_time);
       Alert.alert('Data deleted', 'The app has been reset to its factory state.');
     } catch (err) {
       Alert.alert('Delete failed', err instanceof Error ? err.message : String(err));
@@ -205,7 +241,7 @@ export default function SettingsScreen() {
               <ThemedText type="small" themeColor="textSecondary">
                 Notification times
               </ThemedText>
-              <Hint>Two reminders a day, at exact times you choose — the book&apos;s own suggestion is start and end of day.</Hint>
+              <Hint>Daily reminders at exact times you choose — the book&apos;s own suggestion is start and end of day.</Hint>
               <ThemedView style={styles.windowRow}>
                 <ThemedText type="eyebrow">Morning</ThemedText>
                 <TextInput
@@ -238,6 +274,48 @@ export default function SettingsScreen() {
               {eveningError && (
                 <ThemedText type="small" themeColor="error" accessibilityLiveRegion="polite">
                   {eveningError}
+                </ThemedText>
+              )}
+            </ThemedView>
+
+            <ThemedView style={styles.setting}>
+              <ChipToggle
+                label="Evening practice"
+                options={['on', 'off'] as const}
+                value={settings.evening_practice_enabled ? 'on' : 'off'}
+                onChange={(v) => setEveningPractice(v === 'on')}
+              />
+              <Hint>
+                An evening sitting — the morning&apos;s endings once more, then a reflection sentence. Off also removes
+                the evening reminder above.
+              </Hint>
+            </ThemedView>
+
+            <ThemedView style={styles.section}>
+              <ThemedText type="small" themeColor="textSecondary">
+                Weekly reflection
+              </ThemedText>
+              <Hint>A weekly reminder to sit with the week&apos;s writing — one day, at an exact time.</Hint>
+              <ChipToggle
+                options={WEEKDAY_NAMES}
+                value={settings.weekly_meta_day as (typeof WEEKDAY_NAMES)[number]}
+                onChange={setWeeklyDay}
+              />
+              <ThemedView style={styles.windowRow}>
+                <ThemedText type="eyebrow">Time</ThemedText>
+                <TextInput
+                  value={weeklyTime}
+                  onChangeText={setWeeklyTime}
+                  onBlur={saveWeeklyTime}
+                  placeholder="21:00"
+                  placeholderTextColor={theme.textSecondary}
+                  style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+                  accessibilityLabel="Weekly notification time"
+                />
+              </ThemedView>
+              {weeklyError && (
+                <ThemedText type="small" themeColor="error" accessibilityLiveRegion="polite">
+                  {weeklyError}
                 </ThemedText>
               )}
             </ThemedView>
