@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -187,7 +187,6 @@ export default function WriteScreen() {
   // settle animation above, not staggered against each other.
   const badgeRevealAnim = useAnimatedValue(0);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const [newlyEarnedBadges, setNewlyEarnedBadges] = useState<BadgeDef[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -335,12 +334,20 @@ export default function WriteScreen() {
   // control (below, gated by `awaitingStart`) still holds the next stem's
   // timer until the user taps it, same as the first stem. Reflection flows
   // carry no queue — their own completion effect below handles 'done'.
-  useEffect(() => {
-    if (session.phase !== 'done' || !queue || flow) return;
-    if (isLastInQueue) return;
-    setQueueIndex((i) => i + 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.phase]);
+  //
+  // The advance is an adjustment of state in response to the shared session
+  // machine's phase change, so it happens during render (React's documented
+  // "adjusting state when a value changes" pattern) instead of in an
+  // effect, which would commit the advanced pointer in a second cascading
+  // pass. `prevSessionPhase` keeps the trigger to actual phase changes,
+  // exactly as the former effect's dependency array did.
+  const [prevSessionPhase, setPrevSessionPhase] = useState(session.phase);
+  if (session.phase !== prevSessionPhase) {
+    setPrevSessionPhase(session.phase);
+    if (session.phase === 'done' && queue !== null && !flow && !isLastInQueue) {
+      setQueueIndex((i) => i + 1);
+    }
+  }
 
   const startPendingStem = () => {
     if (!pendingStem) return;
@@ -397,21 +404,27 @@ export default function WriteScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flow?.phase, flow?.kind, session.phase, session.state]);
 
-  // Assembles the badge reveal once, when the *last* stem in the sitting
-  // lands on 'done' — see badgeReveal.ts for why "before" is derived by
+  // Assembles the badge reveal for the *last* stem in the sitting landing
+  // on 'done' — see badgeReveal.ts for why "before" is derived by
   // excluding this session's id rather than reading before the save (the
-  // save already happened by the time this phase renders). `!awaitingStart`
-  // (W4's guard, generalized): the render right after the queue-advance
-  // effect increments `queueIndex` to the sitting's last position still
-  // carries `session.phase === 'done'` from the *previous* (non-final)
-  // stem for one commit — without this guard, that stale 'done' would read
-  // as "the sitting finished" one stem early. Reflection flows reveal no
-  // badges (same as the review screen's meta-stem — §6.5.2's "normal timed
-  // session", not a gamified one).
-  useEffect(() => {
-    if (session.phase !== 'done' || !session.sessionId || !isLastInQueue || awaitingStart || flow) return;
-    setNewlyEarnedBadges(assembleNewlyEarnedBadges(getRepository(), session.sessionId));
-  }, [session.phase, session.sessionId, isLastInQueue, awaitingStart, flow]);
+  // save already happened by the time this phase renders). The assembly is
+  // derived at render time instead of stored in state (set-state-in-effect
+  // debt pass, issue 17): it is a pure read of what the repository already
+  // holds, memoized on exactly the guards that decide it. Those guards:
+  // the session is done and persisted (`sessionId`), the sitting-final
+  // position, the Start gate not pending (W4's guard, generalized — a
+  // render can still carry the previous (non-final) stem's 'done' while
+  // the pointer is mid-advance; without this guard that stale 'done'
+  // would read as "the sitting finished" one stem early), and no
+  // reflection flow (flows reveal no badges — same as the review screen's
+  // meta-stem, §6.5.2's "normal timed session", not a gamified one).
+  const newlyEarnedBadges = useMemo<BadgeDef[]>(
+    () =>
+      session.phase === 'done' && session.sessionId && isLastInQueue && !awaitingStart && !flow
+        ? assembleNewlyEarnedBadges(getRepository(), session.sessionId)
+        : [],
+    [session.phase, session.sessionId, isLastInQueue, awaitingStart, flow],
+  );
 
   // Drives the settle animation and, sequenced ~300ms later, the badge
   // reveal's fade+slide — only for the sitting's final 'done' (the one that

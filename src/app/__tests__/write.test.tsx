@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import WriteScreen from '@/app/write';
 import { type Settings, type StemRow } from '@/db';
+import type { BadgeSession } from '@/session/badges';
 
 // Route params are per-test (morning sitting, evening/weekly reflection,
 // one-off week, solo write, bare deep link) — a mock-prefixed holder so
@@ -70,6 +71,10 @@ const mockRepoState: {
   createdReviews: { input: Record<string, unknown> }[];
   settingWrites: [string, unknown][];
   activationCalls: number[];
+  /** Badge-reveal seam (issue 17): rows `listSessionsForStats` would return, and whether the just-finalized session is wired into them. */
+  priorStatsSessions: BadgeSession[];
+  statsCompleteLastSession: boolean;
+  lastCreatedSessionId: string | null;
 } = {
   settings: {},
   openSession: null,
@@ -79,6 +84,9 @@ const mockRepoState: {
   reviewedMorning: [],
   reviewedWeek: [],
   createdSessions: [],
+  priorStatsSessions: [],
+  statsCompleteLastSession: false,
+  lastCreatedSessionId: null,
   createdReviews: [] as never as { input: Record<string, unknown> }[],
   settingWrites: [],
   activationCalls: [],
@@ -119,10 +127,37 @@ jest.mock('@/db', () => {
           deleted_at: null,
           created_at: '2026-09-01T06:00:00.000Z',
         })),
+      // Badge-reveal seam (issue 17): the completion screen's newly-earned
+      // diff reads completed sessions, the last review, and user stems.
+      // The just-finalized session is wired in only when a test asks for
+      // it (statsCompleteLastSession) — its shape mirrors listSessionsForStats.
+      listSessionsForStats: () => {
+        if (!mockRepoState.lastCreatedSessionId || !mockRepoState.statsCompleteLastSession) return mockRepoState.priorStatsSessions;
+        return [
+          ...mockRepoState.priorStatsSessions,
+          {
+            id: mockRepoState.lastCreatedSessionId,
+            stemId: 'stem-a',
+            category: null,
+            origin: 'manual' as const,
+            targetEndings: 1,
+            uncensoredMode: false,
+            startedAt: '2026-09-01T06:00:00.000Z',
+            endedAt: '2026-09-01T06:02:00.000Z',
+            endReason: 'user_done' as const,
+            tz: 'Europe/Berlin',
+            offsetMin: 120,
+            endings: [{ text: 'one submitted ending' }],
+          },
+        ];
+      },
+      getLastReviewAt: () => null,
       // Writes
       createSession: (input: { origin: string; stemId: string }) => {
+        const id = `session-${++nextSessionId}`;
         mockRepoState.createdSessions.push({ origin: input.origin, stemId: input.stemId });
-        return `session-${++nextSessionId}`;
+        mockRepoState.lastCreatedSessionId = id;
+        return id;
       },
       createReview: (input: Record<string, unknown>) => {
         mockRepoState.createdReviews.push({ input });
@@ -152,6 +187,9 @@ beforeEach(() => {
   mockRepoState.reviewedMorning = [];
   mockRepoState.reviewedWeek = [];
   mockRepoState.createdSessions = [];
+  mockRepoState.priorStatsSessions = [];
+  mockRepoState.statsCompleteLastSession = false;
+  mockRepoState.lastCreatedSessionId = null;
   mockRepoState.createdReviews = [];
   mockRepoState.settingWrites = [];
   mockRepoState.activationCalls = [];
@@ -387,3 +425,87 @@ describe('WriteScreen — open review sessions resume into their flow (c05-queue
     expect(mockRepoState.createdSessions).toEqual([]);
   });
 });
+
+describe('WriteScreen — badge reveal on the completion screen (issue 17)', () => {
+  // Gamification proposal §1.A/§1.B: the completion block reveals the
+  // badges newly crossed by THIS sitting's final session, computed fresh
+  // each render (§13.7 — nothing stored). Zero coverage before the
+  // 2026-09-16 lint disposition named the badge-reveal UI as a gap; these
+  // tests drive real sittings to 'done' through the mocked repository.
+
+  it('reveals the badges the final session newly crosses', async () => {
+    mockParams.value = { stemId: 'stem-a' };
+    mockRepoState.settings = { endings_per_session: 1 };
+    // No prior history: completing the sitting crosses 'first_words' and
+    // 'six_endings' (a one-ending session meets its one-ending target).
+    mockRepoState.statsCompleteLastSession = true;
+    render(<WriteScreen />);
+
+    await screen.findByText(/If I give this mock sitting my full attention/);
+    fireEvent.press(screen.getByText('Start'));
+    const input = await screen.findByLabelText('Your ending');
+    fireEvent.changeText(input, 'one honest sentence about right now\n');
+
+    await screen.findByText('Saved.');
+    expect(screen.getByText('First Words')).toBeTruthy();
+    expect(screen.getByText('Six Endings')).toBeTruthy();
+  });
+
+  it('reveals nothing when the completion crosses no new threshold', async () => {
+    mockParams.value = { stemId: 'stem-a' };
+    mockRepoState.settings = { endings_per_session: 1 };
+    mockRepoState.statsCompleteLastSession = true;
+    // History already holds an identical completed session — nothing is
+    // newly crossed by this one, so the completion block shows no badges
+    // (the proposal's "empty when nothing newly crossed" common case).
+    mockRepoState.priorStatsSessions = [priorCompletedSession('prior-session')];
+    render(<WriteScreen />);
+
+    await screen.findByText(/If I give this mock sitting my full attention/);
+    fireEvent.press(screen.getByText('Start'));
+    const input = await screen.findByLabelText('Your ending');
+    fireEvent.changeText(input, 'one honest sentence about right now\n');
+
+    await screen.findByText('Saved.');
+    expect(screen.queryByText('First Words')).toBeNull();
+    expect(screen.queryByText('Six Endings')).toBeNull();
+  });
+
+  it('never reveals between stems — only the sitting-final done assembles badges', async () => {
+    mockParams.value = { timeOfDay: 'morning' };
+    mockRepoState.settings = { endings_per_session: 1 };
+    mockRepoState.statsCompleteLastSession = true;
+    render(<WriteScreen />);
+
+    await screen.findByText(/Stem 1 of 3/);
+    fireEvent.press(screen.getByText('Start'));
+    const input = await screen.findByLabelText('Your ending');
+    fireEvent.changeText(input, 'a stray thought I keep circling back to\n');
+
+    // Stem 1 is done — 'First Words' has just been crossed by it — but the
+    // sitting is not finished: no completion block, no badge ("never
+    // between stems", proposal §2), and the next gate is clean.
+    await screen.findByText(/Stem 2 of 3/);
+    expect(screen.getByText('Start')).toBeTruthy();
+    expect(screen.queryByText('First Words')).toBeNull();
+    expect(screen.queryByText('Saved.')).toBeNull();
+  });
+});
+
+/** A completed session row for the badge diff's "before" history. */
+function priorCompletedSession(id: string): BadgeSession {
+  return {
+    id,
+    stemId: 'stem-a',
+    category: null,
+    origin: 'manual',
+    targetEndings: 1,
+    uncensoredMode: false,
+    startedAt: '2026-09-01T06:00:00.000Z',
+    endedAt: '2026-09-01T06:02:00.000Z',
+    endReason: 'user_done',
+    tz: 'Europe/Berlin',
+    offsetMin: 120,
+    endings: [{ text: 'one submitted ending' }],
+  };
+}

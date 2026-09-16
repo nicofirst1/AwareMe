@@ -345,6 +345,10 @@ export function useWritingSession(): WritingSessionView {
 
       if (isComplete(next)) {
         finalize('user_done', next);
+      } else {
+        // The next field just opened: its countdown starts over (the
+        // per-stem reset rule — exercised by useWritingSession.test.ts).
+        setStemRemainingSeconds(next.config.stemTimerSeconds ?? null);
       }
     },
     [repo, finalize],
@@ -386,15 +390,12 @@ export function useWritingSession(): WritingSessionView {
 
     if (isComplete(next)) {
       finalize('user_done');
+    } else {
+      // The next field just opened: its countdown starts over, same reset
+      // rule as a submitted field.
+      setStemRemainingSeconds(next.config.stemTimerSeconds ?? null);
     }
   }, [repo, finalize, flushAutosave]);
-
-  // Resets the per-stem countdown every time the active field changes
-  // (manual submit, Enter, or expiry all advance `activeOrdinal`).
-  useEffect(() => {
-    if (phase !== 'active' || !state?.config.stemTimerSeconds) return;
-    setStemRemainingSeconds(state.config.stemTimerSeconds);
-  }, [phase, state?.activeOrdinal, state?.config.stemTimerSeconds]);
 
   // Local per-stem countdown, independent of the session countdown above.
   useEffect(() => {
