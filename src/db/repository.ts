@@ -448,28 +448,32 @@ export class Repository {
   /**
    * The active programme stems of one week (1–30), in seed order — the
    * morning sitting's queue (§6.2) and the one-off week sitting's queue.
-   * Seed order is `created_at` (the seed inserts weeks in order), with `id`
-   * (UUIDv7) as a deterministic tiebreaker.
+   * Seed order is INSERTION order (`rowid`: the seed inserts stems
+   * sequentially, and import re-inserts in file order, preserving relative
+   * order). `created_at` is NOT a reliable key — all seed rows share
+   * milliseconds, and the UUIDv7 `id` tiebreaker orders same-ms ids by
+   * random bits (c06 finding F7).
    */
   getProgrammeStemsForWeek(week: number): StemRow[] {
     if (!Number.isInteger(week) || week < 1 || week > PROGRAMME_WEEK_CAP) return [];
     return this.db.getAllSync<StemRow>(
       `SELECT id, text, origin, category, weight, time_of_day FROM stems
        WHERE active = 1 AND deleted_at IS NULL AND week_number = ?
-       ORDER BY created_at, id`,
+       ORDER BY rowid`,
       [week],
     );
   }
 
   /**
    * Every active programme stem with its week number, ordered by week then
-   * seed order — the stem library's Week 1–30 grouping (§6.6).
+   * seed order — the stem library's Week 1–30 grouping (§6.6). Seed order is
+   * insertion order (`rowid`, per getProgrammeStemsForWeek; c06 finding F7).
    */
   listProgrammeStems(): (StemRow & { weekNumber: number })[] {
     return this.db.getAllSync<StemRow & { weekNumber: number }>(
       `SELECT id, text, origin, category, weight, time_of_day, week_number as weekNumber FROM stems
        WHERE active = 1 AND deleted_at IS NULL AND week_number IS NOT NULL
-       ORDER BY week_number, created_at, id`,
+       ORDER BY week_number, rowid`,
       [],
     );
   }
