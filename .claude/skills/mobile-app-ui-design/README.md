@@ -2,7 +2,7 @@
 
 [![Install with npx](https://img.shields.io/badge/install-npx%20skills%20add-blue)](https://skills.sh)
 [![Agent Skills](https://img.shields.io/badge/agent-skills-purple)](https://agentskills.io)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
 A comprehensive Claude Code skill for designing professional, polished mobile app interfaces that follow proven design principles from top-tier apps like Airbnb, Duolingo, Spotify, Revolut, and Phantom.
 
