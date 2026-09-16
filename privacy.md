@@ -1,8 +1,8 @@
 # Privacy Policy
 
-**Six Endings** — Last updated September 16, 2026
+**AwareMe**: Last updated September 16, 2026
 
-Six Endings is a private, on-device journaling app. This policy describes what happens to your data, and it is short because the answer to almost every question is: nothing leaves your device.
+AwareMe is a private, on-device journaling app. This policy describes what happens to your data, and it is short because the answer to almost every question is: nothing leaves your device.
 
 ## The short version
 
@@ -21,8 +21,8 @@ Only when you export it yourself. The export feature (SQLite file, JSON bundle, 
 
 ## Permissions the app may request
 
-- **Notifications** — used for local reminders at times you set. These are scheduled on your device; nothing is sent from a server, and notification text never contains your writing. You can decline or disable them and the app remains fully usable.
-- **Biometrics / device passcode** — used only if you turn on the optional app lock. The check happens on your device through the operating system's own authentication (Face ID, fingerprint, or passcode); the app never sees or stores your biometric data.
+- **Notifications**: used for local reminders at times you set. These are scheduled on your device; nothing is sent from a server, and notification text never contains your writing. You can decline or disable them and the app remains fully usable.
+- **Biometrics / device passcode**: used only if you turn on the optional app lock. The check happens on your device through the operating system's own authentication (Face ID, fingerprint, or passcode); the app never sees or stores your biometric data.
 
 ## What we do not do
 
@@ -38,7 +38,7 @@ You can erase everything from inside the app: Settings → "Delete all data" per
 
 ## Children
 
-Six Endings is not directed at children. Since no data is collected from any user, none is collected from children either.
+AwareMe is not directed at children. Since no data is collected from any user, none is collected from children either.
 
 ## Changes to this policy
 
