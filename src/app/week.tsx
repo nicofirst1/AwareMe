@@ -17,6 +17,10 @@ function groupByWeek(stems: (StemRow & { weekNumber: number })[]): Map<number, W
   const byWeek = new Map<number, WeekCardStem[]>();
   for (const stem of stems) {
     const list = byWeek.get(stem.weekNumber) ?? [];
+    // Issue 04 forward hook: WeekCardStem is the spot a category badge
+    // joins the week card's stem list once t04 populates programme-stem
+    // categories — carry the field there, render in WeekCard. Nothing
+    // added in this cycle (no category UI yet).
     list.push({ id: stem.id, text: stem.text });
     byWeek.set(stem.weekNumber, list);
   }

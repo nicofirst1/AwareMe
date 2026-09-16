@@ -73,6 +73,27 @@ describe('matchesStemFilters', () => {
     expect(matchesStemFilters(stem({ time_of_day: null }), allFilters)).toBe(true);
   });
 
+  it('filters by programme week (issue 03): state-agnostic, programme stems only', () => {
+    const week3: StemLibraryFilters = { ...BASE, activeFilter: 'all', weekFilter: 3 };
+    // Every stem of the selected week matches, whatever its state — state
+    // is the State filter's job, not the week filter's.
+    expect(matchesStemFilters(stem({ weekNumber: 3 }), week3)).toBe(true);
+    expect(matchesStemFilters(stem({ weekNumber: 3, active: 0 }), week3)).toBe(true);
+    expect(matchesStemFilters(stem({ weekNumber: 3, deleted_at: '2026-09-01T00:00:00.000Z' }), week3)).toBe(true);
+    // Other weeks, and stems outside the programme (null/undefined week), never match.
+    expect(matchesStemFilters(stem({ weekNumber: 4 }), week3)).toBe(false);
+    expect(matchesStemFilters(stem({ weekNumber: null }), week3)).toBe(false);
+    expect(matchesStemFilters(stem(), week3)).toBe(false);
+
+    // Default/'all' keeps every stem, week or no week.
+    expect(matchesStemFilters(stem({ weekNumber: 3 }), BASE)).toBe(true);
+    expect(matchesStemFilters(stem({ weekNumber: null }), BASE)).toBe(true);
+    expect(matchesStemFilters(stem(), BASE)).toBe(true);
+    // Under the default State filter ('active') a selected week still hides
+    // its resting stems — the two filters AND together.
+    expect(matchesStemFilters(stem({ weekNumber: 3, active: 0 }), { ...BASE, weekFilter: 3 })).toBe(false);
+  });
+
   it('combines all filters with AND', () => {
     const filters: StemLibraryFilters = { query: 'promise', activeFilter: 'all', originFilter: 'user', categoryFilter: 'integrity' };
     expect(
