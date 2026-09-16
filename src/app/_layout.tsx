@@ -1,9 +1,9 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
 
 import { LockScreen } from '@/components/lock-screen';
 import { getRepository } from '@/db';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useNotificationScheduler, useNotificationTapRouting } from '@/notifications/useNotifications';
 import { useAppLock } from '@/session/useAppLock';
 
@@ -41,6 +41,7 @@ function useFirstRunGate(): void {
 }
 
 export default function RootLayout() {
+  // The app-wide hook (not react-native's) so the root navigation theme follows the stored §7 `theme` setting, not just the OS scheme (theme fix, 2026-09-16 owner feedback; FLAG-ANSWER approved swap).
   const colorScheme = useColorScheme();
   const theme = colorScheme === 'dark' ? DarkTheme : DefaultTheme;
   useNotificationScheduler();

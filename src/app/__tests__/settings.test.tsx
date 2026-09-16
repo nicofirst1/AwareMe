@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import SettingsScreen from '@/app/settings';
 import { DEFAULT_SETTINGS, type Settings } from '@/db';
 import { rescheduleNotifications } from '@/notifications/scheduler';
+import { resyncThemePreference } from '@/theme/themePreference';
 
 const mockSetSetting = jest.fn();
 // Reassignable per test — the screen reads settings once on mount, so the
@@ -35,14 +36,41 @@ jest.mock('@/notifications/scheduler', () => ({
   WEEKDAY_NAMES: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
 }));
 
+// Native time pickers, mocked at the module boundary (issue 05): the mock
+// renders the picker's props onto a View so tests can read `value` and fire
+// `onChange` exactly as the native component would deliver them. The real
+// iOS compact picker is a system-rendered button; passing accessibilityLabel
+// through is what the screen relies on for its labels.
+jest.mock('@react-native-community/datetimepicker', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { createElement } = require('react');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { View } = require('react-native');
+  const MockPicker = (props: Record<string, unknown>) => createElement(View, props);
+  return {
+    __esModule: true,
+    default: MockPicker,
+    DateTimePickerAndroid: { open: jest.fn(), dismiss: jest.fn() },
+  };
+});
+
+/** The date the picker mock should emit for a given 24h "HH:MM" time. */
+function pickerDate(hhmm: string): Date {
+  const [hours, minutes] = hhmm.split(':').map(Number);
+  return new Date(2026, 8, 16, hours ?? 0, minutes ?? 0);
+}
+
 describe('SettingsScreen', () => {
   beforeEach(() => {
     mockSettings = { ...DEFAULT_SETTINGS };
     mockSetSetting.mockClear();
     jest.mocked(rescheduleNotifications).mockClear();
+    // The theme preference store is module-level: re-mirror the (fresh)
+    // mocked settings table so each test starts from a known state.
+    resyncThemePreference();
   });
 
-  it('renders the ScreenHeader title, all four group eyebrows, and the destructive block', () => {
+  it('renders the ScreenHeader title, all five group eyebrows, and the destructive block', () => {
     render(<SettingsScreen />);
 
     expect(screen.getByText('Settings')).toBeTruthy();
@@ -51,6 +79,7 @@ describe('SettingsScreen', () => {
     expect(screen.getByText('Notifications')).toBeTruthy();
     expect(screen.getByText('Writing')).toBeTruthy();
     expect(screen.getByText('App')).toBeTruthy();
+    expect(screen.getByText('Data')).toBeTruthy();
     expect(screen.getByText('About the method')).toBeTruthy();
     expect(screen.getByText('Delete all data')).toBeTruthy();
   });
@@ -109,32 +138,79 @@ describe('SettingsScreen', () => {
     expect(rescheduleNotifications).toHaveBeenCalledTimes(1);
   });
 
-  it('validates the weekly time like the existing two: invalid HH:MM rejected, valid persisted + rescheduled', () => {
+  it('renders the three notification times as native pickers seeded from the stored HH:MM values', () => {
+    mockSettings = { ...DEFAULT_SETTINGS, morning_notification_time: '07:45' };
     render(<SettingsScreen />);
 
-    const input = screen.getByLabelText('Weekly notification time');
-    fireEvent.changeText(input, '25:99');
-    fireEvent(input, 'blur');
-    expect(screen.getByText('Enter a valid time (HH:MM).')).toBeTruthy();
-    expect(mockSetSetting).not.toHaveBeenCalledWith('weekly_meta_time', '25:99');
+    for (const label of ['Morning notification time', 'Evening notification time', 'Weekly notification time']) {
+      expect(screen.getByLabelText(label)).toBeTruthy();
+    }
 
-    fireEvent.changeText(input, '07:30');
-    fireEvent(input, 'blur');
+    const morning = screen.getByLabelText('Morning notification time');
+    expect(morning.props.value.getHours()).toBe(7);
+    expect(morning.props.value.getMinutes()).toBe(45);
+  });
+
+  it('persists a picker result as the exact "HH:MM" 24h string and reschedules (morning)', () => {
+    render(<SettingsScreen />);
+
+    fireEvent(screen.getByLabelText('Morning notification time'), 'onChange', { type: 'set' }, pickerDate('09:05'));
+
+    expect(mockSetSetting).toHaveBeenCalledWith('morning_notification_time', '09:05');
+    expect(rescheduleNotifications).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists and reschedules from the evening picker the same way', () => {
+    render(<SettingsScreen />);
+
+    fireEvent(screen.getByLabelText('Evening notification time'), 'onChange', { type: 'set' }, pickerDate('22:30'));
+
+    expect(mockSetSetting).toHaveBeenCalledWith('evening_notification_time', '22:30');
+    expect(rescheduleNotifications).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists and reschedules from the weekly picker the same way', () => {
+    render(<SettingsScreen />);
+
+    fireEvent(screen.getByLabelText('Weekly notification time'), 'onChange', { type: 'set' }, pickerDate('07:30'));
+
     expect(mockSetSetting).toHaveBeenCalledWith('weekly_meta_time', '07:30');
     expect(rescheduleNotifications).toHaveBeenCalledTimes(1);
   });
 
-  it('round-trips a persisted weekly time: saved value is shown on the next mount', () => {
+  it('ignores a picker dismissal: no setSetting, no reschedule', () => {
+    render(<SettingsScreen />);
+
+    fireEvent(screen.getByLabelText('Weekly notification time'), 'onChange', { type: 'dismissed' }, undefined);
+
+    expect(mockSetSetting).not.toHaveBeenCalledWith('weekly_meta_time', expect.anything());
+    expect(rescheduleNotifications).not.toHaveBeenCalled();
+  });
+
+  it('round-trips a persisted weekly time: the picker is seeded with it on the next mount', () => {
     const first = render(<SettingsScreen />);
-    const input = screen.getByLabelText('Weekly notification time');
-    fireEvent.changeText(input, '07:30');
-    fireEvent(input, 'blur');
+    fireEvent(screen.getByLabelText('Weekly notification time'), 'onChange', { type: 'set' }, pickerDate('07:30'));
     expect(mockSetSetting).toHaveBeenCalledWith('weekly_meta_time', '07:30');
     first.unmount();
 
     mockSettings = { ...DEFAULT_SETTINGS, weekly_meta_time: '07:30' };
     render(<SettingsScreen />);
-    expect(screen.getByLabelText('Weekly notification time').props.value).toBe('07:30');
+    const picker = screen.getByLabelText('Weekly notification time');
+    expect(picker.props.value.getHours()).toBe(7);
+    expect(picker.props.value.getMinutes()).toBe(30);
+  });
+
+  it('persists the theme preference through the theme store and re-renders the chip selected state', () => {
+    render(<SettingsScreen />);
+
+    const systemChip = screen.getByRole('button', { name: 'system' });
+    const darkChip = screen.getByRole('button', { name: 'dark' });
+    expect(systemChip.props.accessibilityState.selected).toBe(true);
+    fireEvent.press(darkChip);
+
+    expect(mockSetSetting).toHaveBeenCalledWith('theme', 'dark');
+    expect(darkChip.props.accessibilityState.selected).toBe(true);
+    expect(systemChip.props.accessibilityState.selected).toBe(false);
   });
 
   it('exposes no program_week_override control — the library owns it (c02 contract)', () => {
