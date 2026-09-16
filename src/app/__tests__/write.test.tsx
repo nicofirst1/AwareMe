@@ -178,6 +178,21 @@ describe('WriteScreen — sittings', () => {
     expect(screen.queryByText('a stray thought I keep circling back to')).toBeNull();
   });
 
+  it('carries one line of purpose framing at the Start gate, absent during writing (v12 issue 02)', async () => {
+    const purpose = 'A few minutes of unedited writing for self-awareness and self-esteem.';
+    mockParams.value = { timeOfDay: 'morning' };
+    render(<WriteScreen />);
+
+    await screen.findByText(/Stem 1 of 3/);
+    expect(screen.getByText(purpose)).toBeTruthy();
+
+    // Active writing is bare (§6.3, §13.4): the purpose line belongs on the
+    // gate only, never mid-flow.
+    fireEvent.press(screen.getByText('Start'));
+    await screen.findByLabelText('Your ending');
+    expect(screen.queryByText(purpose)).toBeNull();
+  });
+
   it('the morning sitting is the effective programme week’s block, in seed order', () => {
     mockParams.value = { timeOfDay: 'morning' };
     render(<WriteScreen />);

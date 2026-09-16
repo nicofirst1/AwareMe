@@ -572,6 +572,19 @@ export default function WriteScreen() {
             </ThemedText>
 
             {/*
+              Purpose framing (v12 issue 02, owner feedback 2026-09-16): one
+              line saying what the exercise is for, and only at the Start
+              gate (§13.4: nothing during writing that evaluates or
+              distracts; §6.3 keeps the active-writing screen bare). Small,
+              dimmed, copy-only, and gone the moment Start is tapped.
+            */}
+            {awaitingStart && (
+              <ThemedText type="small" themeColor="textSecondary">
+                A few minutes of unedited writing for self-awareness and self-esteem.
+              </ThemedText>
+            )}
+
+            {/*
               Read-only text, not inputs: there is no control that lets the
               user navigate back into an earlier ending (§6.3.6). Hidden
               while `awaitingStart`: `session.state` still holds the *just-
