@@ -153,7 +153,6 @@ const styles = StyleSheet.create({
   stemLine: {
     gap: Spacing.half,
   },
-  stemText: {},
   categoryChip: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
