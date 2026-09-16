@@ -1,4 +1,4 @@
-# Continuous integration for Six Endings.
+# Continuous integration for AwareMe.
 #
 # Mirrors the local gate trio (typecheck / jest / expo lint) on a fresh clone
 # of the repo. The workflow assumes nothing about the machine it runs on: no

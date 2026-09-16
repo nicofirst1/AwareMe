@@ -1,6 +1,6 @@
-# Six Endings
+# AwareMe
 
-Six Endings is a private, on-device journaling app for the sentence completion exercise developed by the psychologist Nathaniel Branden. You receive an incomplete sentence, a stem, and write several different endings to it, quickly, without stopping to evaluate them. A timer keeps the pen moving, editing is deliberately awkward, and nothing you write is scored, praised, or discarded. Each stem gets six endings by default (configurable).
+AwareMe is a private, on-device journaling app for the sentence completion exercise developed by the psychologist Nathaniel Branden. You receive an incomplete sentence, a stem, and write several different endings to it, quickly, without stopping to evaluate them. A timer keeps the pen moving, editing is deliberately awkward, and nothing you write is scored, praised, or discarded. Each stem gets six endings by default (configurable).
 
 ## What it does
 
