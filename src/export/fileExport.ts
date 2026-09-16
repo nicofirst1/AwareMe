@@ -45,7 +45,7 @@ function writeSqliteExport(db: SQLiteDatabase, at: string): File {
   db.execSync('VACUUM');
 
   const bytes = db.serializeSync();
-  const file = new File(exportDir(), `six-endings-${timestampForFilename(at)}.db`);
+  const file = new File(exportDir(), `awareme-${timestampForFilename(at)}.db`);
   file.create({ overwrite: true });
   file.write(bytes);
   return file;
@@ -55,7 +55,7 @@ function writeJsonExport(at: string, tz: string): File {
   const repo = getRepository();
   const dump = repo.dumpAllTables();
   const bundle = buildJsonBundle(dump, { schemaVersion: CURRENT_SCHEMA_VERSION, appVersion: APP_VERSION, exportedAt: at, exportedTz: tz });
-  const file = new File(exportDir(), `six-endings-${timestampForFilename(at)}.json`);
+  const file = new File(exportDir(), `awareme-${timestampForFilename(at)}.json`);
   file.create({ overwrite: true });
   file.write(serializeJsonBundle(bundle));
   return file;
@@ -66,7 +66,7 @@ function writeCsvExport(at: string): File {
   const dump = repo.dumpAllTables();
   const csvFiles = buildCsvFiles(dump);
   const zipBytes = buildZip(csvFiles, new Date(at));
-  const file = new File(exportDir(), `six-endings-${timestampForFilename(at)}.zip`);
+  const file = new File(exportDir(), `awareme-${timestampForFilename(at)}.zip`);
   file.create({ overwrite: true });
   file.write(zipBytes);
   return file;

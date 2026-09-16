@@ -66,7 +66,7 @@ export function useAppLock(): AppLockStatus {
   }, []);
 
   const authenticate = async () => {
-    const result = await LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock Six Endings' });
+    const result = await LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock AwareMe' });
     if (result.success) {
       setLocked(nextLockState(canLock.current, true, { type: 'authenticated' }));
     }

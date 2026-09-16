@@ -32,7 +32,7 @@ export const WEEKLY_NOTIFICATION_ID = 'six-endings/weekly';
  * Morning, evening, and the weekly reflection get distinct copy, all three
  * content-free.
  */
-export const NOTIFICATION_TITLE = 'Six Endings';
+export const NOTIFICATION_TITLE = 'AwareMe';
 export const MORNING_NOTIFICATION_BODY = 'Time for your morning practice.';
 export const EVENING_NOTIFICATION_BODY = 'Time for your evening practice.';
 export const WEEKLY_NOTIFICATION_BODY = 'Time for your weekly reflection.';
