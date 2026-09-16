@@ -22,6 +22,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { currentSittingPeriod } from '@/session/currentSitting';
 import { computeStreaks } from '@/session/progressStats';
+import { readHomeProgrammeStatus, type HomeProgrammeStatus } from '@/session/programRead';
 import { isWeeklyReviewDue } from '@/session/reviewPeriod';
 
 /**
@@ -43,15 +44,13 @@ function currentPeriodForRender(): TimeOfDay {
   }
 }
 
-interface HomeStatus {
+interface HomeStatus extends HomeProgrammeStatus {
   /** "N sessions this week" — omitted (not "0 sessions") when there are none: absence is never called out (§13.4/§13.6). */
   weekCount: number;
   /** Review is worth surfacing only when there's something to re-read and a week has passed since the last one. */
   reviewAvailable: boolean;
   /** Current consecutive-day streak — shown only at 3+ (gamification proposal §1.B), same quiet treatment as the lines above. */
   currentStreak: number;
-  /** Active stems tagged for the current sitting's period — read at render time, never stored (§13.7). */
-  stemsReady: number;
 }
 
 /** Everything here is read at render time from existing rows — no derived value is ever stored (§13.7). */
@@ -63,18 +62,11 @@ function loadHomeStatus(): HomeStatus {
   const wasDue = isWeeklyReviewDue(repo.getLastReviewAt(), now.toISOString());
   const { at, offsetMin } = nowEventTime(now);
   const { current } = computeStreaks(repo.listSessionsForStats(), at, offsetMin);
-  // Same midpoint rule as the render path (`currentPeriodForRender`) — when
-  // settings read, the eyebrow's period and the stemsReady count always
-  // agree. A throw here is caught by the useFocusEffect's try/catch, which
-  // blanks the whole status block (no count without a DB to count from).
-  const settings = repo.getSettings();
-  const period = currentSittingPeriod(settings.morning_notification_time, settings.evening_notification_time, now);
-  const stemsReady = repo.getActiveStemsForTimeOfDay(period).length;
   return {
+    ...readHomeProgrammeStatus(repo, now),
     weekCount: recent.length,
     reviewAvailable: wasDue && recent.length > 0,
     currentStreak: current,
-    stemsReady,
   };
 }
 
@@ -163,39 +155,43 @@ export default function HomeScreen() {
             </ThemedText>
           </View>
 
-          {/* The sitting card (layout audit 2026-09-15, cycle 1): the day's
-              one dominant action, per the Revolut register anchor (H1). Eyebrow
-              + count name the current-period sitting; both starts live inside
-              the same card (morning/evening pivot, 2026-09-14 — both periods
-              stay reachable, but the current sitting period — midpoint of the
-              user's two notification times, `currentSitting.ts` — gets the
-              primary button so the common case is a single tap); the old
-              centered loose status lines (H2) become a quiet left-aligned
-              stat row in the card's footer. Inner rows are plain `View`s
-              (issue 03): `ThemedView` painted `theme.background` inside the
-              card's `backgroundElement` fill — the owner's "weird white
-              background" strips. */}
+          {/*
+            The programme cards (issue 02, ADR-0005): the week card is the
+            day's one dominant action — Week N of 30 with the sitting's size
+            and its Start; the evening reflection (when
+            `evening_practice_enabled`, §7) and the weekly reflection (on its
+            target day, §7 `weekly_meta_day`) each get their own quiet card
+            below. The current sitting period (midpoint of the user's two
+            notification times, `currentSitting.ts`) still decides which
+            card's button is primary. Inner rows are plain `View`s (issue 03):
+            `ThemedView` painted `theme.background` inside the card's
+            `backgroundElement` fill — the owner's "weird white background"
+            strips.
+          */}
           <Card style={styles.sittingCard}>
             <ThemedText type="eyebrow">
-              {currentPeriod === 'morning' ? 'Morning sitting' : 'Evening sitting'}
+              {status ? `Week ${status.week.currentWeek} of 30` : 'Morning sitting'}
             </ThemedText>
+            {status && status.week.override !== null && (
+              <ThemedText type="small" themeColor="textSecondary">
+                Your chosen week — it clears when its reflection completes.
+              </ThemedText>
+            )}
             {status && (
               <ThemedText type="subtitle">
-                {status.stemsReady === 1 ? '1 stem ready' : `${status.stemsReady} stems ready`}
+                {status.morningDone
+                  ? 'Morning sitting complete'
+                  : status.weekStemCount === 1
+                    ? '1 stem ready'
+                    : `${status.weekStemCount} stems ready`}
               </ThemedText>
             )}
 
             <View style={styles.startRow}>
               <Button
-                label="Morning session"
+                label="Start morning sitting"
                 onPress={() => startSitting('morning')}
                 variant={currentPeriod === 'morning' ? 'primary' : 'secondary'}
-                style={styles.primaryButton}
-              />
-              <Button
-                label="Evening session"
-                onPress={() => startSitting('evening')}
-                variant={currentPeriod === 'evening' ? 'primary' : 'secondary'}
                 style={styles.primaryButton}
               />
             </View>
@@ -232,6 +228,78 @@ export default function HomeScreen() {
               </View>
             )}
           </Card>
+
+          {/* The evening reflection (§6.2/§6.5.2), only when enabled — today's
+              morning endings read-only, then one alternating reflection stem.
+              A done state, never a demand: the button stays, the day's
+              completion is simply acknowledged (§13.4). */}
+          {status?.eveningEnabled && (
+            <Card style={styles.sittingCard}>
+              <ThemedText type="eyebrow">Evening reflection</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                {status.eveningDone
+                  ? 'Reflected today'
+                  : 'Reread this morning’s endings, then one reflection stem.'}
+              </ThemedText>
+              <View style={styles.startRow}>
+                <Button
+                  label="Begin evening reflection"
+                  onPress={() => startSitting('evening')}
+                  variant={currentPeriod === 'evening' ? 'primary' : 'secondary'}
+                  style={styles.primaryButton}
+                />
+              </View>
+            </Card>
+          )}
+
+          {/* The weekly reflection card on its target day (§6.5.1, §7
+              `weekly_meta_day`). The deep link (/write?origin=weekly — c03's
+              notification target) reaches the same flow any day. */}
+          {status?.weeklyCardToday && (
+            <Card style={styles.sittingCard}>
+              <ThemedText type="eyebrow">Weekly reflection</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                {status.weeklyDoneThisWeek
+                  ? 'Reflected this week'
+                  : `Week ${status.week.currentWeek}’s endings, then the weekly stem.`}
+              </ThemedText>
+              {!status.weeklyDoneThisWeek && (
+                <View style={styles.startRow}>
+                  <Button
+                    label="Begin weekly reflection"
+                    onPress={() => router.push({ pathname: '/write', params: { origin: 'weekly' } })}
+                    variant="secondary"
+                    style={styles.primaryButton}
+                  />
+                </View>
+              )}
+            </Card>
+          )}
+
+          {/* §6.2's calm completion nudge — only when this calendar week's
+              reflection actually advanced the derived week, and never once the
+              programme itself is complete (the line below covers that). */}
+          {status?.nudge && !status.programmeComplete && (
+            <ThemedText type="small" themeColor="textSecondary">
+              {`Week ${status.nudge.completedWeek} complete — Week ${status.nudge.nextWeek} is ready.`}
+            </ThemedText>
+          )}
+
+          {/* Week 30's completion state (§6.2/Q2): the programme ends calmly;
+              the library is the way onward. */}
+          {status?.programmeComplete && (
+            <View style={styles.completionBlock}>
+              <ThemedText type="small" themeColor="textSecondary">
+                Week 30 complete. The library is yours from here.
+              </ThemedText>
+              <Link href="/stems" style={styles.reviewRow}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Browse the library
+                </ThemedText>
+                <Ionicons name="chevron-forward-outline" size={16} color={theme.accent} />
+              </Link>
+            </View>
+          )}
 
           <View style={styles.grid}>
             {SECONDARY_LINKS.map(({ href, label, icon, color, colorDark }) => (
@@ -309,6 +377,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   statusFooter: {
+    gap: Spacing.one,
+    alignItems: 'flex-start',
+  },
+  completionBlock: {
     gap: Spacing.one,
     alignItems: 'flex-start',
   },

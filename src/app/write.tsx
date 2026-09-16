@@ -14,81 +14,134 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BadgeCard } from '@/components/badge-card';
 import { Button } from '@/components/button';
+import { Card } from '@/components/card';
+import { EmptyState } from '@/components/empty-state';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WriteActionBar } from '@/components/write-action-bar';
 import { WriteTimerStrip } from '@/components/write-timer-strip';
 import { MaxContentWidth, MinTouchTarget, pressureColorAt, Spacing } from '@/constants/theme';
-import { getRepository, type StemRow, type TimeOfDay } from '@/db';
+import { getRepository, type EndingRow, type SessionRow, type StemRow, type TimeOfDay } from '@/db';
+import { nowEventTime } from '@/db/time';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import type { BadgeDef } from '@/session/badges';
 import { assembleNewlyEarnedBadges } from '@/session/badgeReveal';
+import { PROGRAMME_WEEK_CAP } from '@/session/program';
+import {
+  readEveningReflectionInputs,
+  readMorningSittingQueue,
+  readProgrammeWeek,
+  readWeeklyReflectionInputs,
+  shouldClearOverride,
+} from '@/session/programRead';
+import { utcBoundsOfLocalDay } from '@/session/program';
 import { formatMMSS, sessionDurationLabel } from '@/session/sessionMachine';
 import type { StemForSession } from '@/session/useWritingSession';
 import { useWritingSession } from '@/session/useWritingSession';
 
 /**
- * The queue for one writing sitting (morning/evening pivot, 2026-09-14): all
- * active stems for the chosen period, in `getActiveStemsForTimeOfDay`'s
- * deterministic order. Recomputed on every mount rather than persisted
- * anywhere — a "sitting" has no row of its own (spec keeps one `sessions`
- * row per stem, ADR-0001/CLAUDE.md), so this is the one place the sequence
- * exists.
+ * Parses the one-off week-sitting param (`/write?week=N`, the stem library's
+ * week page). Query params arrive as strings (or arrays); anything that
+ * isn't an integer 1–30 is no param at all.
  */
-function loadQueue(timeOfDay: TimeOfDay): StemRow[] {
-  return getRepository().getActiveStemsForTimeOfDay(timeOfDay);
+function parseWeekParam(week?: string | string[]): number | null {
+  const raw = Array.isArray(week) ? week[0] : week;
+  if (raw === undefined || raw === null) return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= PROGRAMME_WEEK_CAP ? n : null;
 }
 
 /**
- * ADR-0001 resume, extended for a sitting: if a session was left open by a
- * previous run, `useWritingSession`'s own mount effect resumes/finalizes
- * that one `sessions` row exactly as before — this only needs to figure out
- * which period's queue it belongs to (by checking list membership; stems
- * carry no `time_of_day` on `StemRow` itself) and where in that queue to
- * pick back up, so the remaining stems in the sitting still get written
- * rather than the sitting silently ending at one stem. Falls back to a
- * one-stem queue of just the resumed stem when it isn't (or is no longer)
- * in either period's active list — e.g. a single-stem write from the stem
- * library (below), or a stem archived mid-sitting.
+ * ADR-0001 resume, extended for the programme (§6.2): if a session was left
+ * open by a previous run, `useWritingSession`'s own mount effect resumes/
+ * finalizes that one `sessions` row exactly as before — this only needs to
+ * work out which sitting the stem belongs to and where in its queue to pick
+ * back up, so the remaining stems still get written rather than the sitting
+ * silently ending at one stem.
+ *
+ * Order of attempts:
+ * 1. the effective programme week's morning sitting (§6.2) — the common case;
+ * 2. a one-off week sitting from the library (`week` param) — the queue it
+ *    was started from, which may differ from the current effective week if
+ *    the override changed between kill and resume;
+ * 3. a solo one-stem queue. The lookup here includes the meta-stems
+ *    (`listMetaStems` covers `origin='meta'` AND the weekly meta-stem,
+ *    neither of which `listAllStems` returns) — the c05-queued bug: an
+ *    open review meta-stem session used to resume into an empty queue and
+ *    the screen stuck on "No stems set" forever. Meta-stem open sessions
+ *    are normally routed into their reflection flow before this fallback
+ *    runs (see the mount effect); this is the safety net when the flow
+ *    itself can't be reconstructed.
  */
-function resumeQueue(openStemId: string): { queue: StemRow[]; startIndex: number } {
-  const repo = getRepository();
-  for (const timeOfDay of ['morning', 'evening'] as const) {
-    const queue = repo.getActiveStemsForTimeOfDay(timeOfDay);
-    const index = queue.findIndex((s) => s.id === openStemId);
-    if (index >= 0) return { queue, startIndex: index };
+function resumeQueue(repo: ReturnType<typeof getRepository>, openStemId: string, weekParam: number | null): { queue: StemRow[]; startIndex: number } {
+  const { currentWeek } = readProgrammeWeek(repo);
+  const weekQueue = repo.getProgrammeStemsForWeek(currentWeek);
+  const index = weekQueue.findIndex((s) => s.id === openStemId);
+  if (index >= 0) return { queue: weekQueue, startIndex: index };
+
+  if (weekParam !== null) {
+    const oneOff = repo.getProgrammeStemsForWeek(weekParam);
+    const oneOffIndex = oneOff.findIndex((s) => s.id === openStemId);
+    if (oneOffIndex >= 0) return { queue: oneOff, startIndex: oneOffIndex };
   }
-  const solo = repo.listAllStems().find((s) => s.id === openStemId && s.deleted_at === null);
+
+  const solo =
+    repo.listMetaStems().find((s) => s.id === openStemId) ??
+    repo.listAllStems().find((s) => s.id === openStemId && s.deleted_at === null);
   return { queue: solo ? [solo] : [], startIndex: 0 };
 }
 
+/** The two reflection flows that run inside this screen (§6.5.1/§6.5.2). */
+type FlowKind = 'evening' | 'weekly';
+
+interface ReflectionFlow {
+  kind: FlowKind;
+  /** 'reread': the read-only ending list with a Continue gate. 'writing': the meta-stem session. 'done': saved. */
+  phase: 'reread' | 'writing' | 'done';
+  /** The sessions the reread shows (§6.5: grouped by session, chronological, read-only). */
+  reviewed: { session: SessionRow; endings: EndingRow[] }[];
+  metaStem: StemRow;
+  /** Weekly only: the programme week being reflected (for the reread copy and the review row). */
+  week: number | null;
+  /** Weekly only: the `program_week_override` currently selects this week — completing clears it (§6.2). */
+  clearOverride: boolean;
+}
+
 /**
- * The writing session (spec §6.3), driving one multi-stem sitting
- * (morning/evening pivot): every active stem for `timeOfDay` is presented
- * one at a time, in sequence — advancing to the next stem re-runs the same
- * per-stem machinery (`useWritingSession`) rather than anything new, since
- * each stem is still its own `sessions` row. No navigation chrome beyond a
- * single exit affordance (§10) — the stem stays pinned above the input,
- * previously written endings are shown dimmed above it (§6.3.5), and the
- * timer is a thin, calm progress bar with no numerals larger than the text
- * (§6.3.7).
+ * The writing screen (spec §6.3), now the host of every sitting shape
+ * (ADR-0004/ADR-0005): each is a queue of stems written one after another,
+ * every stem still its own `sessions` row driven by the same
+ * `useWritingSession` machinery — the shapes differ only in what fills the
+ * queue and what surrounds it:
  *
- * `origin` is only 'notification' when this screen was reached by tapping a
- * notification (§6.4) — selection is no longer chosen at schedule time
- * (§6.2's weighted draw is gone), so there is nothing to look up; the
- * sitting still loads fresh from `getActiveStemsForTimeOfDay`.
+ * - **Morning sitting** (`timeOfDay=morning`, and the bare `/write` default):
+ *   every active programme stem of the effective week (§6.2), seed order.
+ * - **One-off week sitting** (`week=N`, from the library's week page): that
+ *   week's stems, `origin='manual'`, never in any rotation (§6.2).
+ * - **Solo write** (`stemId`, from the stem library): one stem, `origin='manual'`.
+ * - **Evening reflection** (`timeOfDay=evening`, only when
+ *   `evening_practice_enabled`): today's morning endings read-only, then
+ *   the alternating evening meta-stem as a timed session (`origin='review'`,
+ *   §6.5.2). Completion records the review scoped to today's morning sessions.
+ * - **Weekly reflection** (`origin=weekly` — the `/write?origin=weekly`
+ *   deep link is c03's notification target, plus the Home weekend card): the
+ *   effective programme week's endings read-only, then the weekly meta-stem
+ *   (`review_timer_seconds`, §6.5.1). Completion records the review and —
+ *   when the override selects this week — clears the override so the derived
+ *   week takes over (§6.2).
  *
- * `stemId` (instead of `timeOfDay`) is the stem library's "write on this
- * stem now" entry point (DECISIONS.md Q2: `origin='manual'`, deliberately
- * bypassing period-based selection) — it builds a one-stem queue rather
- * than a whole period's sitting.
+ * A session left open by a previous run always wins over the params
+ * (ADR-0001: there is never more than one open session, and starting a new
+ * one under it would orphan it): the mount effect routes it back into the
+ * flow that owns its stem.
  */
 export default function WriteScreen() {
-  const { timeOfDay, stemId, origin } = useLocalSearchParams<{
+  const { timeOfDay, stemId, origin, week } = useLocalSearchParams<{
     timeOfDay?: TimeOfDay;
     stemId?: string;
     origin?: string;
+    week?: string | string[];
   }>();
   const router = useRouter();
   const theme = useTheme();
@@ -107,6 +160,11 @@ export default function WriteScreen() {
   // index directly, since `useWritingSession`'s mount effect already
   // brought it into 'active' without this screen calling `start()` itself.
   const [startedIndex, setStartedIndex] = useState(-1);
+  // Non-null while a reflection flow (evening/weekly) owns the screen.
+  const [flow, setFlow] = useState<ReflectionFlow | null>(null);
+  // The evening card's off state (`evening_practice_enabled` false, §6.2/§7):
+  // a calm explanation, never a gate error (§13.4).
+  const [eveningOff, setEveningOff] = useState(false);
 
   const stemOrigin: StemForSession['origin'] = origin === 'notification' ? 'notification' : 'manual';
   const pendingStem = queue?.[queueIndex] ?? null;
@@ -138,36 +196,131 @@ export default function WriteScreen() {
     };
   }, []);
 
-  // Loads the sitting's queue once on mount: resumes an open session's
-  // position if ADR-0001 left one, otherwise starts fresh from either
-  // `timeOfDay`'s full active-stem list or a single `stemId` (stem
-  // library's "write now"), at index 0.
+  // Loads the screen once on mount. An open session (ADR-0001) is routed by
+  // its stem — the reflection flows resume straight into their writing
+  // phase, everything else into its sitting queue; params decide only when
+  // nothing is open.
   useEffect(() => {
     const repo = getRepository();
     setTerminator(repo.getSettings().stem_terminator);
+    setEveningOff(false);
 
     const open = repo.getOpenSession();
     if (open) {
-      const resumed = resumeQueue(open.session.stem_id);
+      const openStemId = open.session.stem_id;
+      const weekly = repo.getWeeklyMetaStem();
+      if (weekly && openStemId === weekly.id) {
+        const inputs = readWeeklyReflectionInputs(repo);
+        if (inputs.metaStem) {
+          setFlow({
+            kind: 'weekly',
+            phase: 'writing',
+            reviewed: inputs.reviewed,
+            metaStem: inputs.metaStem,
+            week: inputs.week,
+            clearOverride: shouldClearOverride(repo.getSettings().program_week_override, inputs.week),
+          });
+          setQueue(null);
+          return;
+        }
+      }
+      const eveningStem = repo.listMetaStems().find((s) => s.origin === 'meta' && s.id === openStemId);
+      if (eveningStem) {
+        const inputs = readEveningReflectionInputs(repo);
+        setFlow({
+          kind: 'evening',
+          phase: 'writing',
+          reviewed: inputs.reviewed,
+          metaStem: eveningStem,
+          week: null,
+          clearOverride: false,
+        });
+        setQueue(null);
+        return;
+      }
+      // Sitting resume — the safety net includes meta stems (the c05 bug fix).
+      const resumed = resumeQueue(repo, openStemId, parseWeekParam(week));
       setQueue(resumed.queue);
       setQueueIndex(resumed.startIndex);
-      // `useWritingSession`'s own mount effect resumes this session
-      // directly into 'active' — mark it already-started so the Start
-      // gate below doesn't ask the user to tap Start on a running timer.
       setStartedIndex(resumed.startIndex);
+      setFlow(null);
       return;
     }
 
-    if (timeOfDay) {
-      setQueue(loadQueue(timeOfDay));
+    const enterFlow = (kind: FlowKind, phase: ReflectionFlow['phase']) => {
+      if (kind === 'weekly') {
+        const inputs = readWeeklyReflectionInputs(repo);
+        if (!inputs.metaStem) {
+          // Seed machinery missing (corrupted install): the honest empty
+          // state, not a crash.
+          setFlow(null);
+          setQueue([]);
+          return;
+        }
+        setFlow({
+          kind,
+          phase,
+          reviewed: inputs.reviewed,
+          metaStem: inputs.metaStem,
+          week: inputs.week,
+          clearOverride: shouldClearOverride(repo.getSettings().program_week_override, inputs.week),
+        });
+      } else {
+        const inputs = readEveningReflectionInputs(repo);
+        if (!inputs.metaStem) {
+          setFlow(null);
+          setQueue([]);
+          return;
+        }
+        setFlow({
+          kind,
+          phase,
+          reviewed: inputs.reviewed,
+          metaStem: inputs.metaStem,
+          week: null,
+          clearOverride: false,
+        });
+      }
+      setQueue(null);
+    };
+
+    if (origin === 'weekly') {
+      enterFlow('weekly', 'reread');
+    } else if (timeOfDay === 'evening') {
+      if (!repo.getSettings().evening_practice_enabled) {
+        setFlow(null);
+        setQueue(null);
+        setEveningOff(true);
+        return;
+      }
+      enterFlow('evening', 'reread');
+    } else if (timeOfDay === 'morning') {
+      setFlow(null);
+      setQueue(readMorningSittingQueue(repo));
       setQueueIndex(0);
-    } else if (stemId) {
-      const solo = repo.listAllStems().find((s) => s.id === stemId && s.deleted_at === null);
-      setQueue(solo ? [solo] : []);
-      setQueueIndex(0);
+    } else {
+      const weekNumber = parseWeekParam(week);
+      if (weekNumber !== null) {
+        // One-off sitting on another week's block (§6.2: origin='manual',
+        // never in any rotation).
+        setFlow(null);
+        setQueue(repo.getProgrammeStemsForWeek(weekNumber));
+        setQueueIndex(0);
+      } else if (stemId) {
+        const solo = repo.listAllStems().find((s) => s.id === stemId && s.deleted_at === null);
+        setFlow(null);
+        setQueue(solo ? [solo] : []);
+        setQueueIndex(0);
+      } else {
+        // Bare /write (no params): the morning sitting is the app's one
+        // dominant action — default to it rather than a blank screen.
+        setFlow(null);
+        setQueue(readMorningSittingQueue(repo));
+        setQueueIndex(0);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeOfDay, stemId]);
+  }, [timeOfDay, stemId, origin, week]);
 
   const isLastInQueue = queue !== null && queueIndex >= queue.length - 1;
 
@@ -176,9 +329,10 @@ export default function WriteScreen() {
   // only renders on that last stem's 'done' phase (§6.3.11, proposal "never
   // between stems"). Advancing just moves the pointer; §6.3.1's Start
   // control (below, gated by `awaitingStart`) still holds the next stem's
-  // timer until the user taps it, same as the first stem.
+  // timer until the user taps it, same as the first stem. Reflection flows
+  // carry no queue — their own completion effect below handles 'done'.
   useEffect(() => {
-    if (session.phase !== 'done' || !queue) return;
+    if (session.phase !== 'done' || !queue || flow) return;
     if (isLastInQueue) return;
     setQueueIndex((i) => i + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -190,6 +344,48 @@ export default function WriteScreen() {
     session.start({ id: pendingStem.id, text: pendingStem.text, origin: stemOrigin });
   };
 
+  // Reflection completion (§6.5.1/§6.5.2): the meta-stem session finished
+  // (timeout, done, or resumed-elsewhere) — record the review with whatever
+  // was written, nothing discarded (§6.3.8), and clear the override when it
+  // selected this week (§6.2). Runs once per flow: guarded on the flow's
+  // own phase, which moves to 'done' here.
+  useEffect(() => {
+    if (!flow || flow.phase !== 'writing' || session.phase !== 'done' || !session.state) return;
+
+    const repo = getRepository();
+    const reflectionText = session.state.endings[0]?.text ?? null;
+    const { at } = nowEventTime();
+    if (flow.kind === 'weekly') {
+      // The re-read span: the reviewed sessions' own span (§4.2's
+      // period_start/period_end hold "what was re-read"; a programme week
+      // is a stem block, not a date range, so the span is theirs).
+      const starts = flow.reviewed.map((r) => r.session.started_at).sort();
+      repo.createReview({
+        periodStart: starts[0] ?? at,
+        periodEnd: at,
+        sessionIds: flow.reviewed.map((r) => r.session.id),
+        metaStemText: flow.metaStem.text,
+        reflectionText: reflectionText && reflectionText.length > 0 ? reflectionText : null,
+        createdAt: at,
+      });
+      if (flow.clearOverride) {
+        repo.setSetting('program_week_override', null);
+      }
+    } else {
+      const { start, end } = utcBoundsOfLocalDay(new Date());
+      repo.createReview({
+        periodStart: start,
+        periodEnd: end,
+        sessionIds: flow.reviewed.map((r) => r.session.id),
+        metaStemText: flow.metaStem.text,
+        reflectionText: reflectionText && reflectionText.length > 0 ? reflectionText : null,
+        createdAt: at,
+      });
+    }
+    setFlow({ ...flow, phase: 'done' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flow?.phase, flow?.kind, session.phase, session.state]);
+
   // Assembles the badge reveal once, when the *last* stem in the sitting
   // lands on 'done' — see badgeReveal.ts for why "before" is derived by
   // excluding this session's id rather than reading before the save (the
@@ -198,11 +394,13 @@ export default function WriteScreen() {
   // effect increments `queueIndex` to the sitting's last position still
   // carries `session.phase === 'done'` from the *previous* (non-final)
   // stem for one commit — without this guard, that stale 'done' would read
-  // as "the sitting finished" one stem early.
+  // as "the sitting finished" one stem early. Reflection flows reveal no
+  // badges (same as the review screen's meta-stem — §6.5.2's "normal timed
+  // session", not a gamified one).
   useEffect(() => {
-    if (session.phase !== 'done' || !session.sessionId || !isLastInQueue || awaitingStart) return;
+    if (session.phase !== 'done' || !session.sessionId || !isLastInQueue || awaitingStart || flow) return;
     setNewlyEarnedBadges(assembleNewlyEarnedBadges(getRepository(), session.sessionId));
-  }, [session.phase, session.sessionId, isLastInQueue, awaitingStart]);
+  }, [session.phase, session.sessionId, isLastInQueue, awaitingStart, flow]);
 
   // Drives the settle animation and, sequenced ~300ms later, the badge
   // reveal's fade+slide — only for the sitting's final 'done' (the one that
@@ -210,7 +408,7 @@ export default function WriteScreen() {
   // straight to the final state, no animation at all. Same `!awaitingStart`
   // guard as the badge-assembly effect above, and for the same reason.
   useEffect(() => {
-    if (session.phase !== 'done' || !isLastInQueue || awaitingStart) return;
+    if (session.phase !== 'done' || !isLastInQueue || awaitingStart || flow) return;
     if (reduceMotion) {
       settleAnim.setValue(1);
       badgeRevealAnim.setValue(1);
@@ -234,7 +432,7 @@ export default function WriteScreen() {
       }).start();
     }, 300);
     return () => clearTimeout(badgeTimer);
-  }, [session.phase, isLastInQueue, awaitingStart, reduceMotion, settleAnim, badgeRevealAnim]);
+  }, [session.phase, isLastInQueue, awaitingStart, flow, reduceMotion, settleAnim, badgeRevealAnim]);
 
   useEffect(() => {
     if (session.phase === 'active') {
@@ -244,24 +442,39 @@ export default function WriteScreen() {
     }
   }, [session.phase, session.state?.activeOrdinal]);
 
-  const timerSeconds = session.state?.config.timerSeconds ?? 1;
-  const stemTimerSeconds = session.state?.config.stemTimerSeconds ?? null;
-  const progress = session.phase === 'active' ? Math.max(0, Math.min(1, session.remainingSeconds / timerSeconds)) : 0;
-  const stemProgress =
-    session.phase === 'active' && stemTimerSeconds && session.stemRemainingSeconds !== null
-      ? Math.max(0, Math.min(1, session.stemRemainingSeconds / stemTimerSeconds))
-      : null;
-  // The per-stem timer drives the pressure cue when it's on (it's the
-  // tighter, more immediate deadline); otherwise the session timer does.
-  const pressureFraction = stemProgress ?? progress;
+  if (eveningOff) {
+    return (
+      <ThemedView style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <ThemedText type="default" themeColor="textSecondary">
+            Evening practice is turned off. You can turn it on in Settings.
+          </ThemedText>
+        </SafeAreaView>
+      </ThemedView>
+    );
+  }
 
-  // §6.3.7's depleting-color cue (2026-09-15 owner decision, DECISIONS.md at
-  // merge): the top-strip MM:SS numerals carry the pressure gradient now
-  // that the countdown Save button is gone — ambient urgency only, no
-  // shaming copy (§13.4). Recomputed per render (the screen re-renders on
-  // every timer tick), so no Animated value is needed; `undefined` outside
-  // 'active' leaves the numerals in the theme's normal text color.
-  const pressureColor = session.phase === 'active' ? pressureColorAt(1 - pressureFraction, resolvedScheme) : undefined;
+  if (flow) {
+    return (
+      <ReflectionFlowView
+        flow={flow}
+        session={session}
+        terminator={terminator}
+        inputRef={inputRef}
+        onBegin={() => {
+          if (!flow.metaStem) return;
+          const timerSeconds = getRepository().getSettings().review_timer_seconds;
+          setFlow({ ...flow, phase: 'writing' });
+          session.start({
+            id: flow.metaStem.id,
+            text: flow.metaStem.text,
+            origin: 'review',
+            configOverrides: { targetEndings: 1, timerSeconds },
+          });
+        }}
+      />
+    );
+  }
 
   if (queue !== null && queue.length === 0) {
     return (
@@ -287,6 +500,16 @@ export default function WriteScreen() {
   const targetEndings = session.state?.config.targetEndings ?? 0;
 
   const submittedEndings = session.state?.endings.filter((e) => e.submittedAt !== null) ?? [];
+
+  const timerSeconds = session.state?.config.timerSeconds ?? 1;
+  const stemTimerSeconds = session.state?.config.stemTimerSeconds ?? null;
+  const progress = session.phase === 'active' ? Math.max(0, Math.min(1, session.remainingSeconds / timerSeconds)) : 0;
+  const stemProgress =
+    session.phase === 'active' && stemTimerSeconds && session.stemRemainingSeconds !== null
+      ? Math.max(0, Math.min(1, session.stemRemainingSeconds / stemTimerSeconds))
+      : null;
+  const pressureFraction = stemProgress ?? progress;
+  const pressureColor = session.phase === 'active' ? pressureColorAt(1 - pressureFraction, resolvedScheme) : undefined;
 
   // Enter submits the ending (2026-09-11 addition, §6.3.4): the input is
   // `multiline` so it wraps a long sentence, which means the platform
@@ -373,7 +596,7 @@ export default function WriteScreen() {
           </ScrollView>
 
           {/*
-            Pinned bottom (LC8/W5): whichever control belongs to the current
+            Pinned bottom (LC8): whichever control belongs to the current
             moment — Start, the writing controls, or the completion block —
             occupies this one fixed slot above the keyboard, never after the
             scrolling stack.
@@ -450,6 +673,195 @@ export default function WriteScreen() {
   );
 }
 
+/**
+ * The reflection flows' reread phase and meta-stem session (§6.5): the
+ * same pinned primitives as write's sitting path and review's meta-stem
+ * (`WriteTimerStrip` / `WriteActionBar`) — the reflection stem is
+ * deliberately "a normal timed session" (§6.5.2), not a bespoke screen.
+ * The reread is read-only (§6.5's quiet list: stem + dim endings), and the
+ * exit affordance exists only before the reflection starts (§6.3.1:
+ * nothing is timed until Start/Continue).
+ */
+function ReflectionFlowView({
+  flow,
+  session,
+  terminator,
+  inputRef,
+  onBegin,
+}: {
+  flow: ReflectionFlow;
+  session: ReturnType<typeof useWritingSession>;
+  terminator: string;
+  inputRef: React.RefObject<TextInput | null>;
+  onBegin: () => void;
+}) {
+  const router = useRouter();
+  const theme = useTheme();
+  const resolvedScheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+
+  if (flow.phase === 'done') {
+    return (
+      <ThemedView style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <ThemedView style={styles.scrollContent}>
+            <ThemedText type="default" themeColor="textSecondary">
+              Saved.
+            </ThemedText>
+            <Button label="Close" onPress={() => router.back()} />
+          </ThemedView>
+        </SafeAreaView>
+      </ThemedView>
+    );
+  }
+
+  if (flow.phase === 'reread') {
+    return (
+      <ThemedView style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <ThemedView style={styles.topStrip}>
+            <ThemedView style={styles.exitRow}>
+              <Pressable
+                onPress={() => router.back()}
+                hitSlop={12}
+                style={styles.exitButton}
+                accessibilityRole="button"
+                accessibilityLabel="Exit reflection"
+              >
+                <ThemedText type="small" themeColor="textSecondary">
+                  Close
+                </ThemedText>
+              </Pressable>
+            </ThemedView>
+            <WriteTimerStrip
+              positionLabel={flow.kind === 'weekly' ? `Week ${flow.week ?? '?'} review` : 'Evening reflection'}
+            />
+          </ThemedView>
+
+          <ScrollView style={styles.flexOne} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+            {flow.reviewed.length === 0 ? (
+              <ThemedText type="default" themeColor="textSecondary">
+                {flow.kind === 'weekly'
+                  ? `Nothing written in week ${flow.week ?? '?'} yet — the reflection is still open to you.`
+                  : 'Nothing written this morning — the reflection is still open to you.'}
+              </ThemedText>
+            ) : (
+              flow.reviewed.map(({ session: s, endings }) => (
+                <Card key={s.id} style={styles.reviewedCard}>
+                  <ThemedText type="eyebrow">
+                    {formatDate(s.started_at)} · {endings.length === 1 ? '1 ending' : `${endings.length} endings`}
+                  </ThemedText>
+                  <ThemedText type="stem">{s.stem_text_snapshot}</ThemedText>
+                  {endings.map((e) => (
+                    <ThemedText
+                      key={e.id}
+                      type="stem"
+                      themeColor="textSecondary"
+                      style={[styles.pastEnding, { borderTopColor: theme.border }]}
+                    >
+                      {e.text || '(nothing written)'}
+                    </ThemedText>
+                  ))}
+                </Card>
+              ))
+            )}
+          </ScrollView>
+
+          <ThemedView style={styles.bottomBar}>
+            <Button label="Continue" onPress={onBegin} />
+          </ThemedView>
+        </SafeAreaView>
+      </ThemedView>
+    );
+  }
+
+  // 'writing' — the meta-stem as a normal timed session (§6.5.2).
+  const timerSeconds = session.state?.config.timerSeconds ?? 1;
+  const stemTimerSeconds = session.state?.config.stemTimerSeconds ?? null;
+  const progress = session.phase === 'active' ? Math.max(0, Math.min(1, session.remainingSeconds / timerSeconds)) : 0;
+  const stemProgress =
+    session.phase === 'active' && stemTimerSeconds && session.stemRemainingSeconds !== null
+      ? Math.max(0, Math.min(1, session.stemRemainingSeconds / stemTimerSeconds))
+      : null;
+  const pressureFraction = stemProgress ?? progress;
+  const pressureColor = session.phase === 'active' ? pressureColorAt(1 - pressureFraction, resolvedScheme) : undefined;
+
+  const submittedEndings = session.state?.endings.filter((e) => e.submittedAt !== null) ?? [];
+
+  // Enter submits the ending — same trailing-newline path as the sitting
+  // (§6.3.4's return key).
+  const handleChangeText = (nextText: string) => {
+    if (nextText.endsWith('\n')) {
+      session.submitActive(nextText.slice(0, -1));
+      return;
+    }
+    session.changeActiveText(nextText);
+  };
+
+  return (
+    <ThemedView style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView style={styles.flexOne} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <ThemedView style={styles.topStrip}>
+            <WriteTimerStrip
+              positionLabel={flow.kind === 'weekly' ? `Week ${flow.week ?? '?'} reflection` : 'Evening reflection'}
+              progress={session.phase === 'active' ? progress : undefined}
+              timeLabel={session.phase === 'active' ? formatMMSS(session.remainingSeconds) : undefined}
+              timeColor={pressureColor}
+            />
+          </ThemedView>
+
+          <ScrollView style={styles.flexOne} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+            <ThemedText type="stem">
+              {session.stemText ?? ''}
+              {terminator}
+            </ThemedText>
+            {submittedEndings.map((e) => (
+              <ThemedText
+                key={e.ordinal}
+                type="stem"
+                themeColor="textSecondary"
+                style={[styles.pastEnding, { borderTopColor: theme.border }]}
+              >
+                {e.text}
+              </ThemedText>
+            ))}
+          </ScrollView>
+
+          <ThemedView style={styles.bottomBar}>
+            {session.phase === 'active' && (
+              <WriteActionBar
+                inputRef={inputRef}
+                value={session.activeText}
+                onChangeText={handleChangeText}
+                onSubmitEditing={() => session.submitActive()}
+                inputAccessibilityLabel="Your reflection"
+                placeholder="Keep the pen moving."
+                stemProgress={stemProgress}
+                onDone={session.finishNow}
+              />
+            )}
+
+            {session.phase === 'done' && (
+              <ThemedView style={styles.doneBlock}>
+                <ThemedText type="default" themeColor="textSecondary">
+                  Saved.
+                </ThemedText>
+                {/* The completion effect records the review row and flips the
+                    flow to 'done' — this frame only shows while that is in
+                    flight, so no extra control is offered here. */}
+              </ThemedView>
+            )}
+          </ThemedView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </ThemedView>
+  );
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -480,6 +892,9 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
+  },
+  reviewedCard: {
+    gap: Spacing.two,
   },
   // Pinned bottom (LC8): `SafeAreaView` already insets the home indicator;
   // this only needs top breathing room to separate from the scroll column

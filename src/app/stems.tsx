@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
@@ -158,6 +158,28 @@ export default function StemsScreen() {
             </ThemedView>
           }
         />
+
+        {/*
+          The official programme's entry point (issue 02, §6.6/ADR-0005): the
+          30 week blocks live on their own screen with the week grouping, the
+          one-off sitting action, and "make this my week". A quiet list-row
+          sibling above the search/filter block — the library's flat list
+          (all stems, filterable) is unchanged below it.
+        */}
+        <Pressable
+          onPress={() => router.push('/week')}
+          accessibilityRole="button"
+          accessibilityLabel="Official programme. Thirty weeks of guided sittings."
+          style={[styles.programmeRow, { backgroundColor: theme.backgroundElement }]}
+        >
+          <View style={styles.programmeText}>
+            <ThemedText type="default">Official programme</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Thirty weeks of guided sittings
+            </ThemedText>
+          </View>
+          <Ionicons name="chevron-forward-outline" size={18} color={theme.textSecondary} />
+        </Pressable>
 
         <ThemedView style={styles.controlsRow}>
           <TextInput
@@ -421,6 +443,24 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     flexGrow: 0,
     flexShrink: 0,
+  },
+  // The programme entry row: same list-row anatomy as the stems below
+  // (backgroundElement fill, card radius) but a single-row sibling above
+  // the controls, so the guided programme reads as a destination, not one
+  // row among 142.
+  programmeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: MinTouchTarget,
+    marginHorizontal: Spacing.four,
+    marginTop: Spacing.two,
+    padding: Spacing.three,
+    borderRadius: Radius.medium,
+  },
+  programmeText: {
+    gap: Spacing.half,
+    backgroundColor: 'transparent',
   },
   search: {
     flex: 1,

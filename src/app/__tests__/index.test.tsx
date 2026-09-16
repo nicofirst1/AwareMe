@@ -20,64 +20,124 @@ jest.mock('expo-router', () => {
 });
 
 // Same pattern as `progress.test.tsx`: a minimal repository stub so the
-// sitting card's read-time count and status footer (loadHomeStatus) have
-// something real to render, instead of silently catching a throw from a
-// real (unopenable-in-this-env) on-device DB. `getSettings` carries the
-// real §7 defaults (issue 03: loadHomeStatus and the render path both read
-// the two notification times to derive the current sitting period); tests
-// that need other settings reassign it and `afterEach` restores the base.
+// programme cards' read-time state (readHomeProgrammeStatus) has something
+// real to render, instead of silently catching a throw from a real
+// (unopenable-in-this-env) on-device DB. The issue's standing note — the
+// @/db mock must carry every repository method the screen's read path
+// calls — applies: the programme reads are all stubbed here (their SQL is
+// exercised against real SQLite in programRepository.test.ts).
 const mockRepository: {
   listSessionsForHistory: () => { id: string }[];
   getLastReviewAt: () => string | null;
   listSessionsForStats: () => { id: string }[];
-  getActiveStemsForTimeOfDay: () => { id: string }[];
+  getFirstProgrammeSitting: () => { startedAt: string; offsetMin: number } | null;
+  listCompletedWeeklyReflections: () => { startedAt: string; offsetMin: number }[];
+  listCompletedEveningReflections: () => { startedAt: string; offsetMin: number }[];
+  getProgrammeStemsForWeek: (week: number) => { id: string }[];
+  countProgrammeStemsCompletedInRange: (week: number, start: string, end: string) => number;
   getSettings?: () => Settings;
 } = {
   listSessionsForHistory: () => [{ id: 'session-1' }],
   getLastReviewAt: () => '2000-01-01T00:00:00.000Z',
   listSessionsForStats: () => [],
-  getActiveStemsForTimeOfDay: () => [{ id: 'stem-1' }],
+  getFirstProgrammeSitting: () => null,
+  listCompletedWeeklyReflections: () => [],
+  listCompletedEveningReflections: () => [],
+  getProgrammeStemsForWeek: () => [{ id: 'stem-1' }],
+  countProgrammeStemsCompletedInRange: () => 0,
   getSettings: () => DEFAULT_SETTINGS,
 };
 
 jest.mock('@/db', () => {
-  const actual = jest.requireActual('@/db');
+  const actual = jest.requireActual<typeof import('@/db')>('@/db');
   return {
     ...actual,
     getRepository: () => mockRepository,
   };
 });
 
+const WEEKDAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+const todayName = (): string => WEEKDAY_NAMES[new Date().getDay()];
+
 describe('HomeScreen', () => {
   afterEach(() => {
     mockRepository.getSettings = () => DEFAULT_SETTINGS;
   });
 
-  it('renders the sitting card with eyebrow, stem count, and a review row', () => {
+  it('renders the week card with the derived week, stem count, and a review row', () => {
     render(<HomeScreen />);
-    // Eyebrow names whichever period is current — either is a valid render.
-    expect(screen.getByText(/^(Morning|Evening) sitting$/)).toBeTruthy();
+    // Fresh install: no first programme sitting → derived week 1.
+    expect(screen.getByText('Week 1 of 30')).toBeTruthy();
     expect(screen.getByText('1 stem ready')).toBeTruthy();
     expect(screen.getByText('1 session this week')).toBeTruthy();
     expect(screen.getByText('Review available')).toBeTruthy();
+    expect(screen.getByText('Start morning sitting')).toBeTruthy();
   });
 
-  it('names the sitting period from the configured notification times (midpoint rule)', () => {
-    // 08:00/09:00 midpoint is 08:30; at a faked 10:00 local the old hardcoded
-    // 17:00 rule would still say "Morning", the midpoint rule says "Evening".
-    jest.useFakeTimers();
-    jest.setSystemTime(new Date(2026, 8, 15, 10, 0));
-    mockRepository.getSettings = () => ({
-      ...DEFAULT_SETTINGS,
-      morning_notification_time: '08:00',
-      evening_notification_time: '09:00',
-    });
-    try {
-      render(<HomeScreen />);
-      expect(screen.getByText('Evening sitting')).toBeTruthy();
-    } finally {
-      jest.useRealTimers();
-    }
+  it('renders the evening reflection card (enabled by default) and marks its done state', () => {
+    render(<HomeScreen />);
+    expect(screen.getByText('Evening reflection')).toBeTruthy();
+    expect(screen.getByText('Begin evening reflection')).toBeTruthy();
+
+    // A completed evening reflection today → the quiet done state, and the
+    // card stays (a second sitting is allowed, absence is never punished,
+    // §13.4).
+    const nowIso = new Date().toISOString();
+    const offsetMin = -new Date().getTimezoneOffset();
+    mockRepository.listCompletedEveningReflections = () => [{ startedAt: nowIso, offsetMin }];
+    render(<HomeScreen />);
+    expect(screen.getByText('Reflected today')).toBeTruthy();
+  });
+
+  it('hides the evening card when evening practice is disabled', () => {
+    mockRepository.getSettings = () => ({ ...DEFAULT_SETTINGS, evening_practice_enabled: false });
+    render(<HomeScreen />);
+    expect(screen.queryByText('Evening reflection')).toBeNull();
+  });
+
+  it('shows the weekly reflection card on its target day, with its done state', () => {
+    mockRepository.getSettings = () => ({ ...DEFAULT_SETTINGS, weekly_meta_day: todayName() });
+    render(<HomeScreen />);
+    expect(screen.getByText('Weekly reflection')).toBeTruthy();
+    expect(screen.getByText(`Week 1’s endings, then the weekly stem.`)).toBeTruthy();
+    expect(screen.getByText('Begin weekly reflection')).toBeTruthy();
+  });
+
+  it('does not show the weekly reflection card on other days', () => {
+    const otherDay = WEEKDAY_NAMES[(new Date().getDay() + 3) % 7];
+    mockRepository.getSettings = () => ({ ...DEFAULT_SETTINGS, weekly_meta_day: otherDay });
+    render(<HomeScreen />);
+    expect(screen.queryByText('Weekly reflection')).toBeNull();
+  });
+
+  it('nudges only when this calendar week advanced the derived week', () => {
+    // A reflection in the current Mon–Sun week (anchored 3 weeks ago):
+    // derived 2 with it, 1 without it → the calm nudge with derived numbers.
+    const now = new Date();
+    const offsetMin = -now.getTimezoneOffset();
+    const anchor = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000);
+    mockRepository.getFirstProgrammeSitting = () => ({ startedAt: anchor.toISOString(), offsetMin });
+    mockRepository.listCompletedWeeklyReflections = () => [{ startedAt: now.toISOString(), offsetMin }];
+    render(<HomeScreen />);
+    expect(screen.getByText('Week 1 complete — Week 2 is ready.')).toBeTruthy();
+
+    // No reflection this week → no nudge, no guilt about the missed one.
+    mockRepository.listCompletedWeeklyReflections = () => [];
+    render(<HomeScreen />);
+    expect(screen.queryByText(/is ready\./)).toBeNull();
+  });
+
+  it('marks the week-30 completion state and points at the library', () => {
+    const now = new Date();
+    const offsetMin = -now.getTimezoneOffset();
+    mockRepository.getSettings = () => ({ ...DEFAULT_SETTINGS, program_week_override: 30 });
+    mockRepository.listCompletedWeeklyReflections = () => [{ startedAt: now.toISOString(), offsetMin }];
+    render(<HomeScreen />);
+    expect(screen.getByText('Week 30 of 30')).toBeTruthy();
+    expect(screen.getByText('Week 30 complete. The library is yours from here.')).toBeTruthy();
+    expect(screen.getByText('Browse the library')).toBeTruthy();
+    // The nudge is suppressed once the completion state speaks.
+    expect(screen.queryByText(/is ready\./)).toBeNull();
   });
 
   it('still renders (default period rule) when settings cannot be read', () => {
@@ -88,7 +148,7 @@ describe('HomeScreen', () => {
     delete mockRepository.getSettings;
     try {
       render(<HomeScreen />);
-      expect(screen.getByText(/^(Morning|Evening) sitting$/)).toBeTruthy();
+      expect(screen.getByText('Morning sitting')).toBeTruthy();
       expect(screen.queryByText('1 stem ready')).toBeNull();
     } finally {
       mockRepository.getSettings = baseGetSettings;
@@ -100,10 +160,8 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Six Endings')).toBeTruthy();
   });
 
-  it('has morning and evening session starts and a secondary destination group', () => {
+  it('has a secondary destination group', () => {
     render(<HomeScreen />);
-    expect(screen.getByText('Morning session')).toBeTruthy();
-    expect(screen.getByText('Evening session')).toBeTruthy();
     expect(screen.getByText('Stems')).toBeTruthy();
     expect(screen.getByText('History')).toBeTruthy();
     expect(screen.getByText('Review')).toBeTruthy();

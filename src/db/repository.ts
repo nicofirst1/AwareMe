@@ -5,6 +5,7 @@ import { DEFAULT_SETTINGS, Settings } from './seed/settings';
 import { nowEventTime } from './time';
 import { EndReason, SessionOrigin } from '@/session/sessionMachine';
 import { BadgeSession } from '@/session/badges';
+import { PROGRAMME_WEEK_CAP } from '@/session/program';
 
 /** Every user-facing table, in the order the debug dump shows them. */
 export const ALL_TABLES = [
@@ -340,6 +341,191 @@ export class Repository {
       "SELECT id, text, origin, category, weight, time_of_day, active, deleted_at, created_at FROM stems WHERE origin != 'meta' AND is_weekly_meta = 0 ORDER BY created_at DESC",
       [],
     );
+  }
+
+  // -------------------------------------------------------------------
+  // Official-programme reads (issue 02-program-engine; coordinator
+  // pre-approval in the round hub: read-path additions ONLY — the cycle's
+  // only writes are `createReview` on reflection completion and the
+  // ADR-0005-sanctioned `program_week_override` setting via `setSetting`).
+  // Week/calendar arithmetic deliberately stays OUT of SQL: these reads
+  // return raw §4.1.3 event triples and rows, and `src/session/program.ts`
+  // (pure, unit-tested) does the Mon–Sun bucketing.
+  // -------------------------------------------------------------------
+
+  /**
+   * The §6.2 derivation anchor: the earliest non-deleted session ever
+   * written on a programme stem (`week_number IS NOT NULL`), with its
+   * stored UTC offset so the caller can place it in its own local calendar
+   * week. Null before the first programme sitting — the derived week stays
+   * 1 until the programme itself has started, however many reflections
+   * predate it.
+   */
+  getFirstProgrammeSitting(): { startedAt: string; offsetMin: number } | null {
+    return (
+      this.db.getFirstSync<{ startedAt: string; offsetMin: number }>(
+        `SELECT s.started_at as startedAt, s.offset_min as offsetMin
+         FROM sessions s JOIN stems st ON st.id = s.stem_id
+         WHERE s.deleted_at IS NULL AND st.week_number IS NOT NULL
+         ORDER BY s.started_at ASC
+         LIMIT 1`,
+        [],
+      ) ?? null
+    );
+  }
+
+  /**
+   * Every completed weekly reflection (§6.5.1): a finished (`ended_at` set)
+   * `origin='review'` session on the weekly meta-stem. The caller buckets
+   * these into Mon–Sun week keys (`eventWeekMondayKey`) to derive the
+   * programme week — an in-progress session is not yet a completed
+   * reflection and must not advance anything.
+   */
+  listCompletedWeeklyReflections(): { startedAt: string; offsetMin: number }[] {
+    return this.db.getAllSync<{ startedAt: string; offsetMin: number }>(
+      `SELECT s.started_at as startedAt, s.offset_min as offsetMin
+       FROM sessions s JOIN stems st ON st.id = s.stem_id
+       WHERE s.deleted_at IS NULL AND s.ended_at IS NOT NULL
+         AND s.origin = 'review' AND st.is_weekly_meta = 1
+       ORDER BY s.started_at ASC`,
+      [],
+    );
+  }
+
+  /**
+   * Every completed evening reflection (§6.2/§6.5.2): a finished
+   * `origin='review'` session on either evening meta-stem. Drives the
+   * deterministic stem alternation (count parity, `eveningReflectionStemIndex`)
+   * and the evening card's done state. On-demand reviews (§6.5.3) that used
+   * an evening meta-stem land in the same set — they are indistinguishable
+   * by design (same storage path, §6.5.2) and merely shift which stem is
+   * next, never the programme week.
+   */
+  listCompletedEveningReflections(): { startedAt: string; offsetMin: number }[] {
+    return this.db.getAllSync<{ startedAt: string; offsetMin: number }>(
+      `SELECT s.started_at as startedAt, s.offset_min as offsetMin
+       FROM sessions s JOIN stems st ON st.id = s.stem_id
+       WHERE s.deleted_at IS NULL AND s.ended_at IS NOT NULL
+         AND s.origin = 'review' AND st.origin = 'meta' AND st.is_weekly_meta = 0
+       ORDER BY s.started_at ASC`,
+      [],
+    );
+  }
+
+  /**
+   * The active programme stems of one week (1–30), in seed order — the
+   * morning sitting's queue (§6.2) and the one-off week sitting's queue.
+   * Seed order is `created_at` (the seed inserts weeks in order), with `id`
+   * (UUIDv7) as a deterministic tiebreaker.
+   */
+  getProgrammeStemsForWeek(week: number): StemRow[] {
+    if (!Number.isInteger(week) || week < 1 || week > PROGRAMME_WEEK_CAP) return [];
+    return this.db.getAllSync<StemRow>(
+      `SELECT id, text, origin, category, weight, time_of_day FROM stems
+       WHERE active = 1 AND deleted_at IS NULL AND week_number = ?
+       ORDER BY created_at, id`,
+      [week],
+    );
+  }
+
+  /**
+   * Every active programme stem with its week number, ordered by week then
+   * seed order — the stem library's Week 1–30 grouping (§6.6).
+   */
+  listProgrammeStems(): (StemRow & { weekNumber: number })[] {
+    return this.db.getAllSync<StemRow & { weekNumber: number }>(
+      `SELECT id, text, origin, category, weight, time_of_day, week_number as weekNumber FROM stems
+       WHERE active = 1 AND deleted_at IS NULL AND week_number IS NOT NULL
+       ORDER BY week_number, created_at, id`,
+      [],
+    );
+  }
+
+  /**
+   * The weekly meta-stem row (`is_weekly_meta = 1`, §5.4 #1/ADR-0005) — the
+   * scheduled weekly reflection's own stem, reached only through this flag,
+   * never a generic sitting draw.
+   */
+  getWeeklyMetaStem(): StemRow | null {
+    return (
+      this.db.getFirstSync<StemRow>(
+        'SELECT id, text, origin, category, weight, time_of_day FROM stems WHERE is_weekly_meta = 1 LIMIT 1',
+        [],
+      ) ?? null
+    );
+  }
+
+  /**
+   * The weekly reflection's re-read (§6.5.1): every non-deleted session on
+   * the given programme week's stems that has at least one non-deleted
+   * ending, chronological, with endings in ordinal order. The programme
+   * week is a stem block (`week_number`), not a date range — the reflection
+   * is self-paced, so "week N's endings" means what was written on week N's
+   * stems, whenever that happened. Same two-step shape as
+   * `listSessionsForReview`.
+   */
+  listSessionsForProgrammeWeek(week: number): { session: SessionRow; endings: EndingRow[] }[] {
+    if (!Number.isInteger(week) || week < 1 || week > PROGRAMME_WEEK_CAP) return [];
+    const sessionIds = this.db
+      .getAllSync<{ id: string }>(
+        `SELECT DISTINCT s.id as id
+         FROM sessions s
+         JOIN stems st ON st.id = s.stem_id
+         JOIN endings e ON e.session_id = s.id
+         WHERE s.deleted_at IS NULL AND e.deleted_at IS NULL AND st.week_number = ?
+         ORDER BY s.started_at`,
+        [week],
+      )
+      .map((r) => r.id);
+    return sessionIds
+      .map((id) => this.getSessionDetail(id))
+      .filter((d): d is { session: SessionRow; endings: EndingRow[] } => d !== null);
+  }
+
+  /**
+   * The evening reflection's re-read (§6.2/§6.5.2): non-deleted sessions on
+   * morning-tagged stems with at least one non-deleted ending started in
+   * `[dayStart, dayEnd)` — the caller passes today's local-day bounds in
+   * UTC ISO (`utcBoundsOfLocalDay`). Scoped to `time_of_day = 'morning'`
+   * stems: the evening sits down to reflect the morning's practice, not
+   * everything touched today.
+   */
+  listSessionsForDayMorning(dayStart: string, dayEnd: string): { session: SessionRow; endings: EndingRow[] }[] {
+    const sessionIds = this.db
+      .getAllSync<{ id: string }>(
+        `SELECT DISTINCT s.id as id
+         FROM sessions s
+         JOIN stems st ON st.id = s.stem_id
+         JOIN endings e ON e.session_id = s.id
+         WHERE s.deleted_at IS NULL AND e.deleted_at IS NULL
+           AND st.time_of_day = 'morning'
+           AND e.started_at >= ? AND e.started_at < ?
+         ORDER BY s.started_at`,
+        [dayStart, dayEnd],
+      )
+      .map((r) => r.id);
+    return sessionIds
+      .map((id) => this.getSessionDetail(id))
+      .filter((d): d is { session: SessionRow; endings: EndingRow[] } => d !== null);
+  }
+
+  /**
+   * How many DISTINCT stems of the given programme week have at least one
+   * completed (ended) session started in `[dayStart, dayEnd)` — the Home
+   * week card's "sitting done for today" signal, compared against the
+   * week's stem count (§6.2: the sitting is complete once every stem in
+   * the set has been written).
+   */
+  countProgrammeStemsCompletedInRange(week: number, dayStart: string, dayEnd: string): number {
+    if (!Number.isInteger(week) || week < 1 || week > PROGRAMME_WEEK_CAP) return 0;
+    const row = this.db.getFirstSync<{ count: number }>(
+      `SELECT COUNT(DISTINCT s.stem_id) as count
+       FROM sessions s JOIN stems st ON st.id = s.stem_id
+       WHERE s.deleted_at IS NULL AND s.ended_at IS NOT NULL AND st.week_number = ?
+         AND s.started_at >= ? AND s.started_at < ?`,
+      [week, dayStart, dayEnd],
+    );
+    return row?.count ?? 0;
   }
 
   /**

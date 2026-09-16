@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import StemsScreen from '@/app/stems';
 import { LibraryStemRow } from '@/db';
@@ -8,10 +8,12 @@ import { LibraryStemRow } from '@/db';
 // mount instead, matching what happens on a real mount-while-focused.
 // (`require` inside the factory, not a top-level import: jest.mock()
 // factories can't close over out-of-scope variables.)
+const mockRouter = { push: jest.fn() };
+
 jest.mock('expo-router', () => {
   const { useEffect } = require('react');
   return {
-    useRouter: () => ({ push: jest.fn() }),
+    useRouter: () => mockRouter,
     useFocusEffect: (effect: () => void) => useEffect(() => effect(), []),
   };
 });
@@ -54,5 +56,15 @@ describe('StemsScreen', () => {
     expect(screen.getByLabelText('More filters')).toBeTruthy();
     expect(screen.getAllByText('awareness').length).toBeGreaterThan(0);
     expect(screen.getByText(mockStems[0].text)).toBeTruthy();
+  });
+
+  // issue 02 (ADR-0005): the guided programme is a destination above the
+  // flat list, not one row among the seed corpus.
+  it("offers the official programme as the list's first entry", () => {
+    const { getByLabelText } = render(<StemsScreen />);
+    const row = getByLabelText('Official programme. Thirty weeks of guided sittings.');
+    expect(row).toBeTruthy();
+    fireEvent.press(row);
+    expect(mockRouter.push).toHaveBeenCalledWith('/week');
   });
 });
