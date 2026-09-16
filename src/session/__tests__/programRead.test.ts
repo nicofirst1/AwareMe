@@ -5,6 +5,7 @@
  * `programRepository.test.ts`.
  */
 import {
+  applyWeekSetActivation,
   readEveningReflectionInputs,
   readHomeProgrammeStatus,
   readMorningSittingQueue,
@@ -25,6 +26,7 @@ type Repo = {
   listSessionsForProgrammeWeek: (week: number) => unknown[];
   countProgrammeStemsCompletedInRange: (week: number, start: string, end: string) => number;
   getSettings: () => Settings;
+  setProgrammeWeekActive: (week: number) => void;
 };
 
 function makeRepo(overrides: Partial<Repo> = {}): Repository {
@@ -243,5 +245,43 @@ describe('shouldClearOverride (§6.2 clearing rule)', () => {
     expect(shouldClearOverride(null, 7)).toBe(false);
     expect(shouldClearOverride(7, 3)).toBe(false);
     expect(shouldClearOverride(55, 7)).toBe(false); // garbage override never matches
+  });
+});
+
+describe('applyWeekSetActivation (issue 04: the effective week is the active one)', () => {
+  const makeRepoWithRecording = (overrides: Partial<Repo> = {}) => {
+    const activated: number[] = [];
+    const repo = makeRepo({
+      ...overrides,
+      setProgrammeWeekActive: (week: number) => {
+        activated.push(week);
+      },
+    });
+    return { activated, repo };
+  };
+
+  it('activates the override week while one is set', () => {
+    const { activated, repo } = makeRepoWithRecording({
+      ...ANCHOR,
+      getSettings: () => ({ ...DEFAULT_SETTINGS, program_week_override: 12 }),
+    });
+    applyWeekSetActivation(repo, new Date('2026-09-16T10:00:00Z'));
+    expect(activated).toEqual([12]); // the override wins (§6.2/§7)
+  });
+
+  it('on clear (override null) it activates the derived week, not the last selection', () => {
+    // Anchor week Mon 2026-08-31 + two anchored reflection weeks → derived 3.
+    const { activated, repo } = makeRepoWithRecording({
+      ...ANCHOR,
+      listCompletedWeeklyReflections: () => [atIso('2026-09-06T21:00:00Z'), atIso('2026-09-13T21:00:00Z')],
+    });
+    applyWeekSetActivation(repo, new Date('2026-09-16T10:00:00Z'));
+    expect(activated).toEqual([3]);
+  });
+
+  it('with no anchor at all it activates week 1 (the derivation starts at 1)', () => {
+    const { activated, repo } = makeRepoWithRecording();
+    applyWeekSetActivation(repo, new Date('2026-09-16T10:00:00Z'));
+    expect(activated).toEqual([1]);
   });
 });

@@ -10,18 +10,16 @@ import { WeekCard, type WeekCardStem } from '@/components/week-card';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { getRepository, type StemRow } from '@/db';
 import { PROGRAMME_WEEK_CAP } from '@/session/program';
-import { readProgrammeWeek, type ProgrammeWeek } from '@/session/programRead';
+import { applyWeekSetActivation, readProgrammeWeek, type ProgrammeWeek } from '@/session/programRead';
 
-/** Every active programme stem bucketed by its week, keyed 1–30. */
+/** Every non-deleted programme stem bucketed by its week, keyed 1–30. */
 function groupByWeek(stems: (StemRow & { weekNumber: number })[]): Map<number, WeekCardStem[]> {
   const byWeek = new Map<number, WeekCardStem[]>();
   for (const stem of stems) {
     const list = byWeek.get(stem.weekNumber) ?? [];
-    // Issue 04 forward hook: WeekCardStem is the spot a category badge
-    // joins the week card's stem list once t04 populates programme-stem
-    // categories — carry the field there, render in WeekCard. Nothing
-    // added in this cycle (no category UI yet).
-    list.push({ id: stem.id, text: stem.text });
+    // Issue 04 (t03's forward hook, fulfilled): programme stems carry their
+    // §5.2 category (week→pillar mapping) — the week card renders the chip.
+    list.push({ id: stem.id, text: stem.text, category: stem.category });
     byWeek.set(stem.weekNumber, list);
   }
   return byWeek;
@@ -75,8 +73,11 @@ export default function ProgrammeScreen() {
     (weekNumber: number) => {
       const repo = getRepository();
       // §6.2/§7: the selection is the override setting — user input, not a
-      // derived value. Clearing restores the derived week.
+      // derived value. Clearing restores the derived week. Week-set
+      // activation (issue 04) rides the same write: the effective week's
+      // stems become the active ones, one call covers both directions.
       repo.setSetting('program_week_override', week?.override === weekNumber ? null : weekNumber);
+      applyWeekSetActivation(repo);
       refresh();
     },
     [refresh, week],

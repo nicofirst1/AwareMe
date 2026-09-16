@@ -21,7 +21,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { migrate } from '../migrate';
 import { CURRENT_SCHEMA_VERSION } from '../migrations';
 import { Repository } from '../repository';
-import { EVENING_META_STEMS, PROGRAMME_SEED_STEMS, RETIRED_SEED_STEMS, WEEKLY_META_STEM } from '../seed/stems';
+import { EVENING_META_STEMS, PROGRAMME_SEED_STEMS, programmeStemCategory, PROGRAMME_WEEK_CATEGORY, RETIRED_SEED_STEMS, StemCategory, WEEKLY_META_STEM } from '../seed/stems';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
 
 const SNAPSHOT_PATH = path.join(__dirname, '..', '..', '..', '.scratch', 'official-program', 'official-program-verbatim.txt');
@@ -219,7 +219,10 @@ describe('fresh-install seed lands the programme in the database', () => {
       expect(rows[i].week_number).toBe(expected[i].week);
       expect(rows[i].is_weekly_meta).toBe(0);
       expect(rows[i].origin).toBe('seed');
-      expect(rows[i].category).toBeNull();
+      // Issue 04: each programme stem carries its week's pillar (per-stem
+      // exceptions included) straight from the seed — no post-seed backfill.
+      // The lookup uses the row's stored text (terminator already stripped).
+      expect(rows[i].category).toBe(programmeStemCategory(rows[i].week_number, rows[i].text));
       expect(rows[i].active).toBe(1);
       expect(rows[i].time_of_day).toBe('morning');
       expect(rows[i].deleted_at).toBeNull();
@@ -271,11 +274,43 @@ describe('fresh-install seed lands the programme in the database', () => {
     expect((db.prepare('SELECT COUNT(*) AS c FROM stems').get() as { c: number }).c).toBe(142 + 1 + 2 + 26);
   });
 
-  it('reaches schema version 4 on a fresh install', () => {
+  it('reaches schema version 5 on a fresh install', () => {
     const { db, repo } = freshDatabase();
     repo.seedIfEmpty();
-    expect(CURRENT_SCHEMA_VERSION).toBe(4);
+    expect(CURRENT_SCHEMA_VERSION).toBe(5);
     const meta = db.prepare('SELECT schema_version FROM schema_meta WHERE id = 1').get() as { schema_version: number };
-    expect(meta.schema_version).toBe(4);
+    expect(meta.schema_version).toBe(5);
+  });
+
+  it('every programme stem resolves to one of the six §5.2 categories (issue 04)', () => {
+    const valid = new Set(['awareness', 'self_acceptance', 'responsibility', 'assertiveness', 'purpose', 'integrity']);
+    for (const stem of PROGRAMME_SEED_STEMS) {
+      const category = programmeStemCategory(stem.weekNumber, stem.text);
+      expect(valid.has(category as StemCategory)).toBe(true);
+    }
+  });
+
+  it('the week→pillar mapping covers exactly weeks 1–30 (issue 04)', () => {
+    expect(Object.keys(PROGRAMME_WEEK_CATEGORY).map(Number).sort((a, b) => a - b)).toEqual(
+      Array.from({ length: 30 }, (_, i) => i + 1),
+    );
+  });
+
+  it('the per-stem exceptions key on exact seed texts and resolve to their pillar (issue 04)', () => {
+    // Week 1's responsibility stem inside the awareness opener.
+    expect(programmeStemCategory(1, 'If I take more responsibility for my choices and actions today')).toBe('responsibility');
+    // "I am becoming aware" recurs verbatim in weeks 11 and 23 — a pure awareness stem in both.
+    expect(programmeStemCategory(11, 'I am becoming aware')).toBe('awareness');
+    expect(programmeStemCategory(23, 'I am becoming aware')).toBe('awareness');
+    // Week 16's responsibility stem inside the purpose block.
+    expect(programmeStemCategory(16, 'If I take more responsibility for fulfilling my wants')).toBe('responsibility');
+    // Week 30's synthesis: each stem names its pillar, all seven excepted.
+    expect(programmeStemCategory(30, 'If I bring 5 percent more awareness to my life')).toBe('awareness');
+    expect(programmeStemCategory(30, 'If I am 5 percent more self-accepting')).toBe('self_acceptance');
+    expect(programmeStemCategory(30, 'If I bring 5 percent more self-responsibility to my life')).toBe('responsibility');
+    expect(programmeStemCategory(30, 'If I operate 5 percent more self-assertively')).toBe('assertiveness');
+    expect(programmeStemCategory(30, 'If I live my life 5 percent more purposefully')).toBe('purpose');
+    expect(programmeStemCategory(30, 'If I bring 5 percent more integrity to my life')).toBe('integrity');
+    expect(programmeStemCategory(30, 'If I breathe deeply and allow myself to experience what self-esteem feels like')).toBe('self_acceptance');
   });
 });

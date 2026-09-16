@@ -1,6 +1,6 @@
 import { newId } from './id';
 import { SqlBindValue, SqlExecutor } from './executor';
-import { EVENING_META_STEMS, PROGRAMME_SEED_STEMS, RETIRED_SEED_STEMS, TimeOfDay, WEEKLY_META_STEM } from './seed/stems';
+import { EVENING_META_STEMS, PROGRAMME_SEED_STEMS, programmeStemCategory, RETIRED_SEED_STEMS, TimeOfDay, WEEKLY_META_STEM } from './seed/stems';
 import { DEFAULT_SETTINGS, Settings } from './seed/settings';
 import { nowEventTime } from './time';
 import { EndReason, SessionOrigin } from '@/session/sessionMachine';
@@ -148,7 +148,9 @@ export class Repository {
    * 1. the official Sentence Completion I programme — every stem of Weeks
    *    1–30, byte-for-byte from the canonical snapshot, stored WITHOUT the
    *    trailing terminator (`stem_terminator` is appended at render),
-   *    `time_of_day = 'morning'`, each tagged with its `week_number`;
+   *    `time_of_day = 'morning'`, each tagged with its `week_number` and
+   *    its §5.2 category via the week→pillar mapping (`programmeStemCategory`,
+   *    issue 04);
    * 2. the official weekly reflection stem, seeded once with
    *    `is_weekly_meta = 1`, `week_number = NULL`, `time_of_day = NULL`;
    * 3. the two evening-review meta-stems (`origin = 'meta'`, inactive),
@@ -165,8 +167,8 @@ export class Repository {
         const { at, tz, offsetMin } = nowEventTime();
         this.db.runSync(
           `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
-           VALUES (?, ?, 'seed', NULL, 'en', 1.0, 1, ?, ?, ?, 'morning', ?, 0)`,
-          [newId(), stem.text, at, tz, offsetMin, stem.weekNumber],
+           VALUES (?, ?, 'seed', ?, 'en', 1.0, 1, ?, ?, ?, 'morning', ?, 0)`,
+          [newId(), stem.text, programmeStemCategory(stem.weekNumber, stem.text), at, tz, offsetMin, stem.weekNumber],
         );
       }
 
@@ -470,16 +472,68 @@ export class Repository {
   }
 
   /**
-   * Every active programme stem with its week number, ordered by week then
-   * seed order — the stem library's Week 1–30 grouping (§6.6). Seed order is
+   * Every non-deleted programme stem with its week number, ordered by week
+   * then seed order — the programme page's Week 1–30 grouping (§6.6).
+   * Resting stems are INCLUDED since issue 04's week-set activation
+   * (coordinator-approved hub FLAG 2026-09-16): activation deliberately
+   * rests 29 of 30 weeks, and the programme page must still show every
+   * week's full block for its one-off sitting. The rotation's own reads
+   * stay active-filtered (`getProgrammeStemsForWeek`). Seed order is
    * insertion order (`rowid`, per getProgrammeStemsForWeek; c06 finding F7).
    */
   listProgrammeStems(): (StemRow & { weekNumber: number })[] {
     return this.db.getAllSync<StemRow & { weekNumber: number }>(
       `SELECT id, text, origin, category, weight, time_of_day, week_number as weekNumber FROM stems
-       WHERE active = 1 AND deleted_at IS NULL AND week_number IS NOT NULL
+       WHERE deleted_at IS NULL AND week_number IS NOT NULL
        ORDER BY week_number, rowid`,
       [],
+    );
+  }
+
+  // -------------------------------------------------------------------
+  // t04 (v12-feedback round, issue 04): week-set activation + the one-off
+  // week visit. `active` is the §4.1 state column and the week-set write
+  // is allowed state mutation — history rows are never touched,
+  // soft-deletes are never touched, and rows outside the programme
+  // (`week_number IS NULL`: user/imported stems, the weekly meta-stem,
+  // the retired v1 originals, the evening meta-stems) are never in scope.
+  // -------------------------------------------------------------------
+
+  /**
+   * Week-set activation (issue 04): makes `week` the programme's ONE active
+   * week — its stems `active = 1`, every other programme week's stems
+   * `active = 0`, in one statement so the frontier never has a half-applied
+   * state. Called at every point the effective week can change: setting or
+   * clearing `program_week_override` (the programme page) and completing a
+   * weekly reflection (write.tsx — override-clear back to the derived week,
+   * or a derived advance). Idempotent; out-of-range weeks are a no-op,
+   * same guard as `getProgrammeStemsForWeek`.
+   */
+  setProgrammeWeekActive(week: number): void {
+    if (!Number.isInteger(week) || week < 1 || week > PROGRAMME_WEEK_CAP) return;
+    this.db.runSync(
+      'UPDATE stems SET active = CASE WHEN week_number = ? THEN 1 ELSE 0 END WHERE week_number IS NOT NULL',
+      [week],
+    );
+  }
+
+  /**
+   * Every non-deleted programme stem of one week, resting included, in seed
+   * order — the one-off week sitting's queue (§6.2 `origin='manual'`, the
+   * programme page's "write this week's sitting"). An explicit whole-block
+   * visit is activation-state-agnostic (hub FLAG-ANSWER 2026-09-16): unlike
+   * `getProgrammeStemsForWeek` (the rotation's queue), it must not empty out
+   * because week-set activation rested the week, and it deliberately does
+   * not trample per-stem resting in the rotation either — the two reads
+   * answer different questions. Soft-deleted stems stay excluded everywhere.
+   */
+  getProgrammeWeekBlock(week: number): StemRow[] {
+    if (!Number.isInteger(week) || week < 1 || week > PROGRAMME_WEEK_CAP) return [];
+    return this.db.getAllSync<StemRow>(
+      `SELECT id, text, origin, category, weight, time_of_day FROM stems
+       WHERE deleted_at IS NULL AND week_number = ?
+       ORDER BY rowid`,
+      [week],
     );
   }
 

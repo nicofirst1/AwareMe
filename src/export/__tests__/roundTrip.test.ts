@@ -32,8 +32,14 @@ function exportNow(repo: Repository, exportedAt: string): ExportBundle {
   });
 }
 
-/** Writes a realistic, varied corpus: a user stem, a completed session with two endings (one containing quotes/commas/newlines — the CSV-hostile characters), a soft-deleted stem, a soft-deleted session, and a review. */
+/** Writes a realistic, varied corpus: a user stem, a completed session with two endings (one containing quotes/commas/newlines — the CSV-hostile characters), a soft-deleted stem, a soft-deleted session, and a review. The corpus also exercises issue 04's state: week-set activation (one active week, others resting) and a `program_week_override` row, so categories and activation flags must survive the round trip unchanged. */
 function writeRealisticCorpus(repo: Repository): void {
+  // Week-set activation (issue 04): week 2 becomes the active programme
+  // week — every programme stem gains a category at seed time, and all
+  // non-2 weeks go inactive. Export must carry both columns' new states.
+  repo.setProgrammeWeekActive(2);
+  repo.setSetting('program_week_override', 2);
+
   const stemId = repo.listActiveStems()[0].id;
 
   const userStemId = repo.addStem({ text: 'A user-written stem, with a comma...', category: 'purpose', origin: 'user' });

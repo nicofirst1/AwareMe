@@ -119,7 +119,7 @@ describe('programme repository reads', () => {
     expect(repo.getWeeklyMetaStem()?.text).toContain('If any of what I wrote this week is true');
   });
 
-  it('listProgrammeStems returns every active programme stem ordered by week then seed order', () => {
+  it('listProgrammeStems returns every non-deleted programme stem ordered by week then seed order (resting included since issue 04)', () => {
     const { repo } = makeDb();
     const all = repo.listProgrammeStems();
     expect(all.length).toBe(142);
