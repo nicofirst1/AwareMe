@@ -60,14 +60,30 @@ describe('IntroScreen', () => {
     mockReschedule.mockClear();
   });
 
-  it('renders the one question card with the recommended include as primary and a skip exit', () => {
+  it('renders the one question card with the morning path as the default selection, the opt-in, and a skip exit', () => {
     render(<IntroScreen />);
 
     expect(screen.getByText('Include an evening practice?')).toBeTruthy();
+    // The default selection is the morning path — unconditional, never
+    // clock-sensitive (owner feedback 2026-09-16).
+    expect(screen.getByText('Start with the morning sitting')).toBeTruthy();
     expect(screen.getByText('Include evening practice')).toBeTruthy();
     expect(screen.getByText('Skip for now')).toBeTruthy();
     // Non-trap promise, on the card itself: the answer lives in Settings.
     expect(screen.getByText('Skipping keeps the evening practice on. You can change this anytime in Settings.')).toBeTruthy();
+  });
+
+  it('states the purpose of the exercise and the evening + weekly note', () => {
+    render(<IntroScreen />);
+
+    // Purpose framing (owner feedback 2026-09-16): what the exercise is
+    // FOR, not merely the mechanics — factual, no outcome promises.
+    expect(screen.getByText(/self-awareness/)).toBeTruthy();
+    expect(screen.getByText(/self-esteem/i)).toBeTruthy();
+    // The evening explanation: the original method practised morning and
+    // evening, plus what this app adds beyond it.
+    expect(screen.getByText(/The original method is practised morning and evening/)).toBeTruthy();
+    expect(screen.getByText(/weekly reflection/)).toBeTruthy();
   });
 
   it('persists "include" as evening_practice_enabled, marks the intro done, reschedules, and continues to onboarding', () => {
@@ -81,13 +97,35 @@ describe('IntroScreen', () => {
     expect(mockReplace).toHaveBeenCalledWith('/onboarding');
   });
 
-  it('routes an upgrader (onboarding already complete) back home after answering', () => {
+  it('defaults to the morning path even at an evening clock time (21:30 local)', () => {
+    // The clock is mocked to an evening hour to pin the owner requirement:
+    // the default must stay the morning path regardless of the time of
+    // day. Nothing in the component reads the clock today; this fails if
+    // anyone makes the default clock-sensitive later.
+    const hoursSpy = jest.spyOn(Date.prototype, 'getHours').mockReturnValue(21);
+    const minutesSpy = jest.spyOn(Date.prototype, 'getMinutes').mockReturnValue(30);
+    try {
+      render(<IntroScreen />);
+
+      fireEvent.press(screen.getByText('Start with the morning sitting'));
+
+      expect(mockSetSetting).toHaveBeenCalledWith('evening_practice_enabled', false);
+      expect(mockSetIntroComplete).toHaveBeenCalledTimes(1);
+      expect(mockReschedule).toHaveBeenCalledTimes(1);
+      expect(mockReplace).toHaveBeenCalledWith('/onboarding');
+    } finally {
+      hoursSpy.mockRestore();
+      minutesSpy.mockRestore();
+    }
+  });
+
+  it('routes an upgrader (onboarding already complete) home after choosing the morning path', () => {
     mockOnboardingComplete = true;
     render(<IntroScreen />);
 
-    fireEvent.press(screen.getByText('Include evening practice'));
+    fireEvent.press(screen.getByText('Start with the morning sitting'));
 
-    expect(mockSetSetting).toHaveBeenCalledWith('evening_practice_enabled', true);
+    expect(mockSetSetting).toHaveBeenCalledWith('evening_practice_enabled', false);
     expect(mockReplace).toHaveBeenCalledWith('/');
   });
 
