@@ -117,7 +117,7 @@ export default function ProgrammeScreen() {
           ListHeaderComponent={
             <View style={styles.intro}>
               <ThemedText type="small" themeColor="textSecondary">
-                The official programme, thirty weeks long. Sit on any week once, or make a week yours — your
+                The official programme, thirty weeks long. Sit on any week once, or make a week yours: your
                 selection clears when its reflection completes.
               </ThemedText>
               {week && week.override !== null && (

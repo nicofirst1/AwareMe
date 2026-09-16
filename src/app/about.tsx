@@ -49,7 +49,7 @@ export default function AboutScreen() {
         <ScreenHeader title="About" />
         <ThemedView style={styles.content}>
           <ThemedText type="default" themeColor="textSecondary">
-            AwareMe is a quiet place to finish a sentence — no scoring, no feed, nothing leaving your device.
+            AwareMe is a quiet place to finish a sentence: no scoring, no feed, nothing leaving your device.
           </ThemedText>
 
           <ThemedText type="default" themeColor="textSecondary">
@@ -76,7 +76,7 @@ export default function AboutScreen() {
               style={styles.linkRow}
               onPress={() => Linking.openURL(OFFICIAL_PROGRAMME_URL)}
               accessibilityRole="link"
-              accessibilityLabel="The official programme — opens the nathanielbranden.com website"
+              accessibilityLabel="The official programme, opens the nathanielbranden.com website"
             >
               <ThemedText type="default">The official programme</ThemedText>
               <Ionicons name="chevron-forward-outline" size={16} color={theme.accent} />

@@ -48,7 +48,7 @@ export default function SessionDetailScreen() {
   const confirmDelete = () => {
     Alert.alert(
       'Delete this session?',
-      'This session will no longer appear in your history. It is not erased — it stays in your data and in any export, marked as deleted.',
+      'This session will no longer appear in your history. It is not erased: it stays in your data and in any export, marked as deleted.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -81,7 +81,7 @@ export default function SessionDetailScreen() {
                 <ThemedText type="stem">{e.text || '(nothing written)'}</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
                   {formatTime(e.started_at)}
-                  {e.submitted_at ? ` – ${formatTime(e.submitted_at)}` : ''} · {e.backspace_count} backspace
+                  {e.submitted_at ? ` · ${formatTime(e.submitted_at)}` : ''} · {e.backspace_count} backspace
                   {e.backspace_count === 1 ? '' : 's'}
                 </ThemedText>
               </Card>

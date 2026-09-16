@@ -69,7 +69,7 @@ export default function AboutMethodScreen() {
             >
               The Art of Living Consciously
             </ThemedText>
-            . If this practice is useful to you, his own writing is the place to go deeper — the stems in this app
+            . If this practice is useful to you, his own writing is the place to go deeper. The stems in this app
             are original material written in the spirit of his method, not excerpts from his work.
           </ThemedText>
         </ScrollView>

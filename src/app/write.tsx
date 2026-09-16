@@ -765,8 +765,8 @@ function ReflectionFlowView({
             {flow.reviewed.length === 0 ? (
               <ThemedText type="default" themeColor="textSecondary">
                 {flow.kind === 'weekly'
-                  ? `Nothing written in week ${flow.week ?? '?'} yet — the reflection is still open to you.`
-                  : 'Nothing written this morning — the reflection is still open to you.'}
+                  ? `Nothing written in week ${flow.week ?? '?'} yet. The reflection is still open to you.`
+                  : 'Nothing written this morning. The reflection is still open to you.'}
               </ThemedText>
             ) : (
               flow.reviewed.map(({ session: s, endings }) => (
