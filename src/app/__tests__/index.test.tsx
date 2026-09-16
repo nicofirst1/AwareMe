@@ -155,9 +155,12 @@ describe('HomeScreen', () => {
     }
   });
 
-  it('renders the app name', () => {
+  it('renders the app name and tagline', () => {
     render(<HomeScreen />);
     expect(screen.getByText('Six Endings')).toBeTruthy();
+    // Tagline (v12 issue 02): states the purpose, in the self-esteem
+    // direction; alternatives live in the issue Comments.
+    expect(screen.getByText('A daily practice for self-esteem, one sentence at a time.')).toBeTruthy();
   });
 
   it('has a secondary destination group', () => {

@@ -150,8 +150,12 @@ export default function HomeScreen() {
         <View style={styles.content}>
           <View style={styles.header}>
             <ThemedText type="title">Six Endings</ThemedText>
+            {/* Owner feedback 2026-09-16 (v12 issue 02): the old tagline read
+                as "finish sentences" with no stated purpose. This names the
+                practice's aim without hype (§10, §13.4); two alternatives are
+                in the issue Comments for the owner to swap freely. */}
             <ThemedText type="default" themeColor="textSecondary">
-              A quiet place to finish a sentence.
+              A daily practice for self-esteem, one sentence at a time.
             </ThemedText>
           </View>
 
