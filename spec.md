@@ -36,7 +36,7 @@ The value to the user accrues over weeks, not in a single session, and it accrue
 - A seeded library of sentence stems
 - User-authored stems, on equal footing with seeded ones
 - Timed writing sessions with a configurable number of endings
-- Randomised local notifications inside a user-defined window
+- Repeating local notifications at user-set times: two daily, one weekly
 - A review mode covering the last N days
 - Browsable, searchable history
 - Full data export in analysis-ready formats
@@ -63,7 +63,7 @@ Do not build these. Do not add stubs, dead settings toggles, or "coming soon" sc
 | Navigation    | `expo-router`                              | File-based routing                      |
 | Storage       | `expo-sqlite`                              | See section 4                           |
 | Notifications | `expo-notifications`, local only           | No push tokens, no remote notifications |
-| State         | Plain React hooks / local component state  | Zustand removed 2026-09-15, never adopted (DECISIONS.md); do not add Redux |
+| State         | Plain React hooks / local component state  | Do not add Redux or Zustand             |
 | Export/share  | `expo-file-system`, `expo-sharing`         | See section 8                           |
 | Lock          | `expo-local-authentication`                | Optional, off by default                |
 | Tests         | Jest + `@testing-library/react-native`     | See section 11                          |
@@ -127,6 +127,7 @@ CREATE TABLE sessions (
   notification_id   TEXT,                      -- links to the scheduled notification, nullable
   notified_at       TEXT,                      -- when the notification fired
   opened_at         TEXT,                      -- when the user opened it, nullable
+  last_activity_at  TEXT,                      -- bumped on the ending autosave debounce, so absence is computable across a cold start (ADR-0003)
   tz                TEXT NOT NULL,
   offset_min        INTEGER NOT NULL,
   device_locale     TEXT NOT NULL,
@@ -138,8 +139,8 @@ CREATE TABLE endings (
   session_id        TEXT NOT NULL REFERENCES sessions(id),
   ordinal           INTEGER NOT NULL,          -- 1-based position within the session
   text              TEXT NOT NULL,
-  started_at        TEXT NOT NULL,             -- first keypress in this field
-  submitted_at      TEXT NOT NULL,             -- moved to next field, or session ended
+  started_at        TEXT NOT NULL,             -- first keypress in this field (row created then, ADR-0003)
+  submitted_at      TEXT,                      -- nullable: begun but not yet submitted (ADR-0003); set on submit or session end
   backspace_count   INTEGER NOT NULL DEFAULT 0,
   was_revised       INTEGER NOT NULL DEFAULT 0,-- returned to after leaving the field
   deleted_at        TEXT,
@@ -201,68 +202,19 @@ The onboarding screen MUST credit the method by name and point the user to Brand
 
 ### 5.2 Categories
 
-Six categories, used for browsing and for balanced selection. These are conceptual buckets, not quoted text:
+Six categories, used for browsing and filtering. These are conceptual buckets, not quoted text:
 
 `awareness`, `self_acceptance`, `responsibility`, `assertiveness`, `purpose`, `integrity`
 
 ### 5.3 Seed stems
 
-**2026-09-15 amendment (ADR-0005):** first-launch seeding now inserts the official Sentence Completion I programme (§5.1): every stem of Weeks 1–30, transcribed byte-for-byte from the canonical snapshot, `origin = 'seed'`, `week_number` 1–30, `time_of_day = 'morning'`; plus the weekly reflection stem, seeded once with `is_weekly_meta = 1`, `week_number = NULL`. Programme stems are stored **without** the trailing terminator exactly as before: the snapshot writes stems with a trailing ellipsis; strip it at seed time and append the `stem_terminator` setting at render. The v1 original list below is **retired**: on fresh installs it is seeded with `deleted_at` set at seed time (present in exports as retracted rows, never active, never shown in the library); on installs that predate this amendment those rows are left exactly as they are.
+**2026-09-15 amendment (ADR-0005):** first-launch seeding now inserts the official Sentence Completion I programme (§5.1): every stem of Weeks 1–30, transcribed byte-for-byte from the canonical snapshot, `origin = 'seed'`, `week_number` 1–30, `time_of_day = 'morning'`; plus the weekly reflection stem, seeded once with `is_weekly_meta = 1`, `week_number = NULL`. Programme stems are stored **without** the trailing terminator exactly as before: the snapshot writes stems with a trailing ellipsis; strip it at seed time and append the `stem_terminator` setting at render. `week_number = NULL`. Programme stems are stored **without** the trailing terminator: the snapshot writes stems with a trailing ellipsis; strip it at seed time and append the `stem_terminator` setting at render.
 
-*[Retired 2026-09-15 — kept for the record and for pre-amendment installs:]*
-
-Insert these at first launch with `origin = 'seed'`. Each ends with an ellipsis and a space is not appended. The trailing punctuation style is a setting (`stem_terminator`, default `"..."`, alternative `"—"`), applied at render time; store the stem text **without** the terminator and append it in the UI. Each also carries `time_of_day` ('morning' | 'evening', 2026-09-14 addition; see §4.2 and §6.2) — which of the two daily sittings it belongs to.
-
-**awareness**
-
-1. If I brought five percent more awareness to how I spend my mornings
-2. Something I keep not noticing about my own behaviour is
-3. The thing I avoid thinking about when I make myself busy is
-4. If I were willing to see what is actually in front of me
-
-**self_acceptance**
-
-5. The part of myself I find hardest to sit with is
-6. If I stopped arguing with the fact that I feel this way
-7. When I judge myself harshly, what I am actually afraid of is
-8. If I brought more kindness to the way I speak to myself
-
-**responsibility**
-
-9. If I took full responsibility for how today goes
-10. Something I have been waiting for someone else to fix is
-11. The cost of continuing to wait is
-12. What I get out of staying stuck is
-
-**assertiveness**
-
-13. If I said the thing I have not been saying
-14. What I want that I have not asked for is
-15. If my preferences mattered as much as everyone else's
-16. The conversation I keep rehearsing but never having is
-
-**purpose**
-
-17. If I were honest about what I want from the next five years
-18. The goal I keep restating instead of starting is
-19. If I gave the work that matters the hours it actually needs
-20. If I let myself rest without earning it first
-
-**integrity**
-
-21. A promise I made to myself and quietly dropped is
-22. If I lived by what I say I believe
-23. The small dishonesty I keep repeating is
-24. If I were five percent braver this week
-
-**general**
-
-25. Something the people closest to me would say about me that I resist is
-26. If I am not as stuck as I tell myself I am
+The v1 original list (26 stems) is **retired**: on fresh installs it is seeded soft-deleted (present in exports as retracted rows, never active, never shown in the library); on installs that predate this amendment those rows are left exactly as they are. Its canonical text lives in the seed module (`src/db/seed/stems.ts`); the official programme's in `.scratch/official-program/official-program-verbatim.txt`.
 
 ### 5.4 Meta-stems for review
 
-Used in review mode (section 6.5), stored with the same terminator handling. Meta-stems carry `time_of_day = NULL` (2026-09-14 addition). **2026-09-15 amendment (ADR-0005):** the first stem below is the official weekly reflection stem — migration 0004 tags it `is_weekly_meta = 1` — and it is the stem used by the *scheduled* weekly reflection (§6.5). The other two power the evening reflection sitting (§6.2) on a deterministic alternating schedule. All three remain available to on-demand review:
+Used in review mode (section 6.5), stored with the same terminator handling. Meta-stems carry `time_of_day = NULL`. **2026-09-15 amendment (ADR-0005):** the first stem below is the official weekly reflection stem — migration 0004 tags it `is_weekly_meta = 1` — and it is the stem used by the *scheduled* weekly reflection (§6.5). The other two power the evening reflection sitting (§6.2) on a deterministic alternating schedule. All three remain available to on-demand review:
 
 - If any of what I wrote this week is true, it might be helpful if I
 - Reading these back, the thing I notice myself circling is
@@ -278,10 +230,10 @@ Four screens maximum, skippable, shown once:
 
 1. What sentence completion is, in under 60 words. Emphasise: write fast, do not evaluate, repetition and nonsense are fine.
 2. Credit to Branden and the method.
-3. Notification permission request, with an honest explanation of the randomised window. If the user declines, the app MUST remain fully usable in manual mode and MUST NOT nag.
-4. Set the notification window, sessions per day (default 1), endings per session (default 6), timer (default 90 seconds).
+3. Notification permission request, with an honest explanation of the fixed daily times (§6.4). If the user declines, the app MUST remain fully usable in manual mode and MUST NOT nag.
+4. Set the morning/evening notification times (§6.4), endings per session (default 6), and timer (default 90 seconds).
 
-### 6.2 Stem selection (2026-09-14 revision — see `DECISIONS.md`)
+### 6.2 Stem selection
 
 A session is a **sitting**: every active stem for one time-of-day period, written one after another in sequence.
 
@@ -290,7 +242,7 @@ A session is a **sitting**: every active stem for one time-of-day period, writte
 - The user may **select any week** as their current week (§6.6). The selection is stored as the `program_week_override` setting (nullable, §7) — user input, not a derived value. Completing the reflection of the selected week clears the override so the derived week takes over; Home shows a calm nudge ("Week N complete — Week N+1 is ready"). Encouragement only — no guilt copy (§13.4).
 - The **evening sitting** (only when `evening_practice_enabled`, §7) reflects the start of the day instead of repeating it: today's morning endings shown read-only (§6.5's review mechanics), then one reflection meta-stem (§5.4) as a normal timed session. The stem **alternates deterministically** between the two non-weekly review meta-stems, keyed to the count of completed evening reflection sessions. Custom/user-added stems are never in any sitting rotation; they are written on demand from the library (`origin = 'manual'`).
 - The sitting is complete only once every stem in that set has been written (§6.3 covers the per-stem writing mechanics, unchanged).
-- `time_of_day` keeps its meaning for pre-amendment rows; programme selection is driven by `week_number`. `stems.weight` is retained in the schema (§4.2) but remains unread (2026-09-14 entry).
+- `time_of_day` keeps its meaning for pre-amendment rows; programme selection is driven by `week_number`. `stems.weight` is retained in the schema (§4.2) but remains unread (ADR-0004).
 
 ### 6.3 The writing session
 
@@ -299,28 +251,28 @@ This is the core screen. Get it right.
 1. The stem is displayed alone, large, with a **Start** control. Nothing is timed until the user taps Start, so a notification that arrives at a bad moment costs nothing.
 2. On Start: the timer begins and the first input field is focused with the keyboard up.
 3. The stem remains visible above the input at all times. The user is completing _this_ sentence, repeatedly, and losing sight of it breaks the exercise.
-4. `target_endings` fields, revealed one at a time. Submitting a field (return key, or a Next control) advances to the next and creates the `endings` row. An empty field is not submittable by either path; timeout/expiry saves it anyway (item 8, and the per-stem timer below).
+4. `target_endings` fields, revealed one at a time. Submitting a field (the return key) advances to the next; the field's `endings` row was created on first keypress (ADR-0003) and is finalized on submit. An empty field is not submittable; timeout/expiry saves it anyway (item 8, and the per-stem timer below).
 5. Previously written endings in this session remain visible above, in a dimmed style. Seeing your own repetition is part of the method.
 6. **Uncensored mode** (default on): backspace is limited to the current word only; long-press-to-select and cut are disabled within input fields; the user cannot navigate back to an earlier ending in the same session. Increment `backspace_count` regardless. A setting turns this off for users who find it intolerable, and the setting value is recorded per session.
-7. The timer is a thin, calm progress indicator. No red, no ticking sound, no vibration, no countdown numerals larger than the text. Anxiety is not the goal; momentum is. An optional per-stem timer (`stem_timer_enabled`/`stem_timer_seconds`, 2026-09-11 addition; see §7) runs alongside it as a second, independent countdown scoped to the current field: on expiry, whatever is typed in that field is saved as-is (same "nothing discarded" rule as item 8) and the session advances to the next field without ending. The session timer above is unaffected and still ends the session if it expires first. The Save/Next control may use a depleting-color cue tied to whichever of the two timers is more urgent, as an ambient pressure signal only — no penalty text, no shaming copy (§13.4).
+7. The timer is a thin, calm progress indicator. No red, no ticking sound, no vibration, no countdown numerals larger than the text. Anxiety is not the goal; momentum is. An optional per-stem timer (`stem_timer_enabled`/`stem_timer_seconds`, 2026-09-11 addition; see §7) runs alongside it as a second, independent countdown scoped to the current field: on expiry, whatever is typed in that field is saved as-is (same "nothing discarded" rule as item 8) and the session advances to the next field without ending. The session timer above is unaffected and still ends the session if it expires first. The timer's numerals may carry a depleting-color cue tied to whichever of the two timers is more urgent, as an ambient pressure signal only — no penalty text, no shaming copy (§13.4).
 8. On timeout: the session ends immediately, whatever is on screen is saved (including a partially typed final ending), `end_reason = 'timeout'`. Nothing is discarded, ever.
 9. The user may finish early with a **Done** control (`end_reason = 'user_done'`), including with fewer than the target number of endings.
 10. If the app is backgrounded mid-session: on return within 5 minutes, resume with the timer having continued to run. After 5 minutes, close the session with `end_reason = 'abandoned'` and save everything written.
-11. After the session: a plain confirmation, the endings shown back once, and no scoring, no praise, no evaluation of content. Do not congratulate the user on their insight. Do not summarise what they wrote.
+11. After the session: the endings shown back once, and no scoring, no evaluation of the content. A post-session celebration is permitted only as bounded by §13.4/§13.6 and `docs/design/gamification-proposal-2026-09-11.md`.
 
-### 6.4 Notifications (2026-09-14 revision — see `DECISIONS.md`)
+### 6.4 Notifications
 
 - Two repeating daily local notifications: one at `morning_notification_time`, one at `evening_notification_time` (both user-set "HH:MM" local wall-clock times, §7; default 08:00 and 21:00, the book's own suggestion of start and end of day). No randomness, no window, no count-per-day, no 90-minute gap rule — the user sets two exact times, and both fire every day at those times. The evening notification is scheduled only when `evening_practice_enabled` is true (§7).
 - **2026-09-15 amendment (ADR-0005):** a third repeating local notification for the weekly reflection fires at `weekly_meta_time` on `weekly_meta_day` (§7; default Sunday 21:00) via the platform's native weekly-repeat trigger. Same discipline as the daily pair: content-free copy (e.g. "Time for your weekly reflection."), reschedule on foreground / setting change / permission grant, and no consequence for missing it.
 - Use the platform's native daily-repeat trigger so the OS itself handles the daily repetition in local time; there is no fire-time math, rolling horizon, or DST handling to own in the app.
-- Reschedule (cancel both, recreate both from current settings) on: app foreground, a notification time being changed in settings, permission grant.
+- Reschedule (cancel all pending, recreate from current settings) on: app foreground, a notification time being changed in settings, permission grant.
 - `notification_schedule` is retained in the schema (§4.2) but is no longer written to by scheduling — there is no per-fire stem draw left to record (§6.2: a sitting loads all of a period's stems, not one chosen at schedule time).
 - Notification copy MUST NOT contain any stem text or user text, since notifications appear on lock screens and this content is private. Use neutral copy, e.g. "Time for your morning practice." / "Time for your evening practice." — distinct copy per period is fine as long as both stay content-free.
 - Missing a notification has no consequence in the app. No streak counter, no guilt copy, no "you have not written in 4 days". If a streak-like display is added at all, it is descriptive and unemphasised.
 
 ### 6.5 Review mode
 
-Three forms (2026-09-15 revision, ADR-0005):
+Three forms (ADR-0005):
 
 1. **Scheduled weekly reflection** — offered by the weekly notification (§6.4) and a Home card on the target day. Show every ending written in the current programme week, grouped by session, chronological, read-only; then the weekly stem (`is_weekly_meta = 1`, §5.4) as a normal timed session (`review_timer_seconds`, default 180; `origin = 'review'`); store in `reviews` with the reviewed session ids captured explicitly. Completing it advances the derived programme week (§6.2) — by derivation, never by a write.
 2. **Evening reflection** — §6.2's evening sitting: today's morning endings read-only, then one alternating review meta-stem, same storage path as (1) but scoped to the day's sessions.
@@ -348,7 +300,7 @@ Three forms (2026-09-15 revision, ADR-0005):
 
 | Key                         | Type   | Default   | Notes                                                                                                                                               |
 | --------------------------- | ------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `endings_per_session`       | int    | 6         | Range 6 to 10 (2026-09-11: was 3 to 12; see `DECISIONS.md`)                                                                                         |
+| `endings_per_session`       | int    | 6         | Range 6 to 10                                                                                                                                       |
 | `timer_seconds`             | int    | 90        | Range 30 to 600                                                                                                                                     |
 | `review_timer_seconds`      | int    | 180       |                                                                                                                                                     |
 | `uncensored_mode`           | bool   | true      |                                                                                                                                                     |
@@ -358,7 +310,7 @@ Three forms (2026-09-15 revision, ADR-0005):
 | `theme`                     | string | `system`  |                                                                                                                                                     |
 | `stem_timer_enabled`        | bool   | false     | 2026-09-11 addition. Optional per-stem time limit, separate from `timer_seconds`; off by default                                                    |
 | `stem_timer_seconds`        | int    | 60        | 2026-09-11 addition. Range 20 to 120. Only used when `stem_timer_enabled` is true                                                                   |
-| `morning_notification_time` | string | `"08:00"` | 2026-09-14 addition (replaces `notification_mode`/`windows`/`sessions_per_day`/`notification_fixed_times`; see §6.4, `DECISIONS.md`). Local "HH:MM" |
+| `morning_notification_time` | string | `"08:00"` | 2026-09-14 addition. Local "HH:MM"                                                                                                                  |
 | `evening_notification_time` | string | `"21:00"` | 2026-09-14 addition. Local "HH:MM"                                                                                                                  |
 | `evening_practice_enabled`  | bool   | `true`    | 2026-09-15 addition (ADR-0005). Asked once at first launch ("Include an evening practice?"); changeable in Settings. Gates the evening reflection sitting (§6.2) and the evening notification (§6.4) |
 | `weekly_meta_day`           | string | `"sunday"` | 2026-09-15 addition. Day of the weekly reflection notification (§6.4); any weekday name, lowercase                                                |
@@ -378,7 +330,7 @@ Offer three formats via the system share sheet:
    ```json
    {
      "export_version": 1,
-     "schema_version": 3,
+     "schema_version": 4,
      "app_version": "1.0.2",
      "exported_at": "2026-09-10T14:03:22.418Z",
      "exported_tz": "Europe/Berlin",
@@ -429,8 +381,8 @@ Restrained, text-first, and quiet. This app is used at odd hours by someone writ
 
 Unit tests are required for:
 
-- Stem selection: weighting, recency penalty, determinism given a seed, correct behaviour with 1, 2, and 0 eligible stems.
-- Notification scheduling: window boundaries, minimum gap enforcement, DST transitions in both directions, the 64-notification cap, rescheduling idempotency.
+- Sitting composition: the derived programme week (§6.2), `program_week_override` handling, and correct behaviour with an empty or exhausted week.
+- Notifications: daily/weekly repeat triggers reschedule idempotently (cancel-and-recreate), copy stays content-free, the evening and weekly notifications gated by their settings.
 - Session lifecycle: timeout saves partial text, backgrounding rules, `end_reason` correctness.
 - Export: round-trip fidelity, CSV quoting for text containing commas, quotes, and newlines, soft-deleted row inclusion.
 - Migrations: every schema version upgrades cleanly from every prior version, with a fixture database per version committed to the repo.
@@ -449,7 +401,7 @@ Implement in this order. Each milestone ends with a working, installable build.
 
 **M3: Stem library.** Browse, add, edit, archive, weight, bulk import.
 
-**M4: Notifications.** Windows, randomised scheduling, rolling top-up, reconciliation, deep link into a session.
+**M4: Notifications.** Fixed daily and weekly-repeat notifications, rescheduling on foreground/permission/setting change, deep link into a session.
 
 **M5: History and review.** List, FTS5 search, filters, review mode with meta-stems.
 
@@ -463,7 +415,7 @@ Note for scheduling: if publishing to Google Play from a personal developer acco
 
 ## 13. Constraints the agent must not violate
 
-1. No copyrighted stem text from Branden or any other author.
+1. No stem text used without recorded permission: the official programme is used under permission from Leigh Branden (§5.1); never add Branden text beyond it.
 2. No network, no accounts, no analytics, no telemetry.
 3. No AI features: no generated stems, no interpretation of the user's endings, no sentiment scoring shown in the app. Analysis is something the user does with their own exported data, on their own terms.
 4. Gamification is permitted only as bounded by `docs/design/gamification-proposal-2026-09-11.md`: milestone badges and streak display, computed at read time (§13.7 still governs), shown only after a session completes, never during writing. Gamification MUST NOT shame absence — no guilt copy, no broken-streak dramatics, no consequence for a missed day. Streaks, where shown, are descriptive.
@@ -476,9 +428,4 @@ Note for scheduling: if publishing to Google Play from a personal developer acco
 
 ## 14. Open questions for the user
 
-Resolve these before M2 rather than guessing:
-
-1. Should a session be resumable across app launches, or is abandonment always final after the 5 minute grace period?
-2. Should the same stem be repeatable on demand from the library, outside the weighted rotation? (Recommended: yes.)
-3. Is a per-stem note or tag field wanted, or does that invite exactly the reflective editing the exercise is designed to avoid?
-4. Should the review period be a fixed 7 days, or user-configurable?
+All four are resolved; the resolutions live in `DECISIONS.md` (with the ADRs they cite).

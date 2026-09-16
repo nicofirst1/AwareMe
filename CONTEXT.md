@@ -1,5 +1,3 @@
-# Six Endings
-
 A local, offline sentence-completion journaling app. The user repeatedly completes a prompt under time pressure — fast enough that the internal editor cannot intervene. The value accrues over weeks, partly through re-reading. The language below is opinionated; prefer these terms in code, issues, and tests.
 
 ## Language
