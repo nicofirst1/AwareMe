@@ -1,22 +1,28 @@
 import { Link } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+
+import { Card } from '@/components/card';
 import { FilterChip } from '@/components/filter-chip';
 import { ScreenHeader } from '@/components/screen-header';
-import { hexToRgba, SectionHeader } from '@/components/section-header';
+import { SectionHeader } from '@/components/section-header';
 import { StepperRow } from '@/components/stepper-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Fonts, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
+import { MaxContentWidth, MinTouchTarget, Radius, Spacing } from '@/constants/theme';
 import { getRepository, Settings } from '@/db';
 import { cancelAllPendingNotifications, rescheduleNotifications, WEEKDAY_NAMES } from '@/notifications/scheduler';
 import { isValidHHMM } from '@/session/settingsValidation';
 import { useTheme } from '@/hooks/use-theme';
+import { resyncThemePreference, setThemePreference, THEME_PREFERENCE_VALUES, useThemePreference } from '@/theme/themePreference';
 
-const THEMES = ['system', 'light', 'dark'] as const;
 const TERMINATORS = ['...', '—'] as const;
+
+/** The three settings keys a `TimeField` writes; all store the same "HH:MM" 24h format. */
+type TimeKey = 'morning_notification_time' | 'evening_notification_time' | 'weekly_meta_time';
 
 function ChipToggle<T extends string>({
   label,
@@ -56,6 +62,97 @@ function Hint({ children }: { children: string }) {
   );
 }
 
+/** Hairline between a card's sub-blocks, using the theme's decorative `border` token (not a text pairing). */
+function Divider() {
+  const theme = useTheme();
+  return <View style={[styles.divider, { backgroundColor: theme.border }]} />;
+}
+
+/** "HH:MM" → a Date for the native pickers: today at that wall-clock time. */
+function hhmmToDate(hhmm: string): Date {
+  const [hours, minutes] = hhmm.split(':').map(Number);
+  const date = new Date();
+  date.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+  return date;
+}
+
+/** A picker result → the exact "HH:MM" 24h string the settings keys store. */
+function dateToHHMM(date: Date): string {
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+/**
+ * One notification-time row (2026-09-16 owner feedback: times should use
+ * native pickers so the hour input is native on both platforms). The
+ * stored value stays the exact "HH:MM" 24h string per setting key — only
+ * the input surface is native:
+ *
+ * - iOS: the compact system picker renders inline as the row's control
+ *   (a button showing the time that opens the system popover).
+ * - Android: a row button shows the stored "HH:MM" and opens the system
+ *   time dialog via the library's imperative `DateTimePickerAndroid.open`.
+ *
+ * `onConfirm` fires only on an explicit set — a dismissal carries no date
+ * and never reaches storage.
+ */
+function TimeField({
+  label,
+  accessibilityLabel,
+  value,
+  onConfirm,
+}: {
+  label: string;
+  accessibilityLabel: string;
+  value: string;
+  onConfirm: (next: string) => void;
+}) {
+  const theme = useTheme();
+
+  const confirmDate = (date?: Date) => {
+    if (date) onConfirm(dateToHHMM(date));
+  };
+
+  if (Platform.OS === 'android') {
+    return (
+      <ThemedView style={styles.windowRow}>
+        <ThemedText type="eyebrow">{label}</ThemedText>
+        <Pressable
+          onPress={() => {
+            DateTimePickerAndroid.open({
+              mode: 'time',
+              is24Hour: true,
+              value: hhmmToDate(value),
+              onChange: (_event, date) => confirmDate(date),
+            });
+          }}
+          style={[styles.timeTrigger, { backgroundColor: theme.backgroundElement }]}
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel}
+        >
+          <ThemedText type="default">{value}</ThemedText>
+        </Pressable>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ThemedView style={styles.windowRow}>
+      <ThemedText type="eyebrow">{label}</ThemedText>
+      <DateTimePicker
+        mode="time"
+        display="compact"
+        value={hhmmToDate(value)}
+        onChange={(event, date) => {
+          if (event.type === 'set') confirmDate(date);
+        }}
+        accessibilityLabel={accessibilityLabel}
+      />
+    </ThemedView>
+  );
+}
+
 /**
  * Settings (§7): every tunable, its stated range, persisted one key at a
  * time via `Repository.setSetting` (JSON-encoded in the `settings` table,
@@ -66,20 +163,30 @@ function Hint({ children }: { children: string }) {
  * recreates the app's triggers from the freshly saved settings, scheduling
  * the evening one only when `evening_practice_enabled` is true.
  *
+ * Notification times are native pickers (2026-09-16 owner feedback) via
+ * `@react-native-community/datetimepicker`; the picker can only emit a
+ * Date, and `isValidHHMM` remains the validation boundary at the storage
+ * edge (`saveTime`) before any key is written. Stored values stay the
+ * exact "HH:MM" 24h strings; the reschedule-on-change contract is
+ * untouched.
+ *
+ * Sub-groups are inset cards (2026-09-16 owner feedback: the screen lacked
+ * visual separation between groups) using the shared `Card`, with the
+ * existing `SectionHeader` per group. Structure only — no setting moved
+ * between keys.
+ *
+ * The theme preference is applied through `src/theme/themePreference` (the
+ * same fix): the chip reads the reactive store and writes through it, so
+ * the change is persisted AND applied app-wide in one step.
+ *
  * `program_week_override` (§7, ADR-0005) deliberately has no control here —
  * it belongs to the stem library's week pages ("make this my week"), which
  * own that setting.
  */
 export default function SettingsScreen() {
-  const theme = useTheme();
+  const themePreference = useThemePreference();
   const repo = useMemo(() => getRepository(), []);
   const [settings, setSettings] = useState<Settings>(() => repo.getSettings());
-  const [morningTime, setMorningTime] = useState(settings.morning_notification_time);
-  const [eveningTime, setEveningTime] = useState(settings.evening_notification_time);
-  const [weeklyTime, setWeeklyTime] = useState(settings.weekly_meta_time);
-  const [morningError, setMorningError] = useState<string | null>(null);
-  const [eveningError, setEveningError] = useState<string | null>(null);
-  const [weeklyError, setWeeklyError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
   const [wiping, setWiping] = useState(false);
 
@@ -89,25 +196,14 @@ export default function SettingsScreen() {
     setSavedNotice(true);
   };
 
-  const saveMorningTime = () => {
-    if (!isValidHHMM(morningTime)) {
-      setMorningError('Enter a valid time (HH:MM).');
-      return;
-    }
-    setMorningError(null);
-    set('morning_notification_time', morningTime);
-    rescheduleNotifications().catch((error) => {
-      if (__DEV__) console.warn('Notification reschedule failed:', error);
-    });
-  };
-
-  const saveEveningTime = () => {
-    if (!isValidHHMM(eveningTime)) {
-      setEveningError('Enter a valid time (HH:MM).');
-      return;
-    }
-    setEveningError(null);
-    set('evening_notification_time', eveningTime);
+  /**
+   * The one storage edge for every notification time: `isValidHHMM` guards
+   * the exact "HH:MM" 24h format the keys store (§7) before the write and
+   * the reschedule-on-change call (c03 contract).
+   */
+  const saveTime = (key: TimeKey, value: string) => {
+    if (!isValidHHMM(value)) return;
+    set(key, value);
     rescheduleNotifications().catch((error) => {
       if (__DEV__) console.warn('Notification reschedule failed:', error);
     });
@@ -123,18 +219,6 @@ export default function SettingsScreen() {
 
   const setWeeklyDay = (day: string) => {
     set('weekly_meta_day', day);
-    rescheduleNotifications().catch((error) => {
-      if (__DEV__) console.warn('Notification reschedule failed:', error);
-    });
-  };
-
-  const saveWeeklyTime = () => {
-    if (!isValidHHMM(weeklyTime)) {
-      setWeeklyError('Enter a valid time (HH:MM).');
-      return;
-    }
-    setWeeklyError(null);
-    set('weekly_meta_time', weeklyTime);
     rescheduleNotifications().catch((error) => {
       if (__DEV__) console.warn('Notification reschedule failed:', error);
     });
@@ -169,9 +253,7 @@ export default function SettingsScreen() {
       repo.deleteAllData();
       const fresh = repo.getSettings();
       setSettings(fresh);
-      setMorningTime(fresh.morning_notification_time);
-      setEveningTime(fresh.evening_notification_time);
-      setWeeklyTime(fresh.weekly_meta_time);
+      resyncThemePreference();
       Alert.alert('Data deleted', 'The app has been reset to its factory state.');
     } catch (err) {
       Alert.alert('Delete failed', err instanceof Error ? err.message : String(err));
@@ -185,193 +267,183 @@ export default function SettingsScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ScreenHeader title="Settings" />
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedView style={[styles.group, { borderTopColor: hexToRgba(theme.accent, 0.3) }]}>
+          <ThemedView style={styles.group}>
             <SectionHeader label="Session" />
-
-            <ThemedView style={styles.setting}>
-              <StepperRow
-                label="Endings per session"
-                value={settings.endings_per_session}
-                rangeKey="endings_per_session"
-                onChange={(v) => set('endings_per_session', v)}
-              />
-              <Hint>Endings you write to the same stem per session.</Hint>
-            </ThemedView>
-
-            <ThemedView style={styles.setting}>
-              <StepperRow
-                label="Timer (seconds)"
-                value={settings.timer_seconds}
-                rangeKey="timer_seconds"
-                step={10}
-                onChange={(v) => set('timer_seconds', v)}
-              />
-              <Hint>How long the session runs before timing out.</Hint>
-            </ThemedView>
-
-            <ThemedView style={styles.section}>
-              <ThemedText type="small" themeColor="textSecondary">
-                Stem time limit
-              </ThemedText>
-              <Hint>
-                An optional per-stem countdown, separate from the session timer above. Off by default; the
-                writing screen scopes it to the field you’re on.
-              </Hint>
-              <ChipToggle
-                options={['off', 'on'] as const}
-                value={settings.stem_timer_enabled ? 'on' : 'off'}
-                onChange={(v) => set('stem_timer_enabled', v === 'on')}
-              />
-              {settings.stem_timer_enabled && (
+            <Card style={styles.cardGap}>
+              <ThemedView style={styles.setting}>
                 <StepperRow
-                  label="Seconds per stem"
-                  value={settings.stem_timer_seconds}
-                  rangeKey="stem_timer_seconds"
-                  step={5}
-                  onChange={(v) => set('stem_timer_seconds', v)}
+                  label="Endings per session"
+                  value={settings.endings_per_session}
+                  rangeKey="endings_per_session"
+                  onChange={(v) => set('endings_per_session', v)}
                 />
-              )}
-            </ThemedView>
+                <Hint>Endings you write to the same stem per session.</Hint>
+              </ThemedView>
+
+              <Divider />
+
+              <ThemedView style={styles.setting}>
+                <StepperRow
+                  label="Timer (seconds)"
+                  value={settings.timer_seconds}
+                  rangeKey="timer_seconds"
+                  step={10}
+                  onChange={(v) => set('timer_seconds', v)}
+                />
+                <Hint>How long the session runs before timing out.</Hint>
+              </ThemedView>
+
+              <Divider />
+
+              <ThemedView style={styles.section}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Stem time limit
+                </ThemedText>
+                <Hint>
+                  An optional per-stem countdown, separate from the session timer above. Off by default; the
+                  writing screen scopes it to the field you’re on.
+                </Hint>
+                <ChipToggle
+                  options={['off', 'on'] as const}
+                  value={settings.stem_timer_enabled ? 'on' : 'off'}
+                  onChange={(v) => set('stem_timer_enabled', v === 'on')}
+                />
+                {settings.stem_timer_enabled && (
+                  <StepperRow
+                    label="Seconds per stem"
+                    value={settings.stem_timer_seconds}
+                    rangeKey="stem_timer_seconds"
+                    step={5}
+                    onChange={(v) => set('stem_timer_seconds', v)}
+                  />
+                )}
+              </ThemedView>
+            </Card>
           </ThemedView>
 
-          <ThemedView style={[styles.group, { borderTopColor: hexToRgba(theme.accent, 0.3) }]}>
+          <ThemedView style={styles.group}>
             <SectionHeader label="Notifications" />
-
-            <ThemedView style={styles.section}>
-              <ThemedText type="small" themeColor="textSecondary">
-                Notification times
-              </ThemedText>
-              <Hint>Daily reminders at exact times you choose — the book&apos;s own suggestion is start and end of day.</Hint>
-              <ThemedView style={styles.windowRow}>
-                <ThemedText type="eyebrow">Morning</ThemedText>
-                <TextInput
-                  value={morningTime}
-                  onChangeText={setMorningTime}
-                  onBlur={saveMorningTime}
-                  placeholder="08:00"
-                  placeholderTextColor={theme.textSecondary}
-                  style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+            <Card style={styles.cardGap}>
+              <ThemedView style={styles.section}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Notification times
+                </ThemedText>
+                <Hint>Daily reminders at exact times you choose — the book&apos;s own suggestion is start and end of day.</Hint>
+                <TimeField
+                  label="Morning"
                   accessibilityLabel="Morning notification time"
+                  value={settings.morning_notification_time}
+                  onConfirm={(v) => saveTime('morning_notification_time', v)}
                 />
-              </ThemedView>
-              {morningError && (
-                <ThemedText type="small" themeColor="error" accessibilityLiveRegion="polite">
-                  {morningError}
-                </ThemedText>
-              )}
-              <ThemedView style={styles.windowRow}>
-                <ThemedText type="eyebrow">Evening</ThemedText>
-                <TextInput
-                  value={eveningTime}
-                  onChangeText={setEveningTime}
-                  onBlur={saveEveningTime}
-                  placeholder="21:00"
-                  placeholderTextColor={theme.textSecondary}
-                  style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+                <TimeField
+                  label="Evening"
                   accessibilityLabel="Evening notification time"
+                  value={settings.evening_notification_time}
+                  onConfirm={(v) => saveTime('evening_notification_time', v)}
                 />
               </ThemedView>
-              {eveningError && (
-                <ThemedText type="small" themeColor="error" accessibilityLiveRegion="polite">
-                  {eveningError}
+
+              <Divider />
+
+              <ThemedView style={styles.setting}>
+                <ChipToggle
+                  label="Evening practice"
+                  options={['on', 'off'] as const}
+                  value={settings.evening_practice_enabled ? 'on' : 'off'}
+                  onChange={(v) => setEveningPractice(v === 'on')}
+                />
+                <Hint>
+                  An evening sitting — the morning&apos;s endings once more, then a reflection sentence. Off also removes
+                  the evening reminder above.
+                </Hint>
+              </ThemedView>
+
+              <Divider />
+
+              <ThemedView style={styles.section}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Weekly reflection
                 </ThemedText>
-              )}
-            </ThemedView>
-
-            <ThemedView style={styles.setting}>
-              <ChipToggle
-                label="Evening practice"
-                options={['on', 'off'] as const}
-                value={settings.evening_practice_enabled ? 'on' : 'off'}
-                onChange={(v) => setEveningPractice(v === 'on')}
-              />
-              <Hint>
-                An evening sitting — the morning&apos;s endings once more, then a reflection sentence. Off also removes
-                the evening reminder above.
-              </Hint>
-            </ThemedView>
-
-            <ThemedView style={styles.section}>
-              <ThemedText type="small" themeColor="textSecondary">
-                Weekly reflection
-              </ThemedText>
-              <Hint>A weekly reminder to sit with the week&apos;s writing — one day, at an exact time.</Hint>
-              <ChipToggle
-                options={WEEKDAY_NAMES}
-                value={settings.weekly_meta_day as (typeof WEEKDAY_NAMES)[number]}
-                onChange={setWeeklyDay}
-              />
-              <ThemedView style={styles.windowRow}>
-                <ThemedText type="eyebrow">Time</ThemedText>
-                <TextInput
-                  value={weeklyTime}
-                  onChangeText={setWeeklyTime}
-                  onBlur={saveWeeklyTime}
-                  placeholder="21:00"
-                  placeholderTextColor={theme.textSecondary}
-                  style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+                <Hint>A weekly reminder to sit with the week&apos;s writing — one day, at an exact time.</Hint>
+                <ChipToggle
+                  options={WEEKDAY_NAMES}
+                  value={settings.weekly_meta_day as (typeof WEEKDAY_NAMES)[number]}
+                  onChange={setWeeklyDay}
+                />
+                <TimeField
+                  label="Time"
                   accessibilityLabel="Weekly notification time"
+                  value={settings.weekly_meta_time}
+                  onConfirm={(v) => saveTime('weekly_meta_time', v)}
                 />
               </ThemedView>
-              {weeklyError && (
-                <ThemedText type="small" themeColor="error" accessibilityLiveRegion="polite">
-                  {weeklyError}
-                </ThemedText>
-              )}
-            </ThemedView>
 
-            <ThemedView style={styles.setting}>
-              <ChipToggle
-                label="Weekly review prompt"
-                options={['on', 'off'] as const}
-                value={settings.weekly_review_prompt ? 'on' : 'off'}
-                onChange={(v) => set('weekly_review_prompt', v === 'on')}
-              />
-              <Hint>Offer a review of the past week&apos;s writing once a week, in-app.</Hint>
-            </ThemedView>
+              <Divider />
+
+              <ThemedView style={styles.setting}>
+                <ChipToggle
+                  label="Weekly review prompt"
+                  options={['on', 'off'] as const}
+                  value={settings.weekly_review_prompt ? 'on' : 'off'}
+                  onChange={(v) => set('weekly_review_prompt', v === 'on')}
+                />
+                <Hint>Offer a review of the past week&apos;s writing once a week, in-app.</Hint>
+              </ThemedView>
+            </Card>
           </ThemedView>
 
-          <ThemedView style={[styles.group, { borderTopColor: hexToRgba(theme.accent, 0.3) }]}>
+          <ThemedView style={styles.group}>
             <SectionHeader label="Writing" />
+            <Card style={styles.cardGap}>
+              <ThemedView style={styles.setting}>
+                <ChipToggle
+                  label="Uncensored mode"
+                  options={['on', 'off'] as const}
+                  value={settings.uncensored_mode ? 'on' : 'off'}
+                  onChange={(v) => set('uncensored_mode', v === 'on')}
+                />
+                <Hint>
+                  Backspace only erases the word you&apos;re on, and you can&apos;t edit an earlier ending in the same
+                  session. This keeps the writing unfiltered — turn it off if that restriction feels intolerable.
+                </Hint>
+              </ThemedView>
 
-            <ThemedView style={styles.setting}>
-              <ChipToggle
-                label="Uncensored mode"
-                options={['on', 'off'] as const}
-                value={settings.uncensored_mode ? 'on' : 'off'}
-                onChange={(v) => set('uncensored_mode', v === 'on')}
-              />
-              <Hint>
-                Backspace only erases the word you&apos;re on, and you can&apos;t edit an earlier ending in the same
-                session. This keeps the writing unfiltered — turn it off if that restriction feels intolerable.
-              </Hint>
-            </ThemedView>
+              <Divider />
 
-            <ThemedView style={styles.setting}>
-              <ChipToggle
-                label="Stem terminator"
-                options={TERMINATORS}
-                value={settings.stem_terminator as (typeof TERMINATORS)[number]}
-                onChange={(v) => set('stem_terminator', v)}
-              />
-              <Hint>The punctuation shown at the end of each stem.</Hint>
-            </ThemedView>
+              <ThemedView style={styles.setting}>
+                <ChipToggle
+                  label="Stem terminator"
+                  options={TERMINATORS}
+                  value={settings.stem_terminator as (typeof TERMINATORS)[number]}
+                  onChange={(v) => set('stem_terminator', v)}
+                />
+                <Hint>The punctuation shown at the end of each stem.</Hint>
+              </ThemedView>
+            </Card>
           </ThemedView>
 
-          <ThemedView style={[styles.group, { borderTopColor: hexToRgba(theme.accent, 0.3) }]}>
+          <ThemedView style={styles.group}>
             <SectionHeader label="App" />
+            <Card style={styles.cardGap}>
+              <ThemedView style={styles.setting}>
+                <ChipToggle
+                  label="App lock"
+                  options={['on', 'off'] as const}
+                  value={settings.app_lock_enabled ? 'on' : 'off'}
+                  onChange={(v) => set('app_lock_enabled', v === 'on')}
+                />
+                <Hint>Require your device passcode or biometrics to open the app.</Hint>
+              </ThemedView>
 
-            <ThemedView style={styles.setting}>
+              <Divider />
+
               <ChipToggle
-                label="App lock"
-                options={['on', 'off'] as const}
-                value={settings.app_lock_enabled ? 'on' : 'off'}
-                onChange={(v) => set('app_lock_enabled', v === 'on')}
+                label="Theme"
+                options={THEME_PREFERENCE_VALUES}
+                value={themePreference}
+                onChange={setThemePreference}
               />
-              <Hint>Require your device passcode or biometrics to open the app.</Hint>
-            </ThemedView>
-
-            <ChipToggle label="Theme" options={THEMES} value={settings.theme as (typeof THEMES)[number]} onChange={(v) => set('theme', v)} />
+            </Card>
           </ThemedView>
 
           {savedNotice && (
@@ -384,21 +456,24 @@ export default function SettingsScreen() {
             <ThemedText type="default">About the method</ThemedText>
           </Link>
 
-          <ThemedView style={styles.destructiveBlock}>
-            <ThemedText type="small" themeColor="textSecondary">
-              Delete all data permanently removes everything from this device. Export first if you want to keep it.
-            </ThemedText>
-            <Pressable
-              onPress={confirmDeleteAll}
-              disabled={wiping}
-              style={[styles.deleteButton, { opacity: wiping ? 0.5 : 1 }]}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: wiping, busy: wiping }}
-            >
-              <ThemedText type="default" themeColor="error">
-                Delete all data
+          <ThemedView style={styles.group}>
+            <SectionHeader label="Data" />
+            <Card style={styles.cardGap}>
+              <ThemedText type="small" themeColor="textSecondary">
+                Delete all data permanently removes everything from this device. Export first if you want to keep it.
               </ThemedText>
-            </Pressable>
+              <Pressable
+                onPress={confirmDeleteAll}
+                disabled={wiping}
+                style={[styles.deleteButton, { opacity: wiping ? 0.5 : 1 }]}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: wiping, busy: wiping }}
+              >
+                <ThemedText type="default" themeColor="error">
+                  Delete all data
+                </ThemedText>
+              </Pressable>
+            </Card>
           </ThemedView>
         </ScrollView>
       </SafeAreaView>
@@ -417,15 +492,20 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   // One setting = control + its hint, held together by the 4pt
-  // label-to-control gap (LC3); settings sit 8pt apart inside a group (row
-  // gap), groups 24pt apart via scrollContent's gap (section gap).
+  // label-to-control gap (LC3); sub-blocks inside a card sit 8pt apart
+  // (cardGap), groups 24pt apart via scrollContent's gap (section gap).
   setting: {
     gap: Spacing.one,
   },
   group: {
     gap: Spacing.two,
-    paddingTop: Spacing.two,
-    borderTopWidth: 1,
+  },
+  cardGap: {
+    gap: Spacing.two,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
   },
   section: {
     gap: Spacing.one,
@@ -440,22 +520,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
-  timeInput: {
-    fontFamily: Fonts.sans,
-    fontSize: 16,
-    padding: Spacing.two,
-    borderRadius: Spacing.two,
-    width: 80,
+  // The Android trigger shows the stored "HH:MM" verbatim and opens the
+  // system time dialog; iOS renders the compact native picker instead.
+  timeTrigger: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.small,
     minHeight: MinTouchTarget,
-    textAlign: 'center',
-  },
-  // No extra `paddingTop` here (2026-09-11 visual-test finding: this stacked
-  // on top of `scrollContent`'s own `gap: Spacing.four` between children,
-  // doubling the space above "Delete all data" to ~48px vs. every other
-  // section boundary's ~32px — the ScrollView's gap alone now matches the
-  // rest of the screen's rhythm).
-  destructiveBlock: {
-    gap: Spacing.two,
+    justifyContent: 'center',
   },
   deleteButton: {
     paddingVertical: Spacing.two,
