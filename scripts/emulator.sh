@@ -8,6 +8,12 @@ set -euo pipefail
 ANDROID_HOME="${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}"
 export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 
+# Newer Android Studio puts AVDs in ~/.config/.android/avd; the emulator only
+# searches $ANDROID_AVD_HOME / $ANDROID_SDK_HOME/avd / ~/.android/avd.
+if [ -z "${ANDROID_AVD_HOME:-}" ] && [ -d "$HOME/.config/.android/avd" ]; then
+  export ANDROID_AVD_HOME="$HOME/.config/.android/avd"
+fi
+
 AVD_NAME="sixendings-audit"
 FORCE=0
 for arg in "$@"; do
