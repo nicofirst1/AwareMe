@@ -108,9 +108,10 @@ describe('SettingsScreen', () => {
   it('persists a stepper change one key at a time via setSetting (§7 pattern)', async () => {
     render(<SettingsScreen />);
 
-    // Default endings_per_session is 6 → Increase emits 7, clamped range 6–10.
+    // Default endings_per_session is 7 (issue 03 owner feedback) → Increase
+    // emits 8, clamped range 6–10.
     fireEvent.press(screen.getByLabelText('Increase Endings per session'));
-    expect(mockSetSetting).toHaveBeenCalledWith('endings_per_session', 7);
+    expect(mockSetSetting).toHaveBeenCalledWith('endings_per_session', 8);
     expect(await screen.findByText('Saved.')).toBeTruthy();
   });
 
