@@ -25,7 +25,7 @@ export interface StemRow {
   origin: 'seed' | 'user' | 'imported' | 'meta';
   category: string | null;
   weight: number;
-  /** Morning/evening pivot (migration 0003): which fixed daily notification this stem belongs to. Null for meta-stems and any pre-pivot row never backfilled (DECISIONS.md 2026-09-14). */
+  /** Morning/evening pivot (migration 0003): which fixed daily notification this stem belongs to. Null for the weekly meta-stem and any pre-pivot row never backfilled (DECISIONS.md 2026-09-14); the two evening reflection meta-stems carry 'evening' (issue 06) — tagged at seed, never drawn by a sitting. */
   time_of_day: TimeOfDay | null;
 }
 
@@ -154,7 +154,8 @@ export class Repository {
    * 2. the official weekly reflection stem, seeded once with
    *    `is_weekly_meta = 1`, `week_number = NULL`, `time_of_day = NULL`;
    * 3. the two evening-review meta-stems (`origin = 'meta'`, inactive),
-   *    as since v1;
+   *    tagged `time_of_day = 'evening'` (issue 06) so the library's
+   *    Evening filter matches them;
    * 4. the 26 retired v1 originals — soft-deleted AT SEED TIME
    *    (`deleted_at` set, `active = 0`): present for provenance/exports,
    *    never active, never shown in the library (spec §5.3).
@@ -193,13 +194,15 @@ export class Repository {
       // distinct concept from stems (CONTEXT.md: "used only in review..."),
       // not a category of them — seeded with `active = 0` so they can never
       // surface via the sitting draws or `listActiveStems`, and `origin =
-      // 'meta'` so `listAllStems` (the stem library) can exclude them by
-      // construction. Same real-row reasoning as the weekly stem above.
+      // 'meta'` so the review/rotation reads can tell them apart. Since
+      // issue 06 they carry `time_of_day = 'evening'` and ARE shown in the
+      // stem library (§6.6) as resting, evening-tagged rows — the Evening
+      // filter matches them; no draw ever picks them.
       for (const text of EVENING_META_STEMS) {
         const { at, tz, offsetMin } = nowEventTime();
         this.db.runSync(
-          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, week_number, is_weekly_meta)
-           VALUES (?, ?, 'meta', NULL, 'en', 1.0, 0, ?, ?, ?, NULL, 0)`,
+          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
+           VALUES (?, ?, 'meta', NULL, 'en', 1.0, 0, ?, ?, ?, 'evening', NULL, 0)`,
           [newId(), text, at, tz, offsetMin],
         );
       }
@@ -367,18 +370,21 @@ export class Repository {
   /**
    * Every stem, including archived and soft-deleted ones, for the stem
    * library (§6.6) — the library filters/searches client-side over this,
-   * unlike `listActiveStems`'s narrow session-start use. Excludes
-   * `origin = 'meta'` (the evening meta-stems) and the weekly meta-stem
-   * (`is_weekly_meta = 1`, seeded `origin = 'seed'` since migration 0004):
-   * review stems are a distinct concept, used only in review, and never
-   * editable/browsable/writable-on-demand like a regular stem.
+   * unlike `listActiveStems`'s narrow session-start use. Includes the two
+   * evening meta-stems (issue 06, owner feedback "there are no evening
+   * stems"): they surface as resting, evening-tagged rows the Evening
+   * filter matches — still `active = 0`, so no sitting draw or generic
+   * active-stem read ever picks them. The weekly meta-stem
+   * (`is_weekly_meta = 1`, seeded `origin = 'seed'`) stays excluded: it is
+   * the scheduled weekly reflection's own stem (§6.5), not an evening one,
+   * and review machinery is not editable/browsable like a regular stem.
    */
   listAllStems(): LibraryStemRow[] {
     return this.db.getAllSync<LibraryStemRow>(
       // week_number rides along (read-path, issue 03): the library's week
       // filter buckets every row — resting and soft-deleted included — by
       // its programme week. Schema untouched.
-      "SELECT id, text, origin, category, weight, time_of_day, active, deleted_at, created_at, week_number as weekNumber FROM stems WHERE origin != 'meta' AND is_weekly_meta = 0 ORDER BY created_at DESC",
+      "SELECT id, text, origin, category, weight, time_of_day, active, deleted_at, created_at, week_number as weekNumber FROM stems WHERE is_weekly_meta = 0 ORDER BY created_at DESC",
       [],
     );
   }

@@ -63,7 +63,7 @@ import { CONTENT } from './stems.content';
 
 export type StemCategory = 'awareness' | 'self_acceptance' | 'responsibility' | 'assertiveness' | 'purpose' | 'integrity';
 
-/** Morning/evening pivot (migration 0003): which fixed daily notification a stem belongs to. Meta-stems (§5.4) carry `null` — never surfaced by a sitting draw. */
+/** Morning/evening pivot (migration 0003): which fixed daily notification a stem belongs to. The weekly meta-stem carries `null`; the two evening reflection meta-stems carry `evening` (issue 06) so the library's Evening filter matches them — either way, never surfaced by a sitting draw. */
 export type TimeOfDay = 'morning' | 'evening';
 
 /** One official programme stem: its Week 1–30 block and its byte-exact text (no trailing terminator). Categories are NOT stored on the entries — they resolve through `programmeStemCategory` below, so this array stays byte-identical to the snapshot transcription. */

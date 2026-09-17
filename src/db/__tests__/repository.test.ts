@@ -69,7 +69,7 @@ describe('Repository.seedIfEmpty', () => {
     });
   });
 
-  it('seeds the 2 evening-review meta-stems as inactive stems rows with origin=meta (§5.4)', () => {
+  it('seeds the 2 evening-review meta-stems as inactive, evening-tagged stems rows with origin=meta (§5.4, issue 06)', () => {
     const { db, repo } = freshRepository();
     repo.seedIfEmpty();
 
@@ -77,13 +77,18 @@ describe('Repository.seedIfEmpty', () => {
       text: string;
       active: number;
       category: string | null;
+      time_of_day: string | null;
+      deleted_at: string | null;
     }[];
     expect(metaRows).toHaveLength(2);
     expect(metaRows.map((r) => r.text).sort()).toEqual([...EVENING_META_STEMS].sort());
     for (const r of metaRows) {
-      // Never selectable by the sitting draws (§6.2) or shown in the
-      // library — they're a distinct concept from stems (CONTEXT.md).
+      // Never selectable by the sitting draws (§6.2) — seeded inactive and
+      // still inactive. Since issue 06 they ARE shown in the library as
+      // resting rows tagged 'evening', so the Evening filter matches them.
       expect(r.active).toBe(0);
+      expect(r.time_of_day).toBe('evening');
+      expect(r.deleted_at).toBeNull();
       expect(r.category).toBeNull();
     }
   });

@@ -350,12 +350,11 @@ describe('fresh-install seed lands the programme in the database (both modes)', 
     );
   });
 
-  it('reaches schema version 5 on a fresh install', () => {
+  it('reaches the current schema version on a fresh install', () => {
     const { db, repo } = freshDatabase();
     repo.seedIfEmpty();
-    expect(CURRENT_SCHEMA_VERSION).toBe(5);
     const meta = db.prepare('SELECT schema_version FROM schema_meta WHERE id = 1').get() as { schema_version: number };
-    expect(meta.schema_version).toBe(5);
+    expect(meta.schema_version).toBe(CURRENT_SCHEMA_VERSION);
   });
 });
 

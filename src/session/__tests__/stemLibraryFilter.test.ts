@@ -73,6 +73,18 @@ describe('matchesStemFilters', () => {
     expect(matchesStemFilters(stem({ time_of_day: null }), allFilters)).toBe(true);
   });
 
+  it('evening meta-stem rows (issue 06): origin=meta, active=0, time_of_day=evening — Evening matches under Resting/All, never under Active', () => {
+    const eveningMeta = stem({ origin: 'meta', active: 0, time_of_day: 'evening' });
+    // The library's default State is Active — the meta-stems are resting,
+    // so a user must widen the State (or pick Resting) to see them.
+    expect(matchesStemFilters(eveningMeta, { ...BASE, timeOfDayFilter: 'evening' })).toBe(false);
+    expect(matchesStemFilters(eveningMeta, { ...BASE, activeFilter: 'archived', timeOfDayFilter: 'evening' })).toBe(true);
+    expect(matchesStemFilters(eveningMeta, { ...BASE, activeFilter: 'all', timeOfDayFilter: 'evening' })).toBe(true);
+    // An evening-tagged row never matches the other time-of-day filters.
+    expect(matchesStemFilters(eveningMeta, { ...BASE, activeFilter: 'all', timeOfDayFilter: 'morning' })).toBe(false);
+    expect(matchesStemFilters(eveningMeta, { ...BASE, activeFilter: 'all', timeOfDayFilter: 'none' })).toBe(false);
+  });
+
   it('filters by programme week (issue 03): state-agnostic, programme stems only', () => {
     const week3: StemLibraryFilters = { ...BASE, activeFilter: 'all', weekFilter: 3 };
     // Every stem of the selected week matches, whatever its state — state

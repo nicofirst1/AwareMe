@@ -57,8 +57,9 @@ One row per stem, seed or user-authored.
 - \`deleted_at\` (text, UTC ISO-8601 ms, nullable): set if soft-deleted;
   null otherwise.
 - \`time_of_day\` (text, nullable): \`morning\` or \`evening\`; which fixed
-  daily notification this stem belongs to. Null for meta-stems and any
-  pre-pivot row never backfilled.
+  daily notification this stem belongs to. Null for the weekly meta-stem
+  and any pre-pivot row never backfilled; the two evening reflection
+  meta-stems carry \`evening\` (issue 06).
 - \`week_number\` (integer, nullable): the official programme block
   (1-30) this stem belongs to (2026-09-15, ADR-0005). Null for
   non-programme stems.

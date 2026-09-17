@@ -4,6 +4,7 @@ import { migrate } from '../migrate';
 import { Repository } from '../repository';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
 import { EVENING_META_STEMS, PROGRAMME_SEED_STEMS, RETIRED_SEED_STEMS, WEEKLY_META_STEM } from '../seed/stems';
+import { matchesStemFilters } from '@/session/stemLibraryFilter';
 
 function freshRepository(): { db: DatabaseSync; repo: Repository } {
   const raw = new DatabaseSync(':memory:');
@@ -57,7 +58,7 @@ describe('Repository.listStemTexts', () => {
 });
 
 describe('Repository.listMetaStems', () => {
-  it('returns all 3 §5.4 meta-stems — the weekly one (origin=seed, is_weekly_meta=1) plus the 2 evening ones — excluded from listActiveStems/listAllStems', () => {
+  it('returns all 3 §5.4 meta-stems — the weekly one (origin=seed, is_weekly_meta=1) plus the 2 evening ones', () => {
     const { repo } = freshRepository();
     const metaStems = repo.listMetaStems();
     expect(metaStems).toHaveLength(3);
@@ -65,10 +66,46 @@ describe('Repository.listMetaStems', () => {
     // the two evening meta-stems.
     expect(metaStems[0].text).toBe(WEEKLY_META_STEM);
     expect(metaStems.slice(1).map((s) => s.text).sort()).toEqual([...EVENING_META_STEMS].sort());
+  });
 
+  it('listActiveStems never surfaces a meta-stem; listAllStems (issue 06) surfaces only the 2 evening ones, resting and evening-tagged', () => {
+    const { repo } = freshRepository();
+    const metaStems = repo.listMetaStems();
     const metaIds = new Set(metaStems.map((s) => s.id));
     expect(repo.listActiveStems().some((s) => metaIds.has(s.id))).toBe(false);
-    expect(repo.listAllStems().some((s) => metaIds.has(s.id))).toBe(false);
+
+    // Issue 06 (owner feedback "there are no evening stems"): the library
+    // lists the 2 evening meta-stems — still active=0, so no sitting draw
+    // ever picks them, and tagged time_of_day='evening' so the Evening
+    // filter matches. The weekly meta-stem stays excluded.
+    const inLibrary = repo.listAllStems().filter((s) => metaIds.has(s.id));
+    expect(inLibrary.map((s) => s.text).sort()).toEqual([...EVENING_META_STEMS].sort());
+    for (const row of inLibrary) {
+      expect(row.time_of_day).toBe('evening');
+      expect(row.active).toBe(0);
+      expect(row.deleted_at).toBeNull();
+    }
+    expect(inLibrary.some((s) => s.text === WEEKLY_META_STEM)).toBe(false);
+  });
+});
+
+describe('Repository.listAllStems × matchesStemFilters — evening visibility (issue 06)', () => {
+  it('the Evening filter matches an evening meta-stem row under Resting/All state, and the Active state hides it', () => {
+    const { repo } = freshRepository();
+    const eveningMeta = repo.listAllStems().filter((s) => s.origin === 'meta');
+    expect(eveningMeta).toHaveLength(EVENING_META_STEMS.length);
+
+    const matchesEvening = (activeFilter: 'active' | 'archived' | 'all') =>
+      matchesStemFilters(eveningMeta[0], {
+        query: '',
+        activeFilter,
+        originFilter: 'all',
+        categoryFilter: 'all',
+        timeOfDayFilter: 'evening',
+      });
+    expect(matchesEvening('active')).toBe(false);
+    expect(matchesEvening('archived')).toBe(true);
+    expect(matchesEvening('all')).toBe(true);
   });
 });
 
@@ -123,7 +160,10 @@ describe('Repository.bulkImportStems', () => {
   it('is a no-op for an empty list', () => {
     const { repo } = freshRepository();
     expect(repo.bulkImportStems([], null)).toBe(0);
-    expect(repo.listAllStems()).toHaveLength(PROGRAMME_SEED_STEMS.length + RETIRED_SEED_STEMS.length);
+    // Programme + the 2 evening meta-stems (issue 06) + the retired originals.
+    expect(repo.listAllStems()).toHaveLength(
+      PROGRAMME_SEED_STEMS.length + EVENING_META_STEMS.length + RETIRED_SEED_STEMS.length,
+    );
   });
 });
 
