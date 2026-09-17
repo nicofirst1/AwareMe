@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { MinTouchTarget, Spacing } from '@/constants/theme';
+import { MinTouchTarget, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { clampSetting, SETTINGS_RANGES } from '@/session/settingsValidation';
 
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   stepperButton: {
     width: MinTouchTarget,
     height: MinTouchTarget,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.small,
     alignItems: 'center',
     justifyContent: 'center',
   },

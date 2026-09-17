@@ -15,7 +15,7 @@ import { Button } from '@/components/button';
 import { StepperRow } from '@/components/stepper-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Fonts, MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
+import { Fonts, MaxContentWidth, MinTouchTarget, Radius, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { requestNotificationPermission, rescheduleNotifications } from '@/notifications/scheduler';
 import { isValidHHMM } from '@/session/settingsValidation';
@@ -133,7 +133,15 @@ export default function OnboardingScreen() {
               This app is built on sentence completion, a technique from psychologist Nathaniel Branden. Nothing
               here scores or interprets what you write. It just holds space for it.
             </ThemedText>
-            <Link href="/about-method" style={styles.navLink}>
+            {/* accessibilityRole="link" + explicit label: the link convention
+                BackHeader documents (index.tsx's Link rows); the label keeps
+                the name glyph-free and deterministic. */}
+            <Link
+              href="/about-method"
+              style={styles.navLink}
+              accessibilityRole="link"
+              accessibilityLabel="Read more about the method"
+            >
               <ThemedText type="default" themeColor="textSecondary">
                 Read more about the method
               </ThemedText>
@@ -297,7 +305,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.sans,
     fontSize: 16,
     padding: Spacing.two,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.small,
     width: 80,
     minHeight: MinTouchTarget,
     textAlign: 'center',

@@ -215,8 +215,17 @@ export default function HomeScreen() {
                     {status.currentStreak} days in a row
                   </ThemedText>
                 )}
+                {/* Links carry accessibilityRole="link" (BackHeader's documented
+                    convention) plus an explicit label matching the visible
+                    text, so an icon glyph never leaks into the screen
+                    reader's name. Same pattern on every Link below. */}
                 {status.reviewAvailable && (
-                  <Link href="/review" style={styles.reviewRow}>
+                  <Link
+                    href="/review"
+                    style={styles.reviewRow}
+                    accessibilityRole="link"
+                    accessibilityLabel="Review available"
+                  >
                     {/* `textSecondary`, not `accent` (2026-09-15 review finding): `accent`
                         text only clears AA against `background` (theme.ts's own comment),
                         not against the sitting card's `backgroundElement` fill — 4.35:1 in
@@ -296,7 +305,12 @@ export default function HomeScreen() {
               <ThemedText type="small" themeColor="textSecondary">
                 Week 30 complete. The library is yours from here.
               </ThemedText>
-              <Link href="/stems" style={styles.reviewRow}>
+              <Link
+                href="/stems"
+                style={styles.reviewRow}
+                accessibilityRole="link"
+                accessibilityLabel="Browse the library"
+              >
                 <ThemedText type="small" themeColor="textSecondary">
                   Browse the library
                 </ThemedText>
@@ -314,6 +328,8 @@ export default function HomeScreen() {
                   styles.tile,
                   { backgroundColor: label === 'Progress' ? theme.accentMuted : theme.backgroundElement },
                 ]}
+                accessibilityRole="link"
+                accessibilityLabel={label}
               >
                 <Ionicons
                   name={icon}
@@ -326,7 +342,12 @@ export default function HomeScreen() {
           </View>
 
           {__DEV__ && (
-            <Link href="/debug" style={styles.navLink}>
+            <Link
+              href="/debug"
+              style={styles.navLink}
+              accessibilityRole="link"
+              accessibilityLabel="Debug: dump all tables"
+            >
               <ThemedText type="small" themeColor="textSecondary">
                 Debug: dump all tables
               </ThemedText>

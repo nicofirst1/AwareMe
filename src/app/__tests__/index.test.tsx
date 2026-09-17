@@ -71,6 +71,9 @@ describe('HomeScreen', () => {
     expect(screen.getByText('1 stem ready')).toBeTruthy();
     expect(screen.getByText('1 session this week')).toBeTruthy();
     expect(screen.getByText('Review available')).toBeTruthy();
+    // o11 layout/a11y cycle: the review row is a Link with an explicit role
+    // and label (matches BackHeader's documented link convention).
+    expect(screen.getByRole('link', { name: 'Review available' })).toBeTruthy();
     expect(screen.getByText('Start morning sitting')).toBeTruthy();
   });
 
@@ -136,6 +139,8 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Week 30 of 30')).toBeTruthy();
     expect(screen.getByText('Week 30 complete. The library is yours from here.')).toBeTruthy();
     expect(screen.getByText('Browse the library')).toBeTruthy();
+    // o11: the completion block's library link carries the link role + label.
+    expect(screen.getByRole('link', { name: 'Browse the library' })).toBeTruthy();
     // The nudge is suppressed once the completion state speaks.
     expect(screen.queryByText(/is ready\./)).toBeNull();
   });
@@ -166,6 +171,9 @@ describe('HomeScreen', () => {
   it('has a secondary destination group', () => {
     render(<HomeScreen />);
     expect(screen.getByText('Stems')).toBeTruthy();
+    // o11: the tile grid renders as links with label-pinned names.
+    expect(screen.getByRole('link', { name: 'Stems' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'History' })).toBeTruthy();
     expect(screen.getByText('History')).toBeTruthy();
     expect(screen.getByText('Review')).toBeTruthy();
     expect(screen.getByText('Progress')).toBeTruthy();
