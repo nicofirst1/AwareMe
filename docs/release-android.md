@@ -1,4 +1,4 @@
-# Android release runbook (Six Endings 1.1.0 → Google Play)
+# Android release runbook (AwareMe 1.1.0 → Google Play)
 
 Everything needed to take this repo from `main` to a published Play listing.
 Steps marked **[owner]** can only be done by a human (they need the Play
@@ -147,7 +147,7 @@ All application questions below have their worked-out answers in
 
 ### 5.1 One-time app setup
 
-1. Create app → name **Six Endings** (exact `store/listing-copy.md` spelling),
+1. Create app → name **AwareMe** (exact `store/listing-copy.md` spelling),
    default language English (United States), **App** (not game), **Free**.
 2. **Privacy policy URL**: serve `privacy.md` via GitHub Pages (repo Settings
    → Pages → deploy from branch `main`, root). The page will live at

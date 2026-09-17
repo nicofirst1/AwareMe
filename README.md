@@ -51,6 +51,13 @@ cp src/db/seed/stems.content.example.ts src/db/seed/stems.content.ts
 ```
 
 
+## Project status
+
+Feature-complete for v1.1: sittings, uncensored writing, history + review, lossless
+export, reminders, optional lock. The seed-content overlay is verified end-to-end on
+git-faithful trees (fresh clones build, test, and launch). Preparing the first public
+release — see `docs/release-android.md` for the runbook.
+
 ## License and attribution
 
 See [LICENSE](LICENSE). [NOTICE](NOTICE) records the provenance of the official programme.

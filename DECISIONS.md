@@ -28,6 +28,11 @@ This file is an index, not the record: each entry points at the authoritative do
 - **Soft-deleted rows stay in the FTS index and are filtered at query time** — one visibility convention for every read.
 - **New settings are KV rows, not schema changes** — §13.8 migrations govern tables/columns only; absent keys fall through to `DEFAULT_SETTINGS`.
 - **Streak anchor (ratified 2026-09-11):** alive if the last completed-session day is today or yesterday; a second consecutive missed day zeroes it.
+- **License is GPLv3 (owner choice, 2026-09-16):** canonical text machine-verified against gnu.org, reflowed; forks must stay open. `NOTICE` carries the programme-text carve-out — not included in the repo, not sublicensed.
+- **Brand is AwareMe (2026-09-16):** rename swept app.json, src, docs; "six endings" survives only as method copy (CONCEPT). Scheme `sixendings`, bundle ids, DB filename, notification ids are frozen pending owner decisions (issue 14).
+- **Seed content ships via a static overlay (2026-09-17):** `stems.content.ts` is owner-local and gitignored; `content-overlay.js` (metro + jest resolvers) serves the committed example file on fresh clones — no runtime require, no fallback guard to fail (issue 23).
+- **SECURITY.md dropped (2026-09-16):** thin threat model removed; GitHub "Private vulnerability reporting" replaces it.
+- **`store/` is untracked (2026-09-16):** Play submission assets stay owner-local; screenshots carry the programme text visually.
 - **Never nest `ThemedView` inside a `Card`/tinted surface** — it paints `theme.background` over the card; use plain `View`.
 
 ## Environment quirks
@@ -42,8 +47,8 @@ This file is an index, not the record: each entry points at the authoritative do
 - **Layout round (2026-09-15)** — brief `docs/design/layout-audit-brief-2026-09-15.md`; audit + constitution (LC1–LC9) `docs/design/layout-audit-2026-09-15.md`; cycles under `.scratch/layout-audit-2026-09-15/`.
 - **Expo-feedback round (2026-09-15)** — countdown button removed (§6.3.4/§6.3.7 amended; submission is the return key, pressure color moved to the top-strip numerals), midpoint sitting highlight on Home — record in `.scratch/expo-feedback-2026-09-15/`.
 - **Official programme (2026-09-15/16)** — ADR-0005 is the decision record; round records under `.scratch/official-program/` (verbatim list snapshot included).
-- **Lint baseline (2026-09-16)** — `react-hooks/set-state-in-effect` downgraded to `warn` in the owner's `eslint.config.js` (still uncommitted); 5 known sites are contract debt for a dedicated session-state pass.
-- **v1.2 feedback round** — `.scratch/v12-feedback/`.
+- **Lint baseline (2026-09-17)** — `react-hooks/set-state-in-effect` at `warn` in the committed `eslint.config.js`; 4 known sites remain, dispositioned: 2 are ADR-0001's cold-start mount sites by design, 2 documented in issue 17. Baseline: 0 errors / 13 warnings.
+- **v1.2 feedback round** — completed 2026-09-17; all 23 issues in `.scratch/v12-feedback/` done or dispositioned (untracked).
 
 ## Superseded
 
@@ -52,3 +57,5 @@ Weighted stem selection, the random-window scheduler, and the 2026-09-11 "fixed 
 ## Parked owner arbitrations
 
 - Whether the About screen should also carry a one-line book credit (c04 reviewer finding, 2026-09-16).
+- Identity FLAGs (issue 14): deep-link scheme, Android package / iOS bundle ids, DB filename.
+- Spec §5.1/§5.4 and ADR-0005 quote remainders: amend spec to match the overlay architecture (owner call).
