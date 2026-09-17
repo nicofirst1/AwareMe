@@ -4,11 +4,13 @@
  * Completion I programme text (spec §5.1, used with permission; NOT
  * distributed with this repository).
  *
- * A fresh clone falls back to this module, so the repo builds and tests
- * without the licensed text: copy it to `stems.content.ts` for a fully
- * working app tree (see README, "Seed content"). The owner's real module
- * has the same shape and is validated by `__tests__/programmeSeed.test.ts`
- * byte-for-byte against the canonical snapshot whenever both are on disk.
+ * On a fresh clone the resolvers (metro.config.js, jest.resolver.js — see
+ * `stems.ts`) serve the seed's content import from THIS module, so the repo
+ * builds, tests and bundles without the licensed text. The owner's real
+ * module has the same shape — one `CONTENT` export fulfilling the
+ * `SeedContent` interface below — and is validated by
+ * `__tests__/programmeSeed.test.ts` byte-for-byte against the canonical
+ * snapshot whenever both are on disk.
  *
  * Everything below is ORIGINAL text written in the app's spirit — never
  * Branden text (spec §5.1). The example corpus spans six weeks chosen so
@@ -34,7 +36,12 @@ export interface SeedContent {
   stemCategoryExceptions: Readonly<Record<string, StemCategory>>;
 }
 
-export const EXAMPLE_CONTENT: SeedContent = {
+/**
+ * The example corpus, under the same `CONTENT` export name the owner-local
+ * module uses — the two are interchangeable from the loader's point of
+ * view (stems.ts); which one serves an import is decided by the resolvers.
+ */
+export const CONTENT: SeedContent = {
   programmeStems: [
     // Week 1 — awareness
     { weekNumber: 1, text: 'If I notice where my attention actually goes today' },
