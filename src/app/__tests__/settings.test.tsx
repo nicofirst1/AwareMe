@@ -13,9 +13,19 @@ let mockSettings: Settings = { ...DEFAULT_SETTINGS };
 
 jest.mock('expo-router', () => ({
   // Same pattern as about.test.tsx: no real navigation tree in a bare
-  // render, so useRouter/BackHeader need a stub; `Link` renders children.
+  // render, so useRouter/BackHeader need a stub; `Link` renders its
+  // children inside the same Text the real native Link uses, forwarding
+  // accessibility props so the o11 role/label assertions exercise what
+  // ships.
   useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
-  Link: ({ children }: { children: ReactNode }) => children,
+  Link: (props: { children: ReactNode } & Record<string, unknown>) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { createElement } = require('react');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Text } = require('react-native');
+    const { children, ...rest } = props;
+    return createElement(Text, rest, children);
+  },
 }));
 
 jest.mock('@/db', () => {
@@ -81,6 +91,8 @@ describe('SettingsScreen', () => {
     expect(screen.getByText('App')).toBeTruthy();
     expect(screen.getByText('Data')).toBeTruthy();
     expect(screen.getByText('About the method')).toBeTruthy();
+    // o11 layout/a11y cycle: the nav link carries the link role + label.
+    expect(screen.getByRole('link', { name: 'About the method' })).toBeTruthy();
     expect(screen.getByText('Delete all data')).toBeTruthy();
   });
 

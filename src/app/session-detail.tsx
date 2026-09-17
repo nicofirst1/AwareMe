@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BackHeader } from '@/components/back-header';
 import { Card } from '@/components/card';
+import { EmptyState } from '@/components/empty-state';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
@@ -76,6 +77,11 @@ export default function SessionDetailScreen() {
           </ThemedText>
 
           <ThemedView style={styles.endingList}>
+            {/* A session that was started but never had an ending submitted
+                (open or abandoned before the first submit) still shows in
+                history; its list here is empty, so say so quietly instead of
+                rendering nothing (§13.4, same shape as review's empty state). */}
+            {endings.length === 0 && <EmptyState message="Nothing written in this session." />}
             {endings.map((e) => (
               <Card key={e.id} style={styles.endingRow}>
                 <ThemedText type="stem">{e.text || '(nothing written)'}</ThemedText>

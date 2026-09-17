@@ -452,7 +452,14 @@ export default function SettingsScreen() {
             </ThemedText>
           )}
 
-          <Link href="/about-method" style={styles.navLink}>
+          {/* accessibilityRole="link" + explicit label: the same Link
+              convention index.tsx's rows use (BackHeader documents it). */}
+          <Link
+            href="/about-method"
+            style={styles.navLink}
+            accessibilityRole="link"
+            accessibilityLabel="About the method"
+          >
             <ThemedText type="default">About the method</ThemedText>
           </Link>
 

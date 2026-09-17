@@ -9,10 +9,19 @@ const mockSetSetting = jest.fn();
 const mockRequestPermission = jest.fn();
 
 // Same pattern as settings.test.tsx: no real navigation tree in a bare
-// render, so useRouter needs a stub; `Link` renders children.
+// render, so useRouter needs a stub; `Link` renders its children inside the
+// same Text the real native Link uses, forwarding accessibility props so
+// role/label assertions exercise what ships (o11).
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace, back: jest.fn() }),
-  Link: ({ children }: { children: ReactNode }) => children,
+  Link: (props: { children: ReactNode } & Record<string, unknown>) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { createElement } = require('react');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Text } = require('react-native');
+    const { children, ...rest } = props;
+    return createElement(Text, rest, children);
+  },
 }));
 
 jest.mock('@/db', () => ({
