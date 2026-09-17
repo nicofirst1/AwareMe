@@ -129,11 +129,16 @@ data.
 ## 4. Before every upload (re-verify, don't assume)
 
 1. Gates: `npm run typecheck && npm test`.
-2. Re-run the no-collection verification in `store/privacy-declarations.md`
+2. State WHICH tree surface every verification used: an **owner checkout**
+   (private `stems.content.ts` on disk) or a **git-faithful tree** (fresh
+   clone, CI — example content only). An APK verified on an owner checkout
+   says nothing about what a fresh clone ships; the seed-content overlay is
+   exercised per tree, not per repository (issue 23).
+3. Re-run the no-collection verification in `store/privacy-declarations.md`
    ("Re-verify before every release") — the grep over `src/` and the
    dependency diff against `store/dependency-audit.md`.
-3. Confirm `privacy.md` still matches the app's actual behaviour.
-4. Confirm `store/assets/` screenshots show the version being submitted.
+4. Confirm `privacy.md` still matches the app's actual behaviour.
+5. Confirm `store/assets/` screenshots show the version being submitted.
 
 ## 5. Play Console — human-only steps **[owner]**
 

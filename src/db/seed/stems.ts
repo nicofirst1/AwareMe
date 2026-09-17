@@ -12,14 +12,15 @@
  *    snapshot `.scratch/official-program/official-program-verbatim.txt`,
  *    used with permission from Leigh Branden to Nicolo' Brandizzi,
  *    2026-09-15) and is NEVER committed. When that module is absent (fresh
- *    clone, CI), the loader below falls back to the committed
+ *    clone, CI), the module resolvers serve the import below the committed
  *    `./stems.content.example`, whose original example content keeps the
- *    repo building and testing; see README, "Seed content". Stored WITHOUT
- *    the trailing terminator: the snapshot writes stems with a trailing
- *    ellipsis, which is stripped at seed time; the `stem_terminator`
- *    setting is appended at render time (spec §5.3). On an owner tree the
- *    `__tests__/programmeSeed.test.ts` anti-typo guard parses the snapshot
- *    independently and fails on any drift between the two.
+ *    repo building, testing and bundling; see README, "Seed content".
+ *    Stored WITHOUT the trailing terminator: the snapshot writes stems with
+ *    a trailing ellipsis, which is stripped at seed time; the
+ *    `stem_terminator` setting is appended at render time (spec §5.3). On
+ *    an owner tree the `__tests__/programmeSeed.test.ts` anti-typo guard
+ *    parses the snapshot independently and fails on any drift between the
+ *    two.
  *
  * 2. `META_STEMS` — the §5.4 review meta-stems, in spec order. `META_STEMS[0]`
  *    is the official weekly reflection stem: part of the licensed programme
@@ -38,7 +39,27 @@
  * The retired "general" pair still have no `category`: spec §5.2 defines
  * exactly six categories and "general" isn't one of them (DECISIONS.md).
  */
-import { EXAMPLE_CONTENT, type SeedContent } from './stems.content.example';
+/**
+ * The seed content module (issue 10; resolution reworked by issue 23):
+ * statically imported. The owner-local licensed corpus when present,
+ * otherwise the committed example — decided at MODULE RESOLUTION time,
+ * never at runtime. Every tool that resolves this import applies the same
+ * rule (owner module if it exists, else the example):
+ *
+ * - Metro (app bundles): `metro.config.js` redirects `./stems.content` to
+ *   `./stems.content.example` while the private file is absent.
+ * - Jest (test runs): `jest.resolver.js` applies the same rule.
+ * - TypeScript: `stems.content.d.ts` types the import where the private
+ *   file is absent; an owner tree's real `.ts` shadows the declaration.
+ *
+ * Because the import is static, a tree where neither module resolves fails
+ * the build loudly instead of crashing at launch (issue 23: the old
+ * runtime require's fallback guard never matched what Metro's bundling
+ * actually raises — the dead guard turned every fresh-clone APK into a
+ * launch crash). The loaded shape is validated by the programmeSeed suite,
+ * which also proves byte-fidelity against the snapshot on owner trees.
+ */
+import { CONTENT } from './stems.content';
 
 export type StemCategory = 'awareness' | 'self_acceptance' | 'responsibility' | 'assertiveness' | 'purpose' | 'integrity';
 
@@ -57,31 +78,6 @@ export interface RetiredSeedStem {
   category: StemCategory | null;
   timeOfDay: TimeOfDay | null;
 }
-
-/**
- * Load the seed content module (issue 10): the owner-local licensed corpus
- * when present, otherwise the committed example. Node/jest: a missing
- * module throws `MODULE_NOT_FOUND` and we fall back; a private module that
- * exists but is broken rethrows — it must fail loudly, never silently
- * degrade to example content. Metro: resolves the require at bundle time,
- * so a tree without the private file needs the one-line copy from
- * `stems.content.example.ts` (README, "Seed content") before the app can
- * bundle. The loaded shape is validated by the programmeSeed suite, which
- * also proves byte-fidelity against the snapshot on owner trees.
- */
-function loadSeedContent(): SeedContent {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require('./stems.content').CONTENT as SeedContent;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code === 'MODULE_NOT_FOUND') {
-      return EXAMPLE_CONTENT;
-    }
-    throw error;
-  }
-}
-
-const CONTENT: SeedContent = loadSeedContent();
 
 /**
  * The official Sentence Completion I programme, Weeks 1–30, in snapshot

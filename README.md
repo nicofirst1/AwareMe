@@ -44,7 +44,7 @@ The app is built with Expo. `npm start` serves the day-to-day development loop; 
 
 The stems bundled with the app are the official Sentence Completion I programme, used with permission from Leigh Branden; the programme text is not included in this repository and is not licensed under its license. See [NOTICE](NOTICE).
 
-Because that text is licensed, it lives in an owner-local, gitignored module: `src/db/seed/stems.content.ts` (never committed). A fresh clone falls back to the committed `src/db/seed/stems.content.example.ts`, which carries original example content in the same shape, so the repo builds and tests without the licensed text. To work on a full example tree, copy the example over the private path:
+Because that text is licensed, it lives in an owner-local, gitignored module: `src/db/seed/stems.content.ts` (never committed). The import in `src/db/seed/stems.ts` is static, and the module resolvers decide per tree which file backs it (`content-overlay.js`, wired into `metro.config.js` and `jest.resolver.js`): on a fresh clone the committed `src/db/seed/stems.content.example.ts` — original example content in the same shape — is served, so the repo builds, tests and runs without the licensed text; when the private module exists it wins and is resolved natively. To work on a full example tree, copy the example over the private path:
 
 ```sh
 cp src/db/seed/stems.content.example.ts src/db/seed/stems.content.ts
