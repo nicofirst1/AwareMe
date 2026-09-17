@@ -6,8 +6,9 @@ import * as path from 'node:path';
 import { migrate } from '../migrate';
 import { MIGRATIONS, CURRENT_SCHEMA_VERSION } from '../migrations';
 import { MIGRATION_0004_OFFICIAL_PROGRAMME } from '../migrations/0004_official_programme';
+import { MIGRATION_0006_EVENING_META_TIME_OF_DAY } from '../migrations/0006_evening_meta_time_of_day';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
-import { PROGRAMME_SEED_STEMS, programmeStemCategory, WEEKLY_META_STEM } from '../seed/stems';
+import { EVENING_META_STEMS, PROGRAMME_SEED_STEMS, programmeStemCategory, WEEKLY_META_STEM } from '../seed/stems';
 
 const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures');
 
@@ -205,7 +206,9 @@ describe('migrate', () => {
     migrate(db, '9.9.9');
 
     const meta = db.getFirstSync<{ schema_version: number }>('SELECT schema_version FROM schema_meta WHERE id = 1', []);
-    expect(meta?.schema_version).toBe(5);
+    // Now CURRENT (6 with migration 0006): the v4 fixture flows through 0005
+    // and 0006 on its way up.
+    expect(meta?.schema_version).toBe(CURRENT_SCHEMA_VERSION);
 
     // Every programme row's category must equal what fresh-install seeding
     // would have written: the frozen migration and the live seed mapping
@@ -308,5 +311,69 @@ describe('migrate', () => {
     it('the shipped SQL and the live seed cannot disagree on the weekly reflection stem', () => {
       expect(MIGRATION_0004_TAGGED_TEXT).toBe(WEEKLY_META_STEM);
     });
+  });
+
+  it('upgrading the v5 fixture tags the two evening meta-stems (migration 0006), leaving the weekly meta-stem and look-alike user stems untouched', () => {
+    const scratch = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'six-endings-migrate-')), 'copy.db');
+    fs.copyFileSync(fixturePath(5), scratch);
+    const raw = new DatabaseSync(scratch);
+    const db = nodeSqliteExecutor(raw);
+
+    // Mimic a real v5 install's meta rows: the two evening reflection stems
+    // (origin='meta', inactive, time_of_day NULL — the pre-issue-06 seed
+    // shape) and the weekly meta-stem (tagged is_weekly_meta=1 by migration
+    // 0004). The evening texts come from the live seed constant: if the
+    // shipped SQL's frozen copies drifted, this test fails.
+    for (const [index, text] of EVENING_META_STEMS.entries()) {
+      db.runSync(
+        `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
+         VALUES (?, ?, 'meta', NULL, 'en', 1.0, 0, '2026-01-01T00:00:00.000Z', 'UTC', 0, NULL, NULL, 0)`,
+        [`evening-meta-${index}`, text],
+      );
+    }
+    expect(MIGRATION_0004_TAGGED_TEXT).toBeDefined();
+    db.runSync(
+      `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
+       VALUES ('weekly-meta', ?, 'meta', NULL, 'en', 1.0, 1, '2026-01-01T00:00:00.000Z', 'UTC', 0, NULL, NULL, 1)`,
+      [MIGRATION_0004_TAGGED_TEXT!],
+    );
+    // A user-authored stem verbatim-identical to an evening meta-stem: the
+    // duplicate check excludes meta rows, so one can exist — the backfill
+    // must never tag it (scope is the seed-authored meta rows).
+    db.runSync(
+      `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
+       VALUES ('user-lookalike', ?, 'user', NULL, 'en', 1.0, 1, '2026-01-01T00:00:00.000Z', 'UTC', 0, NULL, NULL, 0)`,
+      [EVENING_META_STEMS[0]],
+    );
+
+    migrate(db, '9.9.9');
+
+    const meta = db.getFirstSync<{ schema_version: number }>('SELECT schema_version FROM schema_meta WHERE id = 1', []);
+    expect(meta?.schema_version).toBe(CURRENT_SCHEMA_VERSION);
+
+    const tagged = db.getAllSync<{ id: string; text: string; time_of_day: string | null; active: number }>(
+      "SELECT id, text, time_of_day, active FROM stems WHERE time_of_day = 'evening' ORDER BY id",
+      [],
+    );
+    expect(tagged.map((r) => r.id).sort()).toEqual(['evening-meta-0', 'evening-meta-1']);
+    for (const row of tagged) {
+      expect(EVENING_META_STEMS).toContain(row.text);
+      expect(row.active).toBe(0); // visibility only — still never drawn by a sitting
+    }
+
+    // The weekly meta-stem keeps NULL; the user look-alike keeps NULL.
+    const weekly = db.getFirstSync<{ time_of_day: string | null }>('SELECT time_of_day FROM stems WHERE id = ?', ['weekly-meta']);
+    expect(weekly?.time_of_day).toBeNull();
+    const lookalike = db.getFirstSync<{ time_of_day: string | null }>('SELECT time_of_day FROM stems WHERE id = ?', ['user-lookalike']);
+    expect(lookalike?.time_of_day).toBeNull();
+
+    // Idempotent at the SQL level: re-running the shipped statement is a no-op.
+    db.execSync(MIGRATION_0006_EVENING_META_TIME_OF_DAY);
+    expect(
+      (db.getFirstSync<{ c: number }>("SELECT COUNT(*) AS c FROM stems WHERE time_of_day = 'evening'", []) as { c: number }).c,
+    ).toBe(2);
+
+    raw.close();
+    fs.rmSync(path.dirname(scratch), { recursive: true, force: true });
   });
 });
