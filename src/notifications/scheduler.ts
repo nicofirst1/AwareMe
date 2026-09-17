@@ -22,9 +22,9 @@
 import { getRepository, type TimeOfDay } from '@/db';
 import { getNotifications } from './notificationsModule';
 
-export const MORNING_NOTIFICATION_ID = 'six-endings/morning';
-export const EVENING_NOTIFICATION_ID = 'six-endings/evening';
-export const WEEKLY_NOTIFICATION_ID = 'six-endings/weekly';
+export const MORNING_NOTIFICATION_ID = 'awareme/morning';
+export const EVENING_NOTIFICATION_ID = 'awareme/evening';
+export const WEEKLY_NOTIFICATION_ID = 'awareme/weekly';
 
 /**
  * Neutral copy only (§6.4, unchanged by the amendment): notifications sit on
@@ -61,7 +61,7 @@ function weekdayNumber(day: string): number {
 }
 
 /** Marker carried in the notification's silent `data` payload so a tap can be told apart from other launches, and to say which period fired without naming any stem. */
-export const NOTIFICATION_DATA_KIND = 'six-endings/writing-prompt';
+export const NOTIFICATION_DATA_KIND = 'awareme/writing-prompt';
 
 /**
  * Requests notification permission with the honest explanation the

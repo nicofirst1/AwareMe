@@ -34,6 +34,7 @@ This file is an index, not the record: each entry points at the authoritative do
 - **SECURITY.md dropped (2026-09-16):** thin threat model removed; GitHub "Private vulnerability reporting" replaces it.
 - **`store/` is untracked (2026-09-16):** Play submission assets stay owner-local; screenshots carry the programme text visually.
 - **Never nest `ThemedView` inside a `Card`/tinted surface** — it paints `theme.background` over the card; use plain `View`.
+- **Identity ids unfrozen and renamed (2026-09-17, owner decision in issue 02, v13-feedback round):** deep-link scheme `awareme`, Android package / iOS bundle `com.nicolobrandizzi.awareme`, DB filename `awareme.db` (a first-open file move preserves existing data), notification ids `awareme/...`; old `sixendings://` deep links break (accepted, nothing published uses them); the earned-badge display name "Six Endings" stays CONCEPT copy. Resolves the parked "Identity FLAGs (issue 14)" arbitration. Full record: `.scratch/v13-feedback/issues/02-splash-and-identity-rename.md` (untracked).
 
 ## Environment quirks
 

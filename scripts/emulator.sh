@@ -2,7 +2,7 @@
 # Boot the Android emulator (or iOS simulator) for local testing.
 #
 # Usage:
-#   ./scripts/emulator.sh                       # boot Android AVD (sixendings-audit)
+#   ./scripts/emulator.sh                       # boot Android AVD (awareme-audit)
 #   ./scripts/emulator.sh --fresh               # boot + delete the app's data (fresh start)
 #   ./scripts/emulator.sh --app                 # boot, then adb install the release APK
 #   ./scripts/emulator.sh --force               # recreate the AVD, then boot
@@ -24,8 +24,8 @@ if [ -z "${ANDROID_AVD_HOME:-}" ] && [ -d "$HOME/.config/.android/avd" ]; then
   export ANDROID_AVD_HOME="$HOME/.config/.android/avd"
 fi
 
-APP_PACKAGE="com.nicolobrandizzi.sixendings"
-AVD_NAME="sixendings-audit"
+APP_PACKAGE="com.nicolobrandizzi.awareme"
+AVD_NAME="awareme-audit"
 FORCE=0
 FRESH=0
 INSTALL_APK=0

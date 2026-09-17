@@ -5,13 +5,13 @@
     "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "sixendings",
+    "scheme": "awareme",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "com.nicolobrandizzi.sixendings"
+      "bundleIdentifier": "com.nicolobrandizzi.awareme"
     },
     "android": {
-      "package": "com.nicolobrandizzi.sixendings",
+      "package": "com.nicolobrandizzi.awareme",
       "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#F6EAE4",
