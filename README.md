@@ -1,15 +1,15 @@
 # AwareMe
 
-AwareMe is a private, on-device journaling app for the sentence completion exercise developed by the psychologist Nathaniel Branden. You receive an incomplete sentence, a stem, and write several different endings to it, quickly, without stopping to evaluate them. A timer keeps the pen moving, editing is deliberately awkward, and nothing you write is scored, praised, or discarded. Each stem gets six endings by default (configurable).
+AwareMe is a private, on-device journaling app for the sentence completion exercise developed by the psychologist Nathaniel Branden to increase self-awareness. You receive an incomplete sentence, a stem, and write several different endings to it, quickly, without stopping to evaluate them. A timer keeps the pen moving, editing is deliberately awkward, and nothing you write is scored, praised, or discarded. 
 
 ## What it does
 
-- **Sittings.** A morning sitting walks you through the current programme week’s stems, one at a time. An optional evening sitting shows today’s morning endings read-only and closes with a reflection. A weekly reflection gathers the week’s writing for re-reading, on the day you choose.
-- **Uncensored writing mode.** Backspace is limited to the current word, earlier endings cannot be revisited, and cut, copy, and select are unavailable. When the timer ends, whatever is on screen is saved, including a half-typed ending. Nothing is ever discarded.
+- **Sittings.** A morning sitting walks you through the current stems, one at a time. An optional evening sitting shows today’s morning endings and closes with a reflection. A weekly reflection gathers the week’s writing for re-reading, on the day you choose.
+- **Uncensored writing mode.** Backspace is limited to the current word, earlier endings cannot be revisited, and cut, copy, and select are unavailable. When the timer ends, whatever is on screen is saved, including a half-typed ending. 
 - **History and review.** Every session is kept, browsable, and full-text searchable. The exercise accrues its value over weeks, through re-reading.
-- **Export.** Your data leaves the app only when you send it: lossless export to SQLite, JSON, and CSV, reachable in two taps from the main screen.
-- **Reminders.** Content-free local notifications at times you set. Missing one has no consequence.
-- **Optional lock.** An optional app lock uses your device’s biometrics or passcode; the app never sees or stores them.
+- **Export.** You have full control over your date with lossless export to SQLite, JSON, and CSV.
+- **Reminders.** Content-free local notifications at times you set. 
+- **Optional lock.** An optional app lock uses your device’s biometrics or passcode.
 
 ## Privacy
 
@@ -50,7 +50,6 @@ Because that text is licensed, it lives in an owner-local, gitignored module: `s
 cp src/db/seed/stems.content.example.ts src/db/seed/stems.content.ts
 ```
 
-Until that file exists, jest and typecheck run against the example content (the snapshot-dependent tests skip with a labeled reason), but the Metro bundler needs the module present before the app can bundle. The byte-for-byte fidelity of the official programme is proven by `src/db/__tests__/programmeSeed.test.ts` whenever the owner-local content and the canonical snapshot (`.scratch/official-program/official-program-verbatim.txt`, also untracked) are on disk.
 
 ## License and attribution
 
