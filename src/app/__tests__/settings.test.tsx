@@ -139,38 +139,66 @@ describe('SettingsScreen', () => {
     expect(rescheduleNotifications).toHaveBeenCalledTimes(1);
   });
 
-  it('picks the weekly reflection day from the native date picker and reschedules on set', () => {
+  it('renders the weekly reflection day as a capitalized weekday list (2026-09-18 feedback: no calendar)', () => {
     render(<SettingsScreen />);
 
-    // The seven-chip list is gone (2026-09-17 owner feedback): no weekday
-    // other than the trigger's own value renders as a control.
-    expect(screen.queryByText('thursday')).toBeNull();
+    // All seven days render as pill buttons, named for screen readers via
+    // the group label; no native date picker exists for this field anymore.
+    for (const name of ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']) {
+      expect(screen.getByRole('button', { name: `Weekly reflection day: ${name}` })).toBeTruthy();
+    }
+    expect(screen.queryByLabelText('Weekly reflection day')).toBeNull();
+  });
 
-    // 2026-09-14 is a Monday: the stored day is the picked date's weekday.
-    fireEvent(screen.getByLabelText('Weekly reflection day'), 'onChange', { type: 'set' }, new Date(2026, 8, 14));
+  it('persists a picked weekday as the stored lowercase name and reschedules on pick', () => {
+    render(<SettingsScreen />);
+
+    fireEvent.press(screen.getByRole('button', { name: 'Weekly reflection day: Monday' }));
 
     expect(mockSetSetting).toHaveBeenCalledWith('weekly_meta_day', 'monday');
     expect(rescheduleNotifications).toHaveBeenCalledTimes(1);
   });
 
-  it('seeds the weekly day picker with a date on the stored weekday', () => {
+  it('seeds the weekday list from the stored weekday name (selected pill)', () => {
     mockSettings = { ...DEFAULT_SETTINGS, weekly_meta_day: 'tuesday' };
     render(<SettingsScreen />);
 
-    const picker = screen.getByLabelText('Weekly reflection day');
-    expect(picker.props.mode).toBe('date');
-    expect(picker.props.value.getDay()).toBe(2);
+    const tuesday = screen.getByRole('button', { name: 'Weekly reflection day: Tuesday' });
+    expect(tuesday.props.accessibilityState.selected).toBe(true);
+    expect(
+      screen.getByRole('button', { name: 'Weekly reflection day: Monday' }).props.accessibilityState.selected,
+    ).toBe(false);
   });
 
-  it('round-trips a persisted weekly day: the picker is reseeded from it on the next mount', () => {
+  it('round-trips a persisted weekly day: the list is reseeded from it on the next mount', () => {
     const first = render(<SettingsScreen />);
-    fireEvent(screen.getByLabelText('Weekly reflection day'), 'onChange', { type: 'set' }, new Date(2026, 8, 14));
+    fireEvent.press(screen.getByRole('button', { name: 'Weekly reflection day: Monday' }));
     expect(mockSetSetting).toHaveBeenCalledWith('weekly_meta_day', 'monday');
     first.unmount();
 
     mockSettings = { ...DEFAULT_SETTINGS, weekly_meta_day: 'monday' };
     render(<SettingsScreen />);
-    expect(screen.getByLabelText('Weekly reflection day').props.value.getDay()).toBe(1);
+    expect(
+      screen.getByRole('button', { name: 'Weekly reflection day: Monday' }).props.accessibilityState.selected,
+    ).toBe(true);
+  });
+
+  it('leaves the list unseeded for an out-of-range stored name, and the next pick stores a valid one', () => {
+    // The 2026-09-17 fallback (out-of-range name seeded the picker with
+    // today) translated to the list idiom: no pill renders selected, and
+    // the user's next pick writes a valid lowercase name.
+    mockSettings = { ...DEFAULT_SETTINGS, weekly_meta_day: 'mardi' };
+    render(<SettingsScreen />);
+
+    for (const name of ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']) {
+      expect(
+        screen.getByRole('button', { name: `Weekly reflection day: ${name}` }).props.accessibilityState.selected,
+      ).toBe(false);
+    }
+
+    fireEvent.press(screen.getByRole('button', { name: 'Weekly reflection day: Wednesday' }));
+    expect(mockSetSetting).toHaveBeenCalledWith('weekly_meta_day', 'wednesday');
+    expect(rescheduleNotifications).toHaveBeenCalledTimes(1);
   });
 
   it('renders the three notification times as native pickers seeded from the stored HH:MM values', () => {
@@ -213,14 +241,12 @@ describe('SettingsScreen', () => {
     expect(rescheduleNotifications).toHaveBeenCalledTimes(1);
   });
 
-  it('ignores a picker dismissal: no setSetting, no reschedule (time and day)', () => {
+  it('ignores a picker dismissal: no setSetting, no reschedule (time fields only; the day list has nothing to dismiss)', () => {
     render(<SettingsScreen />);
 
     fireEvent(screen.getByLabelText('Weekly notification time'), 'onChange', { type: 'dismissed' }, undefined);
-    fireEvent(screen.getByLabelText('Weekly reflection day'), 'onChange', { type: 'dismissed' }, undefined);
 
     expect(mockSetSetting).not.toHaveBeenCalledWith('weekly_meta_time', expect.anything());
-    expect(mockSetSetting).not.toHaveBeenCalledWith('weekly_meta_day', expect.anything());
     expect(rescheduleNotifications).not.toHaveBeenCalled();
   });
 

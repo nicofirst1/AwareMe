@@ -13,7 +13,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Palette, MaxContentWidth, MinTouchTarget, Radius, Spacing } from '@/constants/theme';
 import { getRepository, Settings } from '@/db';
-import { cancelAllPendingNotifications, rescheduleNotifications, WEEKDAY_NAMES, type WeekdayName } from '@/notifications/scheduler';
+import { cancelAllPendingNotifications, rescheduleNotifications, type WeekdayName } from '@/notifications/scheduler';
 import { isValidHHMM } from '@/session/settingsValidation';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
@@ -25,8 +25,31 @@ const TERMINATORS = ['...', '—'] as const;
 type TimeKey = 'morning_notification_time' | 'evening_notification_time' | 'weekly_meta_time';
 
 /**
+ * The weekday list's presentation order (2026-09-18 owner feedback, issue 14):
+ * Monday-first, the week's working rhythm, rather than the scheduler's
+ * `WEEKDAY_NAMES` whose index mirrors `Date.getDay()`. Presentation only —
+ * the stored `weekly_meta_day` value is the same lowercase weekday name the
+ * scheduler consumes (spec.md:316), so no storage format changes here.
+ */
+const WEEKDAY_CHOICE_ORDER: readonly WeekdayName[] = [
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
+];
+
+/** "monday" → "Monday": the capitalized display the reporter asked for. */
+function capitalizeWeekday(day: WeekdayName): string {
+  return day.charAt(0).toUpperCase() + day.slice(1);
+}
+
+/**
  * The "pick one of a short row of options" control (on/off pairs, the
- * terminator, the theme) in the screen's unified control anatomy: a pill
+ * terminator, the theme, and now the weekly reflection day) in the
+ * screen's unified control anatomy: a pill
  * row with no borders and no fill equal to the surface it sits on, so no
  * option can render as the white square the 2026-09-17 vision audit
  * caught (v13 issue 08, defect C). Unselected options stay quiet text
@@ -34,6 +57,12 @@ type TimeKey = 'morning_notification_time' | 'evening_notification_time' | 'week
  * theme.ts); the selected option carries the palette's anchor hue
  * consumed through the c04 token contract: the `Palette.indigo` bg/text
  * pair, the measured AA pairing for chip/tint fills.
+ *
+ * `accessibilityLabel` (optional) names the group's options for screen
+ * readers when the visible label alone is too thin — each pill's
+ * accessibility name becomes "<group label>: <option>" (e.g. "Weekly
+ * reflection day: Monday"), so a screen-reader user hears which setting
+ * a pill belongs to without relying on visual grouping.
  */
 function OptionToggle<T extends string>({
   label,
@@ -41,12 +70,14 @@ function OptionToggle<T extends string>({
   value,
   onChange,
   display,
+  accessibilityLabel,
 }: {
   label?: string;
   options: readonly T[];
   value: T;
   onChange: (next: T) => void;
   display?: (opt: T) => string;
+  accessibilityLabel?: string;
 }) {
   const scheme = useColorScheme();
   const selectedPair = scheme === 'dark' ? Palette.indigo.dark : Palette.indigo.light;
@@ -61,6 +92,7 @@ function OptionToggle<T extends string>({
       <ThemedView style={styles.chipRow}>
         {options.map((opt) => {
           const selected = value === opt;
+          const displayText = display ? display(opt) : opt;
           return (
             <Pressable
               key={opt}
@@ -68,13 +100,14 @@ function OptionToggle<T extends string>({
               style={[styles.optionPill, selected && { backgroundColor: selectedPair.bg }]}
               accessibilityRole="button"
               accessibilityState={{ selected }}
+              accessibilityLabel={accessibilityLabel ? `${accessibilityLabel}: ${displayText}` : undefined}
             >
               <ThemedText
                 type="small"
                 themeColor="textSecondary"
                 style={selected ? { color: selectedPair.text } : undefined}
               >
-                {display ? display(opt) : opt}
+                {displayText}
               </ThemedText>
             </Pressable>
           );
@@ -185,87 +218,6 @@ function TimeField({
 }
 
 /**
- * A stored weekday name → the next date falling on that weekday (local
- * noon, clear of DST edges): the seed the native date picker opens on.
- * An out-of-range stored name seeds today; confirming then stores the
- * weekday the user actually picked.
- */
-function weekdayToDate(day: WeekdayName): Date {
-  const date = new Date();
-  const target = WEEKDAY_NAMES.indexOf(day);
-  if (target >= 0) date.setDate(date.getDate() + ((target - date.getDay() + 7) % 7));
-  date.setHours(12, 0, 0, 0);
-  return date;
-}
-
-/**
- * The weekly reflection day as a native picker (2026-09-17 owner
- * feedback: "weekly reflections needs a day picker instead of a list"),
- * mirroring `TimeField`: the stored value stays the lowercase weekday
- * name the scheduler consumes, only the input surface is native. The
- * date picker has no weekday-only mode, so it seeds with the next date
- * on the stored day and `onConfirm` derives the day back from the
- * picked date's weekday — `WEEKDAY_NAMES` is the single mapping in both
- * directions. Same contract as the time fields: `onConfirm` fires only
- * on an explicit set; a dismissal never reaches storage.
- */
-function DayField({
-  label,
-  accessibilityLabel,
-  value,
-  onConfirm,
-}: {
-  label: string;
-  accessibilityLabel: string;
-  value: WeekdayName;
-  onConfirm: (next: WeekdayName) => void;
-}) {
-  const theme = useTheme();
-
-  const confirmDate = (date?: Date) => {
-    const day = date ? WEEKDAY_NAMES[date.getDay()] : undefined;
-    if (day) onConfirm(day);
-  };
-
-  if (Platform.OS === 'android') {
-    return (
-      <ThemedView style={styles.windowRow}>
-        <ThemedText type="eyebrow">{label}</ThemedText>
-        <Pressable
-          onPress={() => {
-            DateTimePickerAndroid.open({
-              mode: 'date',
-              value: weekdayToDate(value),
-              onChange: (_event, date) => confirmDate(date),
-            });
-          }}
-          style={[styles.pillTrigger, { backgroundColor: theme.backgroundSelected }]}
-          accessibilityRole="button"
-          accessibilityLabel={accessibilityLabel}
-        >
-          <ThemedText type="default">{value}</ThemedText>
-        </Pressable>
-      </ThemedView>
-    );
-  }
-
-  return (
-    <ThemedView style={styles.windowRow}>
-      <ThemedText type="eyebrow">{label}</ThemedText>
-      <DateTimePicker
-        mode="date"
-        display="compact"
-        value={weekdayToDate(value)}
-        onChange={(event, date) => {
-          if (event.type === 'set') confirmDate(date);
-        }}
-        accessibilityLabel={accessibilityLabel}
-      />
-    </ThemedView>
-  );
-}
-
-/**
  * Settings (§7): every tunable, its stated range, persisted one key at a
  * time via `Repository.setSetting` (JSON-encoded in the `settings` table,
  * `updated_at` stamped per write — the existing settings-table pattern, no
@@ -275,13 +227,18 @@ function DayField({
  * recreates the app's triggers from the freshly saved settings, scheduling
  * the evening one only when `evening_practice_enabled` is true.
  *
- * Notification times and the weekly reflection day are native pickers
- * (2026-09-16 and 2026-09-17 owner feedback) via
- * `@react-native-community/datetimepicker`; the time picker can only
- * emit a Date, and `isValidHHMM` remains the validation boundary at the
- * storage edge (`saveTime`) before any key is written. Stored values
- * stay the exact "HH:MM" 24h strings and the lowercase weekday name;
- * the reschedule-on-change contract is untouched.
+ * Notification times stay native pickers (2026-09-16 and 2026-09-17 owner
+ * feedback) via `@react-native-community/datetimepicker`; the time picker
+ * can only emit a Date, and `isValidHHMM` remains the validation boundary
+ * at the storage edge (`saveTime`) before any key is written. The weekly
+ * reflection day is back to an in-app weekday list (2026-09-18 owner
+ * feedback, issue 14: the native picker opens a calendar, and the reporter
+ * wants weekday names to pick from, capitalized) — one more row of the
+ * screen's `OptionToggle` pills. Its stored value stays the lowercase
+ * weekday name the scheduler consumes (spec.md:316); the list only changes
+ * which name is picked. An out-of-range stored name renders no selected
+ * pill (the scheduler's own sunday fallback is untouched); the reschedule
+ * on change contract is untouched.
  *
  * Sub-groups are inset cards (2026-09-16 owner feedback: the screen lacked
  * visual separation between groups) using the shared `Card`, with the
@@ -485,15 +442,14 @@ export default function SettingsScreen() {
                 <ThemedText type="small" themeColor="textSecondary">
                   Weekly reflection
                 </ThemedText>
-                <Hint>
-                  A weekly reminder to sit with the week&apos;s writing, on one day at an exact time. Pick any
-                  date: the day it falls on is saved.
-                </Hint>
-                <DayField
-                  label="Day"
+                <Hint>A weekly reminder to sit with the week&apos;s writing, on one day at an exact time.</Hint>
+                <ThemedText type="eyebrow">Day</ThemedText>
+                <OptionToggle
                   accessibilityLabel="Weekly reflection day"
+                  options={WEEKDAY_CHOICE_ORDER}
                   value={settings.weekly_meta_day as WeekdayName}
-                  onConfirm={setWeeklyDay}
+                  display={capitalizeWeekday}
+                  onChange={setWeeklyDay}
                 />
                 <TimeField
                   label="Time"
@@ -652,10 +608,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
-  // The Android trigger shows the stored "HH:MM" or weekday name verbatim
-  // and opens the system dialog; iOS renders the compact native picker
-  // instead. The pill sits on a backgroundElement card, so its fill is
-  // the theme's deeper neutral step (backgroundSelected): element-on-
+  // The Android trigger shows the stored "HH:MM" verbatim and opens the
+  // system dialog; iOS renders the compact native picker instead. The pill
+  // sits on a backgroundElement card, so its fill is the theme's deeper
+  // neutral step (backgroundSelected): element-on-
   // element vanished after the c04 retheme, and the stadium shape matches
   // every other control on this screen.
   pillTrigger: {

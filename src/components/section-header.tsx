@@ -8,7 +8,17 @@ import { useTheme } from '@/hooks/use-theme';
  * Section label (2026-09-11 design-system foundation, ui-audit-2026-09-11.md
  * cycle 1) — for Settings' section blocks and any grouped list, which today
  * have no visible header beyond a `small`/`textSecondary` line (audit
- * cross-cutting note 3). `eyebrow`-type label, optional trailing hint.
+ * cross-cutting note 3). Optional trailing hint.
+ *
+ * Label type is `subtitle` (2026-09-18 owner feedback, issue 13: "Settings
+ * subtitles should have a bigger font"): the scale's 20/30 semibold step,
+ * lifted from the 12/16 `eyebrow` the label launched with. `subtitle` is
+ * an existing scale entry, so the bump adds no ad-hoc size; it re-colors
+ * the label to primary `text` (eyebrow's secondary default is part of the
+ * small-caps style, not kept), which reads as a heading above the card it
+ * names. Both consumers — Settings' five groups and Progress' two — get
+ * the change through the component, keeping one section-header anatomy
+ * app-wide.
  *
  * The rule below the label picks up a low-alpha `accent` tint (color-audit-
  * 2026-09-11.md cycle 4, finding E) instead of the plain `border` hairline —
@@ -24,7 +34,7 @@ export function SectionHeader({ label, hint }: { label: string; hint?: string })
   return (
     <View style={[styles.wrap, { borderBottomColor: ruleColor }]}>
       <View style={styles.row}>
-        <ThemedText type="eyebrow">{label}</ThemedText>
+        <ThemedText type="subtitle">{label}</ThemedText>
         {hint ? (
           <ThemedText type="small" themeColor="textSecondary">
             {hint}
