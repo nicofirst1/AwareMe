@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 import HomeScreen from '@/app/index';
+import { Colors } from '@/constants/theme';
 import { DEFAULT_SETTINGS, type Settings } from '@/db';
 
 // `useFocusEffect` (2026-09-11 visual-test fix: home status now refreshes on
@@ -166,6 +168,40 @@ describe('HomeScreen', () => {
     // Tagline (v12 issue 02): states the purpose, in the self-esteem
     // direction; alternatives live in the issue Comments.
     expect(screen.getByText('A daily practice for self-esteem, one sentence at a time.')).toBeTruthy();
+  });
+
+  it('renders the app icon above the title', () => {
+    render(<HomeScreen />);
+    // Depth-first order over the host JSON tree = visual order. Plain data
+    // only: identity-comparing RNTL instances (instance.parent toBe) fails
+    // and jest's failure printout walks the whole renderer tree (heap OOM).
+    const json = screen.toJSON() as { props?: { testID?: string }; children?: unknown[] };
+    const marks: { testID?: string; text?: string }[] = [];
+    const walk = (node: unknown): void => {
+      if (typeof node === 'string') {
+        marks.push({ text: node });
+        return;
+      }
+      const n = node as { props?: { testID?: string }; children?: unknown[] };
+      marks.push({ testID: n.props?.testID });
+      (n.children ?? []).forEach(walk);
+    };
+    walk(json);
+    const iconIndex = marks.findIndex((m) => m.testID === 'home-app-icon');
+    const titleIndex = marks.findIndex((m) => m.text === 'AwareMe');
+    expect(iconIndex).toBeGreaterThanOrEqual(0);
+    expect(titleIndex).toBeGreaterThan(iconIndex);
+  });
+
+  it('gives all eight tiles one shared background', () => {
+    render(<HomeScreen />);
+    const labels = ['Stems', 'History', 'Review', 'Progress', 'Settings', 'Export', 'Import', 'About'];
+    const fills = labels.map((label) =>
+      StyleSheet.flatten(screen.getByRole('link', { name: label }).props.style).backgroundColor,
+    );
+    // Asserted symbolically (house rule since the palette round): every tile
+    // reads the same theme token — no per-tile special case (v13 issue 05).
+    expect(new Set(fills)).toEqual(new Set([Colors.light.backgroundElement]));
   });
 
   it('has a secondary destination group', () => {
