@@ -66,4 +66,13 @@ describe('AboutScreen', () => {
     expect(Linking.openURL).toHaveBeenCalledTimes(1);
     expect(Linking.openURL).toHaveBeenCalledWith('https://nathanielbranden.com/sentence-completion-i/');
   });
+
+  it('creator link opens the site with the app tag', () => {
+    render(<AboutScreen />);
+
+    // Issue 09: the app’s outbound link carries `utm_source=awareme`.
+    const row = screen.getByRole('link', { name: 'Created by Nicolo\' Brandizzi' });
+    fireEvent.press(row);
+    expect(Linking.openURL).toHaveBeenCalledWith('https://nicolobrandizzi.com/?utm_source=awareme');
+  });
 });

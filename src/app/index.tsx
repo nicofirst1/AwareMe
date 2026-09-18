@@ -8,6 +8,7 @@ import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { CREATOR_SITE_URL, withAppTag } from '@/constants/links';
 import {
   CategoryColors,
   CelebrationColors,
@@ -381,7 +382,7 @@ export default function HomeScreen() {
             type="small"
             themeColor="textSecondary"
             style={styles.footer}
-            onPress={() => Linking.openURL('https://nicolobrandizzi.com/')}
+            onPress={() => Linking.openURL(withAppTag(CREATOR_SITE_URL))}
             accessibilityRole="link"
           >
             Created by Nicolo’ Brandizzi
