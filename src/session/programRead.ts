@@ -20,6 +20,7 @@ import {
   isWeeklyMetaDay,
   localDateKey,
   mondayOfWeek,
+  PROGRAMME_WEEK_CAP,
   utcBoundsOfLocalDay,
 } from './program';
 
@@ -30,6 +31,14 @@ export interface ProgrammeWeek {
   override: number | null;
   /** What the app actually sits with: the override when usable, the derived week otherwise. */
   currentWeek: number;
+  /**
+   * Issue 09 hybrid unlock frontier: the highest week whose stems may be
+   * active — max(override, derivedWeek, highestStoredActiveWeek). The one
+   * source of truth for "is week N locked": the week screen greys weeks
+   * above it, and `applyWeekSetActivation` unlocks to exactly it. Monotone
+   * by construction (the stored floor only rises), so nothing auto-re-locks.
+   */
+  unlockFrontier: number;
 }
 
 /** Reads the §6.2 programme week: anchor + reflection weeks → derived, then the override on top. */
@@ -47,23 +56,37 @@ export function readProgrammeWeek(repo: Repository, now: Date = new Date()): Pro
   const derivedWeek = deriveProgramWeek(anchorLocalDate, anchoredCount, now);
 
   const override = repo.getSettings().program_week_override;
-  return { derivedWeek, override, currentWeek: effectiveWeek(derivedWeek, override) };
+  // Issue 09: the unlock frontier is the same quantity the write path
+  // activates to — max of the override, the derived week, and the highest
+  // week with active stems (existing installs' floor; never regresses).
+  const unlockFrontier = Math.max(override ?? 0, derivedWeek, repo.getHighestUnlockedWeek());
+  return { derivedWeek, override, currentWeek: effectiveWeek(derivedWeek, override), unlockFrontier };
 }
 
 /**
- * Week-set activation (issue 04): the effective week's programme stems are
- * the active ones — that week's stems active, every other programme week's
- * stems resting, user stems and the weekly meta-stem untouched (they have no
- * `week_number`). Called at every point the effective week can change:
+ * Week-set activation (issue 09): the effective week's programme stems are
+ * the active ones — weeks 1..effectiveUnlock active (`active = 1`), weeks
+ * effectiveUnlock+1..30 resting (`active = 0`). The weekly meta-stem, user
+ * stems, and non-programme stems are untouched (they have no `week_number`).
+ *
+ * effectiveUnlock = max(override, derivedWeek, highestActiveFromDb). This
+ * ensures existing installs don't regress: if a user previously had week N
+ * active (old single-week model), they keep unlock to N. Fresh logic then
+ * applies: setting override unlocks 1..override; completing reflection unlocks
+ * 1..newDerivedWeek. Called at every point the effective week can change:
  * setting/clearing `program_week_override` (the programme page) and
  * completing a weekly reflection (write.tsx — both the override-clear back
- * to the derived week and a derived advance; coordinator-approved hub FLAG
- * 2026-09-16). §4.1: `active` is the state column, so this is allowed state
- * mutation — no history row is ever rewritten. Idempotent by construction.
+ * to the derived week and a derived advance).
  */
 export function applyWeekSetActivation(repo: Repository, now: Date = new Date()): void {
-  const { currentWeek } = readProgrammeWeek(repo, now);
-  repo.setProgrammeWeekActive(currentWeek);
+  const { unlockFrontier } = readProgrammeWeek(repo, now);
+
+  // House guard, same shape as setProgrammeWeekActive's no-op: derivedWeek
+  // and the stored floor are always in range, so an out-of-range frontier
+  // can only come from a corrupted raw override — refuse the write rather
+  // than clamp it to the cap.
+  if (!Number.isInteger(unlockFrontier) || unlockFrontier < 1 || unlockFrontier > PROGRAMME_WEEK_CAP) return;
+  repo.setProgrammeWeekActive(unlockFrontier);
 }
 
 /** The morning sitting's queue (§6.2): every active programme stem of the effective week, seed order. */
@@ -119,6 +142,8 @@ export function readHomeProgrammeStatus(repo: Repository, now: Date = new Date()
   const derivedWithoutThisWeek = deriveProgramWeek(anchorLocalDate, anchoredWithoutThisWeek, now);
   const override = settings.program_week_override;
   const currentWeek = effectiveWeek(derivedWeek, override);
+  // Same frontier the week screen reads (issue 09): one unlock rule, shared.
+  const unlockFrontier = Math.max(override ?? 0, derivedWeek, repo.getHighestUnlockedWeek());
 
   const { start, end } = utcBoundsOfLocalDay(now);
   const weekStems = repo.getProgrammeStemsForWeek(currentWeek);
@@ -138,6 +163,7 @@ export function readHomeProgrammeStatus(repo: Repository, now: Date = new Date()
       derivedWeek,
       override,
       currentWeek,
+      unlockFrontier,
     },
     weekStemCount: weekStems.length,
     morningDone,

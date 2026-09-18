@@ -297,7 +297,8 @@ describe('fresh-install seed lands the programme in the database (both modes)', 
       // exceptions included) straight from the seed — no post-seed backfill.
       // The lookup uses the row's stored text (terminator already stripped).
       expect(rows[i].category).toBe(programmeStemCategory(rows[i].week_number, rows[i].text));
-      expect(rows[i].active).toBe(1);
+      // Issue 09: only week 1 stems active, weeks 2..30 resting.
+      expect(rows[i].active).toBe(rows[i].week_number === 1 ? 1 : 0);
       expect(rows[i].time_of_day).toBe('morning');
       expect(rows[i].deleted_at).toBeNull();
     }

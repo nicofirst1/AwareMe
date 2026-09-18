@@ -2,11 +2,14 @@
  * Week-set activation (issue 04, v12-feedback round) against real SQLite —
  * the same node:sqlite pattern as `migrate.test.ts`/`programRepository.test.ts`.
  *
- * Covers the acceptance pair "set-week → that week active, others inactive,
- * manual stems untouched (both directions + clear)" plus the boundaries the
- * write must respect: §4.1 append-only (history rows and soft-deletes are
- * never touched), the weekly meta-stem and non-programme rows stay outside
- * the set, and the one-off visit read (`getProgrammeWeekBlock`) is
+ * Issue 09 (v14-feedback) rewrites the write's semantics: activation is a
+ * CUMULATIVE unlock threshold — `setProgrammeWeekActive(N)` activates every
+ * programme stem of weeks 1..N and rests every higher week, in one statement
+ * so the frontier never has a half-applied state. Fresh installs seed only
+ * the first corpus week active. The write's boundaries are unchanged from
+ * issue 04: §4.1 append-only (history rows and soft-deletes are never
+ * touched), the weekly meta-stem, evening meta-stems and user stems stay
+ * outside the set, and the one-off visit read (`getProgrammeWeekBlock`) is
  * activation-state-agnostic.
  */
 import { DatabaseSync } from 'node:sqlite';
@@ -54,40 +57,51 @@ function activeByWeek(raw: DatabaseSync): Map<number, number> {
   return map;
 }
 
-describe('setProgrammeWeekActive (issue 04 week-set activation)', () => {
-  it('fresh install seeds every programme week active; activation then isolates exactly one week', () => {
-    const { raw, repo } = makeDb();
+describe('setProgrammeWeekActive (issue 09: cumulative week unlock)', () => {
+  it('fresh install seeds only the first corpus week active, every later week resting (issue 09)', () => {
+    const { raw } = makeDb();
 
-    // Before any activation write, the seed's own state: the whole corpus active.
-    let byWeek = activeByWeek(raw);
-    expect(byWeek.get(weekA)).toBe(countOf(weekA)); // weeks are keyed positive when active
-    expect(byWeek.get(-weekA)).toBeUndefined();
-
-    repo.setProgrammeWeekActive(weekB);
-
-    byWeek = activeByWeek(raw);
-    expect(byWeek.get(weekB)).toBe(countOf(weekB));
-    // Every other week rests: all remaining weeks hold the remaining stems.
-    const restingWeeks = [...byWeek.keys()].filter((k) => k < 0);
-    expect(restingWeeks).toHaveLength(CORPUS_WEEKS.length - 1);
-    const restingStems = restingWeeks.reduce((sum, key) => sum + (byWeek.get(key) ?? 0), 0);
-    expect(restingStems).toBe(PROGRAMME_SEED_STEMS.length - countOf(weekB));
+    const byWeek = activeByWeek(raw);
+    // Issue 09: weeks 2..N rest at seed — every corpus week after the first
+    // holds only inactive (resting) rows, the first week only active ones.
+    for (const week of CORPUS_WEEKS) {
+      if (week === weekA) {
+        expect(byWeek.get(week)).toBe(countOf(weekA));
+        expect(byWeek.get(-weekA)).toBeUndefined();
+      } else {
+        expect(byWeek.get(-week)).toBe(countOf(week));
+        expect(byWeek.get(week)).toBeUndefined();
+      }
+    }
   });
 
-  it('activates the target week and rests all others, both directions (set one week, then another)', () => {
+  it('unlocking week N activates weeks 1..N and rests every higher week, both directions (cumulative unlock)', () => {
     const { raw, repo } = makeDb();
 
-    repo.setProgrammeWeekActive(weekC);
+    repo.setProgrammeWeekActive(weekB);
     let byWeek = activeByWeek(raw);
-    expect(byWeek.get(weekC)).toBe(countOf(weekC));
-    expect(byWeek.get(-weekC)).toBeUndefined();
-    expect([...byWeek.keys()].filter((k) => k > 0)).toEqual([weekC]);
+    for (const week of CORPUS_WEEKS) {
+      if (week <= weekB) {
+        expect(byWeek.get(week)).toBe(countOf(week)); // weeks 1..B unlocked
+        expect(byWeek.get(-week)).toBeUndefined();
+      } else {
+        expect(byWeek.get(-week)).toBe(countOf(week)); // higher weeks rest
+        expect(byWeek.get(week)).toBeUndefined();
+      }
+    }
 
-    repo.setProgrammeWeekActive(weekD);
+    repo.setProgrammeWeekActive(weekC);
     byWeek = activeByWeek(raw);
-    expect(byWeek.get(weekD)).toBe(countOf(weekD));
-    expect(byWeek.get(weekC)).toBeUndefined();
-    expect(byWeek.get(-weekC)).toBe(countOf(weekC)); // the previously active week rests too
+    for (const week of CORPUS_WEEKS) {
+      if (week <= weekC) {
+        expect(byWeek.get(week)).toBe(countOf(week)); // the newly admitted week is active too
+      } else {
+        expect(byWeek.get(-week)).toBe(countOf(week));
+      }
+    }
+    // Every previously unlocked week stays active — no re-lock on raise.
+    expect(byWeek.get(weekA)).toBe(countOf(weekA));
+    expect(byWeek.get(weekB)).toBe(countOf(weekB));
   });
 
   it('leaves user stems, the weekly meta-stem, the evening meta-stems and the retired originals untouched', () => {
@@ -143,7 +157,7 @@ describe('setProgrammeWeekActive (issue 04 week-set activation)', () => {
 describe('getProgrammeWeekBlock (one-off visit read, activation-state-agnostic)', () => {
   it('returns the whole non-deleted block in seed order even when the week is resting', () => {
     const { repo } = makeDb();
-    repo.setProgrammeWeekActive(weekA); // weekB now rests
+    repo.setProgrammeWeekActive(weekA); // higher weeks now rest
 
     const block = repo.getProgrammeWeekBlock(weekB);
     const seedWeekB = PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === weekB);
@@ -190,33 +204,35 @@ describe('week-set activation end to end over the §6.2/§7 setting', () => {
     ).map((r) => r.active);
   }
 
-  it('set-week activates the override week; clearing restores the derived week; the rotation queue follows', () => {
+  function restingAbove(raw: DatabaseSync, week: number): { c: number } {
+    return raw
+      .prepare('SELECT COUNT(*) as c FROM stems WHERE week_number IS NOT NULL AND week_number > ? AND active = 1')
+      .get(week) as { c: number };
+  }
+
+  it('set-week unlocks 1..override; clearing keeps the frontier (no auto-relock); the queue follows the effective week', () => {
     const { raw, repo } = makeDb();
 
     // The make-my-week flow (week.tsx): setting the override, then activation.
-    repo.setSetting('program_week_override', weekC);
+    repo.setSetting('program_week_override', weekB);
     applyWeekSetActivation(repo);
-    expect(activeFlags(raw, weekC)).toEqual(allActive(weekC));
-    expect(
-      raw
-        .prepare('SELECT COUNT(*) as c FROM stems WHERE week_number IS NOT NULL AND week_number != ? AND active = 1')
-        .get(weekC),
-    ).toEqual({ c: 0 });
+    expect(activeFlags(raw, weekA)).toEqual(allActive(weekA)); // cumulative: 1..B unlocked
+    expect(activeFlags(raw, weekB)).toEqual(allActive(weekB));
+    expect(restingAbove(raw, weekB)).toEqual({ c: 0 }); // higher weeks rest
     // The morning rotation reads the override week's active stems.
     expect(readMorningSittingQueue(repo).map((s) => s.text)).toEqual(
-      PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === weekC).map((s) => s.text),
+      PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === weekB).map((s) => s.text),
     );
 
-    // The clear path (card toggle or reflection completion): the derived week
-    // (weekA — no anchor on a fresh corpus) takes over.
+    // The clear path (card toggle or reflection completion): the override is
+    // gone so the queue reads the derived week again (weekA — no anchor on a
+    // fresh corpus), but issue 09's frontier is sticky: weeks 1..weekB stay
+    // unlocked, nothing auto-re-locks.
     repo.setSetting('program_week_override', null);
     applyWeekSetActivation(repo);
     expect(activeFlags(raw, weekA)).toEqual(allActive(weekA));
-    expect(
-      raw
-        .prepare('SELECT COUNT(*) as c FROM stems WHERE week_number IS NOT NULL AND week_number != ? AND active = 1')
-        .get(weekA),
-    ).toEqual({ c: 0 });
+    expect(activeFlags(raw, weekB)).toEqual(allActive(weekB));
+    expect(restingAbove(raw, weekB)).toEqual({ c: 0 });
     expect(readMorningSittingQueue(repo)).toHaveLength(countOf(weekA));
   });
 

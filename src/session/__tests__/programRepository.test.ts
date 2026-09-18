@@ -15,6 +15,7 @@ import { migrate } from '../../db/migrate';
 import { nodeSqliteExecutor } from '../../db/testSupport/nodeSqliteExecutor';
 import { Repository } from '../../db/repository';
 import { PROGRAMME_SEED_STEMS, WEEKLY_META_STEM } from '../../db/seed/stems';
+import { PROGRAMME_WEEK_CAP } from '../program';
 import { readProgrammeWeek } from '../programRead';
 
 let nextRowId = 0;
@@ -142,9 +143,13 @@ describe('programme repository reads', () => {
     expect(repo.getFirstProgrammeSitting()).toBeNull();
 
     const userStem = insertStem(raw, { text: 'my own stem', origin: 'user', timeOfDay: null });
-    // Issue 10: the programme week is a corpus-derived pick (second week).
-    const scenarioWeek = [...new Set(PROGRAMME_SEED_STEMS.map((s) => s.weekNumber))].sort((a, b) => a - b)[1];
-    const programmeStem = repo.getProgrammeStemsForWeek(scenarioWeek)[0];
+    // Find any week that has stems in the corpus (issue 10: derive from loaded content).
+    const weeksWithStems = [...new Set(PROGRAMME_SEED_STEMS.map((s) => s.weekNumber))].sort((a, b) => a - b);
+    const scenarioWeek = weeksWithStems[0]; // use first week that has stems
+    expect(scenarioWeek).toBeDefined();
+    const programmeStems = repo.getProgrammeStemsForWeek(scenarioWeek);
+    expect(programmeStems.length).toBeGreaterThan(0);
+    const programmeStem = programmeStems[0];
     insertCompletedSession(raw, userStem, '2026-08-15T10:00:00.000Z'); // earlier, but not a programme sitting
     insertCompletedSession(raw, programmeStem.id, '2026-09-01T06:00:00.000Z');
 
@@ -196,13 +201,21 @@ describe('programme repository reads', () => {
 
   it('listSessionsForProgrammeWeek scopes to the week’s stems, needs a non-deleted ending, orders chronologically', () => {
     const { raw, repo } = makeDb();
-    // Issue 10: both weeks are corpus-derived picks (first and second).
+    // Issue 10: first week is corpus-derived; second week may not exist in example content.
     const corpusWeeks = [...new Set(PROGRAMME_SEED_STEMS.map((s) => s.weekNumber))].sort((a, b) => a - b);
     const firstWeek = corpusWeeks[0];
-    const otherWeek = corpusWeeks[1];
     const w1a = repo.getProgrammeStemsForWeek(firstWeek)[0];
     const w1b = repo.getProgrammeStemsForWeek(firstWeek)[1];
-    const w2 = repo.getProgrammeStemsForWeek(otherWeek)[0];
+    // Cross-week scoping needs a second stemmed week; both shipped corpora
+    // have one. If a future corpus drops to a single week, fire loudly here
+    // instead of the scoping check silently evaporating.
+    expect(corpusWeeks.length).toBeGreaterThan(1);
+    // Issue 09: the seed leaves every week after the first resting, and the
+    // rotation read returns active stems only — raise the unlock frontier to
+    // the cap so the second week's stem is readable. The scoping under test
+    // is the week filter, not the activation state.
+    repo.setProgrammeWeekActive(PROGRAMME_WEEK_CAP);
+    const w2 = repo.getProgrammeStemsForWeek(corpusWeeks[1])[0];
 
     const later = insertCompletedSession(raw, w1b.id, '2026-09-03T08:00:00.000Z');
     const earlier = insertCompletedSession(raw, w1a.id, '2026-09-01T08:00:00.000Z');

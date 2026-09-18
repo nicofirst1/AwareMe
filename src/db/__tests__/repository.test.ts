@@ -29,18 +29,29 @@ describe('Repository.seedIfEmpty', () => {
       expect(typeof t).toBe('string');
       expect(t.length).toBeGreaterThan(0);
     }
-    // Programme stems are active morning stems of their week block.
+    // Issue 09: Only week 1 active, weeks 2..30 resting.
     const programme = db
       .prepare('SELECT week_number, active, deleted_at, time_of_day FROM stems WHERE week_number IS NOT NULL')
       .all() as { week_number: number; active: number; deleted_at: string | null; time_of_day: string | null }[];
     expect(programme).toHaveLength(PROGRAMME_SEED_STEMS.length);
+    let week1Count = 0;
+    let restingCount = 0;
     for (const row of programme) {
-      expect(row.active).toBe(1);
       expect(row.deleted_at).toBeNull();
       expect(row.time_of_day).toBe('morning');
       expect(row.week_number).toBeGreaterThanOrEqual(1);
       expect(row.week_number).toBeLessThanOrEqual(30);
+      if (row.week_number === 1) {
+        expect(row.active).toBe(1);
+        week1Count++;
+      } else {
+        expect(row.active).toBe(0);
+        restingCount++;
+      }
     }
+    // Week 1 active, all weeks 2+ resting. Total = PROGRAMME_SEED_STEMS.length.
+    expect(week1Count).toBeGreaterThanOrEqual(1);
+    expect(restingCount).toBe(PROGRAMME_SEED_STEMS.length - week1Count);
   });
 
   it('seeds the weekly reflection stem once, active, tagged is_weekly_meta = 1 (ADR-0005 decision 6)', () => {

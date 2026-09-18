@@ -49,7 +49,8 @@ export default function ProgrammeScreen() {
   const refresh = useCallback(() => {
     const repo = getRepository();
     setStems(repo.listProgrammeStems());
-    setWeek(readProgrammeWeek(repo));
+    const pw = readProgrammeWeek(repo);
+    setWeek(pw);
   }, []);
 
   // Re-reads on every focus, so returning from a sitting (or having cleared
@@ -90,6 +91,7 @@ export default function ProgrammeScreen() {
         stems={byWeek.get(item) ?? []}
         isCurrentWeek={week?.currentWeek === item}
         isSelected={week?.override === item}
+        isLocked={week != null && item > week.unlockFrontier}
         expanded={expandedWeek === item}
         onToggle={() => setExpandedWeek((current) => (current === item ? null : item))}
         onSit={() => sitOnWeek(item)}

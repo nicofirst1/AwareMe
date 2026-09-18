@@ -169,6 +169,7 @@ jest.mock('@/db', () => {
       setProgrammeWeekActive: (week: number) => {
         mockRepoState.activationCalls.push(week);
       },
+      getHighestUnlockedWeek: () => 0,
       recordFirstKeypress: () => {},
       autosaveEndingText: () => {},
       submitEnding: () => {},

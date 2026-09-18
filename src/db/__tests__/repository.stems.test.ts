@@ -116,13 +116,13 @@ describe('Repository.getActiveStemsForTimeOfDay', () => {
 
     const morning = repo.getActiveStemsForTimeOfDay('morning');
     const evening = repo.getActiveStemsForTimeOfDay('evening');
-    // The official programme (ADR-0005) is mornings-only: every programme
-    // stem is tagged 'morning'; the weekly meta-stem carries NULL and the
-    // retired originals are soft-deleted at seed. Since issue 17 the seed's
-    // ACTIVE evening rows are exactly the practice starter set: the two
-    // evening meta-stems stay inactive (resting, issue 06) and are never
-    // drawn.
-    expect(morning.length).toBe(PROGRAMME_SEED_STEMS.length);
+    // Issue 09: the official programme (ADR-0005) is mornings-only, and only
+    // the first corpus week's programme stems are active at seed — weeks
+    // 2..30 rest. The weekly meta-stem carries NULL and the retired
+    // originals are soft-deleted at seed. Since issue 17 the seed's ACTIVE
+    // evening rows are exactly the practice starter set: the two evening
+    // meta-stems stay inactive (resting, issue 06) and are never drawn.
+    expect(morning.length).toBe(PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === 1).length);
     expect(evening.length).toBe(EVENING_PRACTICE_SEED_STEMS.length);
     expect(evening.every((s) => EVENING_PRACTICE_SEED_STEMS.some((p) => p.text === s.text))).toBe(true);
     expect(morning.some((s) => evening.some((e) => e.id === s.id))).toBe(false);

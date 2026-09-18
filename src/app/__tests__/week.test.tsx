@@ -43,11 +43,13 @@ const mockRepoState: {
   settingWrites: [string, unknown][];
   activationCalls: number[];
   firstSitting: { startedAt: string; offsetMin: number } | null;
+  highestUnlocked: number;
 } = {
   settings: {},
   settingWrites: [],
   activationCalls: [],
   firstSitting: null,
+  highestUnlocked: 0,
 };
 
 jest.mock('@/db', () => {
@@ -68,6 +70,7 @@ jest.mock('@/db', () => {
       setProgrammeWeekActive: (week: number) => {
         mockRepoState.activationCalls.push(week);
       },
+      getHighestUnlockedWeek: () => mockRepoState.highestUnlocked,
     }),
   };
 });
@@ -79,14 +82,14 @@ describe('ProgrammeScreen (week library)', () => {
     mockRepoState.settingWrites = [];
     mockRepoState.activationCalls = [];
     mockRepoState.firstSitting = null;
+    mockRepoState.highestUnlocked = 0;
   });
 
   it('renders all 30 week cards with stem counts, ordered', () => {
     render(<ProgrammeScreen />);
-    // No anchor yet → derived week 1, so Week 1 carries the marker and the
-    // others don't (§6.2: the derivation starts at week 1).
+    // Week 1 is active; week 2 is locked (not unlocked yet).
     expect(screen.getByText('Week 1 · Current week')).toBeTruthy();
-    expect(screen.getByText('Week 2')).toBeTruthy();
+    expect(screen.getByText('Week 2 · Locked')).toBeTruthy();
     expect(screen.getAllByText('4 stems')).toHaveLength(2);
     expect(screen.getAllByText('No active stems')).toHaveLength(28);
   });
@@ -109,7 +112,7 @@ describe('ProgrammeScreen (week library)', () => {
 
   it('renders the category chip on expanded stems that carry one (issue 04)', () => {
     render(<ProgrammeScreen />);
-    fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Collapsed.'));
+    fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Locked. Collapsed.'));
     expect(screen.getByText('awareness')).toBeTruthy();
     expect(screen.getByText('self_acceptance')).toBeTruthy();
     expect(screen.getByText('purpose')).toBeTruthy();
@@ -118,7 +121,7 @@ describe('ProgrammeScreen (week library)', () => {
 
   it('one-off sitting routes to /write?week=N with manual origin semantics (never rotates)', () => {
     render(<ProgrammeScreen />);
-    fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Collapsed.'));
+    fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Locked. Collapsed.'));
     fireEvent.press(screen.getByText('Write this week’s sitting'));
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/write', params: { week: '2' } });
     expect(mockRepoState.settingWrites).toEqual([]); // a one-off sit never writes anything
@@ -126,7 +129,7 @@ describe('ProgrammeScreen (week library)', () => {
 
   it('"make this my week" sets the override; a selected week offers clearing it', () => {
     render(<ProgrammeScreen />);
-    fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Collapsed.'));
+    fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Locked. Collapsed.'));
     fireEvent.press(screen.getByText('Make this my week'));
     expect(mockRepoState.settingWrites).toEqual([['program_week_override', 2]]);
     // Week-set activation (issue 04) rides the same write: the chosen week
@@ -150,7 +153,7 @@ describe('ProgrammeScreen (week library)', () => {
 
   it('does not offer sitting actions on an empty week', () => {
     render(<ProgrammeScreen />);
-    fireEvent.press(screen.getByLabelText('Week 3, 0 stems. Collapsed.'));
+    fireEvent.press(screen.getByLabelText('Week 30, 0 stems. Locked. Collapsed.'));
     expect(screen.getByText('The sitting actions appear once this week has active stems.')).toBeTruthy();
     expect(screen.queryByText('Write this week’s sitting')).toBeNull();
   });
@@ -162,5 +165,37 @@ describe('ProgrammeScreen (week library)', () => {
     for (const [key] of mockRepoState.settingWrites) {
       expect(key).toBe('program_week_override');
     }
+  });
+
+  it('manual enable of week M (derived lower) marks no week <= M Locked — marker agrees with the stored frontier (issue 09)', () => {
+    // The exact manual-enable state: derived week 1 (no anchor in the mock),
+    // the user made week 2 their week, and the activation write stored
+    // weeks 1..2 active (highestUnlocked = 2). No week at or below the
+    // frontier may render the Locked marker, selected or not.
+    mockRepoState.settings = { program_week_override: 2 };
+    mockRepoState.highestUnlocked = 2;
+    render(<ProgrammeScreen />);
+
+    // Week 1 is inside the frontier: active stems, no Locked marker (and it
+    // is no longer the current week — the override moved the effective week).
+    expect(screen.getByLabelText('Week 1, 4 stems. Collapsed.')).toBeTruthy();
+    expect(screen.queryByText('Week 1 · Current week · Locked')).toBeNull();
+    // Week 2: selected marker wins precedence, and no Locked marker hides
+    // behind the aria label either.
+    expect(screen.getByLabelText('Week 2, 4 stems. Your week. Collapsed.')).toBeTruthy();
+    // Week 3 sits above the frontier: still resting, still Locked.
+    expect(screen.getByText('Week 3 · Locked')).toBeTruthy();
+  });
+
+  it('legacy all-active installs (high stored frontier, low derived) mislabel nothing as Locked (issue 09)', () => {
+    // A pre-c10 install has every programme stem active; the stored frontier
+    // is the cap while the derived week is still 1. No week may render
+    // Locked, because no week is resting.
+    mockRepoState.highestUnlocked = 30;
+    render(<ProgrammeScreen />);
+    expect(screen.queryByText(/Locked/)).toBeNull();
+    // Week 2's label carries no marker at all — active stems, never locked.
+    expect(screen.getByLabelText('Week 2, 4 stems. Collapsed.')).toBeTruthy();
+    expect(screen.getByLabelText('Week 1, 4 stems. Current week. Collapsed.')).toBeTruthy();
   });
 });
