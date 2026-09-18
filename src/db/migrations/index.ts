@@ -4,6 +4,7 @@ import { MIGRATION_0003_STEMS_TIME_OF_DAY } from './0003_stems_time_of_day';
 import { MIGRATION_0004_OFFICIAL_PROGRAMME } from './0004_official_programme';
 import { MIGRATION_0005_STEM_CATEGORIES } from './0005_stem_categories';
 import { MIGRATION_0006_EVENING_META_TIME_OF_DAY } from './0006_evening_meta_time_of_day';
+import { MIGRATION_0007_EVENING_PRACTICE_STARTER_SET } from './0007_evening_practice_starter_set';
 
 /** One numbered migration: `version` is the `schema_version` it upgrades to. */
 export interface Migration {
@@ -22,6 +23,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 4, sql: MIGRATION_0004_OFFICIAL_PROGRAMME },
   { version: 5, sql: MIGRATION_0005_STEM_CATEGORIES },
   { version: 6, sql: MIGRATION_0006_EVENING_META_TIME_OF_DAY },
+  { version: 7, sql: MIGRATION_0007_EVENING_PRACTICE_STARTER_SET },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

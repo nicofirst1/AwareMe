@@ -4,7 +4,7 @@ import { migrate } from '../migrate';
 import { Repository, ALL_TABLES } from '../repository';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
 import { DEFAULT_SETTINGS } from '../seed/settings';
-import { EVENING_META_STEMS, META_STEMS, PROGRAMME_SEED_STEMS, RETIRED_SEED_STEMS, WEEKLY_META_STEM } from '../seed/stems';
+import { EVENING_META_STEMS, EVENING_PRACTICE_SEED_STEMS, META_STEMS, PROGRAMME_SEED_STEMS, RETIRED_SEED_STEMS, WEEKLY_META_STEM } from '../seed/stems';
 
 function freshRepository(): { db: DatabaseSync; repo: Repository } {
   const raw = new DatabaseSync(':memory:');
@@ -19,10 +19,11 @@ describe('Repository.seedIfEmpty', () => {
     repo.seedIfEmpty();
 
     // 142 programme stems (byte-check lives in programmeSeed.test.ts) +
-    // 1 weekly meta-stem + 26 soft-deleted retired originals, all
-    // origin='seed'; plus the 2 evening meta-stems (origin='meta').
+    // 1 weekly meta-stem + 26 soft-deleted retired originals + the evening
+    // practice starter set (issue 17), all origin='seed'; plus the 2
+    // evening meta-stems (origin='meta').
     const seedRows = (db.prepare("SELECT COUNT(*) as c FROM stems WHERE origin = 'seed'").get() as { c: number }).c;
-    expect(seedRows).toBe(PROGRAMME_SEED_STEMS.length + 1 + RETIRED_SEED_STEMS.length);
+    expect(seedRows).toBe(PROGRAMME_SEED_STEMS.length + 1 + EVENING_PRACTICE_SEED_STEMS.length + RETIRED_SEED_STEMS.length);
     const texts = (db.prepare("SELECT text FROM stems WHERE origin = 'seed'").all() as { text: string }[]).map((r) => r.text);
     for (const t of texts) {
       expect(typeof t).toBe('string');
@@ -135,7 +136,7 @@ describe('Repository.seedIfEmpty', () => {
     // v1 stems, 24 have a category and 2 (the "general" pair) are null —
     // see DECISIONS.md.
     expect(stems.filter((s) => s.category === null)).toHaveLength(1 + 2);
-    expect(stems.filter((s) => s.category !== null)).toHaveLength(PROGRAMME_SEED_STEMS.length + 24);
+    expect(stems.filter((s) => s.category !== null)).toHaveLength(PROGRAMME_SEED_STEMS.length + 24 + EVENING_PRACTICE_SEED_STEMS.length);
   });
 
   it('has 3 meta-stems matching spec §5.4, used only at review time per §6.5', () => {
@@ -166,7 +167,7 @@ describe('Repository.seedIfEmpty', () => {
 
     const stemCount = (db.prepare('SELECT COUNT(*) as c FROM stems').get() as { c: number }).c;
     const settingsCount = (db.prepare('SELECT COUNT(*) as c FROM settings').get() as { c: number }).c;
-    expect(stemCount).toBe(PROGRAMME_SEED_STEMS.length + 1 + EVENING_META_STEMS.length + RETIRED_SEED_STEMS.length);
+    expect(stemCount).toBe(PROGRAMME_SEED_STEMS.length + 1 + EVENING_META_STEMS.length + EVENING_PRACTICE_SEED_STEMS.length + RETIRED_SEED_STEMS.length);
     expect(settingsCount).toBe(Object.keys(DEFAULT_SETTINGS).length);
   });
 
@@ -214,7 +215,9 @@ describe('Repository.dumpAllTables', () => {
     repo.seedIfEmpty();
     const dump = repo.dumpAllTables();
 
-    expect(dump.stems).toHaveLength(PROGRAMME_SEED_STEMS.length + 1 + EVENING_META_STEMS.length + RETIRED_SEED_STEMS.length);
+    expect(dump.stems).toHaveLength(
+      PROGRAMME_SEED_STEMS.length + 1 + EVENING_META_STEMS.length + EVENING_PRACTICE_SEED_STEMS.length + RETIRED_SEED_STEMS.length,
+    );
     expect(dump.settings).toHaveLength(Object.keys(DEFAULT_SETTINGS).length);
   });
 });
