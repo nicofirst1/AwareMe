@@ -27,4 +27,6 @@ This file is a map. The targets are the sources of truth; when a pointer and its
 
 - **Triage labels** — five-role vocabulary; see `docs/agents/triage-labels.md`.
 - **Domain docs** — one `CONTEXT.md` + `docs/adr/` at the repo root; see `docs/agents/domain.md`.
-- **Mobile UI design** — `.claude/skills/mobile-app-ui-design/` for mobile UI design work.
+- **App work methodology** — pi-droid verification, emulator pool, round protocol; see `.agents/skills/awareme-app-work/`.
+- **Methodology audits** — per-cycle process audits (judge how, not what); see `.agents/skills/methodology-auditor/`.
+- **Mobile UI design** — `.agents/skills/mobile-app-ui-design/` for mobile UI design work.

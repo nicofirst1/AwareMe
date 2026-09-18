@@ -15,7 +15,7 @@ Read these in order, because each frames the next:
 
 1. The round hub `.coordination/<round>.md` - the implementer’s timestamped trail and the lock arbitrations.
 2. Repo `AGENTS.md` - the map; where things live and what is frozen.
-3. The app skill `.claude/skills/awareme-app-work/SKILL.md` - the binding methodology you audit against.
+3. The app skill `.agents/skills/awareme-app-work/SKILL.md` - the binding methodology you audit against.
 4. The cycle’s issue file(s), including the implementer’s Comments - the stated hypotheses and the evidence trail.
 5. The evidence directories (`.coordination/<round>-captures/`, the worktree) - the actual files behind the claims.
 
@@ -44,7 +44,7 @@ Your three sanctioned write surfaces are the issue verdict, the hub line, and th
 
 ## SKILL-UPDATE rule
 
-The app skill is amended by the coordinator between cycles. When the round hub carries a `SKILL-UPDATE` line, re-read `.claude/skills/awareme-app-work/SKILL.md` before judging.
+The app skill is amended by the coordinator between cycles. When the round hub carries a `SKILL-UPDATE` line, re-read `.agents/skills/awareme-app-work/SKILL.md` before judging.
 
 ## Registry maintenance (the coordinator's job, not yours)
 
