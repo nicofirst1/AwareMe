@@ -30,8 +30,8 @@ const STEP_COUNT = 5;
  * Onboarding (§6.1, ticket 17): at most 4 screens, skippable, shown once —
  * since v13 (`.scratch/v13-feedback/issues/03-fresh-screen-rebuild.md`) the
  * first-launch flow is five tabs in the owner's stated order: About the
- * method → How it works → Reminders → Evening practice → Choose your
- * settings. The evening-practice question that used to be a separate
+ * method → Here is how it works! → Reminders → Evening practice → Choose
+ * your settings. The evening-practice question that used to be a separate
  * pre-onboarding route (/intro) is now tab 4, "towards the end, not before
  * the actual intro"; the standalone route remains only for upgraders whose
  * onboarding completed long ago (they must still be asked exactly once —
@@ -187,15 +187,18 @@ export default function OnboardingScreen() {
           </ThemedView>
 
           <ThemedView style={[styles.page, { width }]}>
-            <ThemedText type="title">How it works</ThemedText>
+            {/* v14 issue 03: the owner asked for the exclamation mark, the
+                semicolon sentence split, and the quickness paragraph broken
+                into short sentences (meaning kept). */}
+            <ThemedText type="title">Here is how it works!</ThemedText>
             <ThemedText type="default">
               You’ll get the start of a sentence and finish it, several times, quickly. Write the first
-              thing that comes, without judging it. Repetition or nonsense is fine; that’s part of how it
+              thing that comes, without judging it. Repetition or nonsense is fine. That’s part of how it
               works.
             </ThemedText>
             <ThemedText type="default">
-              The quickness is the point: endings written before you can polish them tend to surface how you
-              actually respond, and the value is in the pattern across many endings, not in any single one.
+              The quickness is the point. Endings written before you can polish them tend to surface how you
+              actually respond. The value is in the pattern across many endings, not in any single one.
             </ThemedText>
           </ThemedView>
 
@@ -205,8 +208,12 @@ export default function OnboardingScreen() {
               This app can nudge you twice a day, at a morning and an evening time you choose: the book’s own
               suggestion is start and end of day.
             </ThemedText>
+            {/* v14 issue 04: the primary variant makes the ask read as the
+                tab's one button (the default secondary read as body text);
+                "Not now" stays the quiet alternative. The hint states what
+                allowing does, honestly: decline and nothing is lost. */}
             <ThemedView style={styles.buttonRow}>
-              <Button label="Allow reminders" onPress={askForNotifications} />
+              <Button label="Allow reminders" variant="primary" onPress={askForNotifications} />
               <Button
                 label="Not now"
                 variant="text"
@@ -216,6 +223,10 @@ export default function OnboardingScreen() {
                 }}
               />
             </ThemedView>
+            <ThemedText type="small" themeColor="textSecondary">
+              Allowing lets the app send those two daily nudges. Saying no costs nothing: the reminders
+              just stay off.
+            </ThemedText>
           </ThemedView>
 
           <ThemedView style={[styles.page, styles.pageForCard, { width }]}>
@@ -234,6 +245,11 @@ export default function OnboardingScreen() {
               rangeKey="endings_per_session"
               onChange={setEndingsPerSession}
             />
+            {/* v14 issue 06: the label names a setting, not a meaning — one
+                dim line does that job (settings.tsx's Hint pattern, LC3). */}
+            <ThemedText type="small" themeColor="textSecondary">
+              How many endings you write in one sitting.
+            </ThemedText>
             <StepperRow
               label="Timer (seconds)"
               value={timerSeconds}
@@ -245,7 +261,7 @@ export default function OnboardingScreen() {
             {notificationsEnabled && (
               <ThemedView style={styles.timeFields}>
                 <TimeField
-                  label="Morning"
+                  label="Morning reminder"
                   accessibilityLabel="Morning notification time"
                   value={morningTime}
                   onConfirm={(next) => {
@@ -253,7 +269,7 @@ export default function OnboardingScreen() {
                   }}
                 />
                 <TimeField
-                  label="Evening"
+                  label="Evening reminder"
                   accessibilityLabel="Evening notification time"
                   value={eveningTime}
                   onConfirm={(next) => {
