@@ -18,6 +18,15 @@ import { useTheme } from '@/hooks/use-theme';
  * decorative divider token `Card.bordered` uses), so it stays defined when
  * placed on a backgroundElement surface (e.g. Home's sitting card).
  * `text` — no fill, no border: Close/Cancel/Skip-style affordances.
+ *
+ * Press feedback and the dark outline (v14 issue 07, coordinator grant):
+ * in dark, `backgroundElement` fills measure 1.25:1 against the black
+ * screen and the old shared 15% `border` hairline 1.39:1 — the reporter's
+ * "buttons not really visible"; secondary now outlines with `borderStrong`
+ * (dark: 45% white, ≥3:1 everywhere it sits; light: coincides with
+ * `border`, so light renders unchanged) and a press shifts the fill to
+ * `backgroundSelected` (the token's own pressed/selected step), while
+ * primary/text dim. Disabled keeps the 0.5 opacity step.
  */
 export type ButtonVariant = 'primary' | 'secondary' | 'text';
 
@@ -49,10 +58,13 @@ export function Button({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: !!disabled }}
-      style={[
+      style={({ pressed }) => [
         styles.base,
         { backgroundColor: fill, borderRadius: variant === 'primary' ? Radius.large : Radius.small },
-        variant === 'secondary' && { borderWidth: 1, borderColor: theme.border },
+        variant === 'secondary' && { borderWidth: 1, borderColor: theme.borderStrong },
+        variant === 'secondary' && pressed && { backgroundColor: theme.backgroundSelected },
+        variant === 'primary' && pressed && styles.pressedPrimary,
+        variant === 'text' && pressed && styles.pressedText,
         disabled && styles.disabled,
         style,
       ]}
@@ -90,5 +102,11 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.5,
+  },
+  pressedPrimary: {
+    opacity: 0.85,
+  },
+  pressedText: {
+    opacity: 0.6,
   },
 });

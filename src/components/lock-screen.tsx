@@ -20,7 +20,10 @@ export function LockScreen({ onUnlock }: { onUnlock: () => void }) {
         <ThemedText type="title">Locked</ThemedText>
         <Pressable
           onPress={onUnlock}
-          style={[styles.button, { backgroundColor: theme.backgroundElement }]}
+          style={[
+            styles.button,
+            { backgroundColor: theme.backgroundElement, borderColor: theme.borderStrong },
+          ]}
           accessibilityRole="button"
         >
           <ThemedText type="subtitle">Unlock</ThemedText>
@@ -42,5 +45,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.four,
     borderRadius: Radius.small,
+    borderWidth: 1,
   },
 });

@@ -146,6 +146,16 @@ export const Colors = {
     // ratio doesn't apply; matches the existing ACTIVE_EDGE/INACTIVE_EDGE
     // precedent in stems.tsx ("decorative, not text").
     border: mixHex(PALETTE_HEX.cream, BLACK, 0.12),
+    // Control outline (v14 issue 07): the boundary of outlined controls
+    // (`Button` variant="secondary", the lock screen's Unlock). A non-text
+    // UI boundary held to WCAG 1.4.11's 3:1 bar against the surfaces it
+    // sits on. The light derivation coincides with `border` verbatim, so
+    // light-mode rendering is unchanged by this token's introduction; the
+    // dark derivation lifts to a 45% white mix (4.4:1 on black, 3.5:1 on
+    // the backgroundElement fills buttons sit on) where the shared 15%
+    // hairline measured 1.4:1 — the invisible dark button the v14 report
+    // caught.
+    borderStrong: mixHex(PALETTE_HEX.cream, BLACK, 0.12),
     // Same hue family as `PressureColors.calm`, reused verbatim here since
     // it already clears AA (4.75:1 against the cream `background`) — kept
     // identical rather than re-derived so the "calm" signal reads the same
@@ -177,6 +187,12 @@ export const Colors = {
     // Hairline divider, ~15% of `text` mixed into `background` — decorative
     // only, same reasoning as the light theme's `border`.
     border: mixHex(BLACK, WHITE, 0.15),
+    // Control outline (v14 issue 07), dark side: 45% white — 4.4:1 against
+    // the black `background`, 3.5:1 against `backgroundElement`, both clear
+    // of WCAG 1.4.11's 3:1 non-text bar (see the light theme's comment).
+    // Deliberately separate from `border` so card/divider hairlines keep
+    // their quiet 15% edge while controls gain a visible outline.
+    borderStrong: mixHex(BLACK, WHITE, 0.45),
     // `PressureColors.calm` fails AA on black (4.10:1), so this is a
     // lighter derivation of the same green family: 10.85:1 against
     // `background`.
