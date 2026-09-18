@@ -5,6 +5,18 @@ import HomeScreen from '@/app/index';
 import { Colors } from '@/constants/theme';
 import { DEFAULT_SETTINGS, type Settings } from '@/db';
 
+// The splash entrance sequence (v14 issue 01) runs its own timers and
+// reads AccessibilityInfo on mount — both belong to its own test file
+// (SplashSequence.test.tsx). Home tests pin only the wiring: the sequence
+// is mounted, and its presence in the render tree is asserted below.
+jest.mock('@/components/splash/SplashSequence', () => {
+  const { createElement } = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+  return {
+    SplashSequence: () => createElement(View, { testID: 'splash-sequence' }),
+  };
+});
+
 // `useFocusEffect` (2026-09-11 visual-test fix: home status now refreshes on
 // focus, not just mount) calls `useNavigation()` under the hood, which
 // throws outside a real navigation tree — this bare `render(<HomeScreen />)`
@@ -217,6 +229,24 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Export')).toBeTruthy();
     expect(screen.getByText('Import')).toBeTruthy();
     expect(screen.getByText('About')).toBeTruthy();
+  });
+
+  it('keeps every tile label on one line', () => {
+    render(<HomeScreen />);
+    // v14 issue 12: "Progress" wrapped a lone "s" at narrow widths — the
+    // contract is that NO tile label wraps (numberOfLines pinned here; the
+    // one-line rendering itself is verified by capture at 320pt).
+    const labels = ['Stems', 'History', 'Review', 'Progress', 'Settings', 'Export', 'Import', 'About'];
+    labels.forEach((label) => {
+      expect(screen.getByText(label).props.numberOfLines).toBe(1);
+    });
+  });
+
+  it('hosts the splash entrance sequence', () => {
+    render(<HomeScreen />);
+    // v14 issue 01: the home screen mounts the (self-dismissing) entrance
+    // overlay; the mock above stands in for its timers.
+    expect(screen.getByTestId('splash-sequence')).toBeTruthy();
   });
 
   it('has a tappable creator footer', () => {
