@@ -27,7 +27,9 @@ export interface Settings {
 
 /** Default settings, per spec.md §7 as amended by the morning/evening pivot and the official-programme amendment (ADR-0005). Values are JSON-encoded in the settings table. */
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
-  endings_per_session: 6,
+  // 7 per owner feedback 2026-09-17 (v13 issue 03): onboarding's default
+  // tab and this seed must read the same number (both changed together).
+  endings_per_session: 7,
   timer_seconds: 90,
   review_timer_seconds: 180,
   uncensored_mode: true,

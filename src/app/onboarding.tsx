@@ -3,48 +3,71 @@ import { useMemo, useRef, useState } from 'react';
 import {
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
-  TextInput,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 
 import { Button } from '@/components/button';
 import { StepperRow } from '@/components/stepper-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Fonts, MaxContentWidth, MinTouchTarget, Radius, Spacing } from '@/constants/theme';
+import { MaxContentWidth, MinTouchTarget, Radius, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
 import { requestNotificationPermission, rescheduleNotifications } from '@/notifications/scheduler';
 import { isValidHHMM } from '@/session/settingsValidation';
 import { useTheme } from '@/hooks/use-theme';
+import { EveningPracticeCard } from '@/app/intro';
 
-const STEP_COUNT = 4;
+const STEP_COUNT = 5;
 
 /**
- * Onboarding (§6.1, ticket 17): at most 4 screens, skippable, shown once.
- * Kept as one route with a `step` state rather than 4 separate routes — the
+ * Onboarding (§6.1, ticket 17): at most 4 screens, skippable, shown once —
+ * since v13 (`.scratch/v13-feedback/issues/03-fresh-screen-rebuild.md`) the
+ * first-launch flow is five tabs in the owner's stated order: About the
+ * method → How it works → Reminders → Evening practice → Choose your
+ * settings. The evening-practice question that used to be a separate
+ * pre-onboarding route (/intro) is now tab 4, "towards the end, not before
+ * the actual intro"; the standalone route remains only for upgraders whose
+ * onboarding completed long ago (they must still be asked exactly once —
+ * see intro.tsx and the `_layout.tsx` gate).
+ *
+ * Kept as one route with a `step` state rather than 5 separate routes — the
  * whole flow is a single linear sequence with one "Skip" affordance that
  * exits it entirely, which a `step` counter expresses more simply than
  * inter-route navigation params would.
  *
- * Steps page horizontally (swipe) in addition to the Next/CTA button — both
+ * Tabs page horizontally (swipe) in addition to the Next/CTA button — both
  * drive the same `step` state, so whichever the user uses, the other stays
  * in sync. Paging is a plain `ScrollView` (`pagingEnabled` + snap-to-width);
- * no pager dependency needed for four fixed-size pages.
+ * no pager dependency needed for five fixed-size pages.
  *
  * "Shown once" is `Repository.isOnboardingComplete()`
  * (`settings.onboarding_completed`) — checked by `_layout.tsx` before this
- * route is ever reached, not by this screen itself.
+ * route is ever reached, not by this screen itself. The evening question's
+ * once-marker (`intro_completed`) is written by every exit: each tab-4
+ * answer, the footer Skip, and Done — so no path loops the question back.
+ *
+ * The evening tab reuses `EveningPracticeCard` (intro.tsx's named export):
+ * one copy of the question, two surfaces.
+ *
+ * Notification times are native pickers (v13 issue 03), reusing the
+ * settings screen's `TimeField` pattern (`@react-native-community/
+ * datetimepicker`; the pattern is restated here rather than shared —
+ * settings.tsx is another cycle's file this round): iOS renders the
+ * compact system picker inline; Android opens the system time dialog from
+ * a row button. The stored value stays the exact "HH:MM" 24h string; only
+ * the input surface is native.
  *
  * Layout round 2026-09-15 (cycle 6, finding O1; M3/M2): step 4's private
  * `PrefRow` is retired in favor of the shared `StepperRow` (cycle 5's
  * component — one stepper anatomy app-wide, identical prop contract), and
- * the step-4 form's field labels (Morning/Evening) use the `eyebrow` role
- * per LC6 ("eyebrow = section and form labels", the M2 pattern stem-edit/
- * stem-import already use).
+ * form field labels (Morning/Evening) use the `eyebrow` role per LC6.
  */
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -54,7 +77,7 @@ export default function OnboardingScreen() {
   const scrollRef = useRef<ScrollView>(null);
 
   const [step, setStep] = useState(0);
-  const [endingsPerSession, setEndingsPerSession] = useState(6);
+  const [endingsPerSession, setEndingsPerSession] = useState(7);
   const [timerSeconds, setTimerSeconds] = useState(90);
   const [morningTime, setMorningTime] = useState('08:00');
   const [eveningTime, setEveningTime] = useState('21:00');
@@ -62,6 +85,9 @@ export default function OnboardingScreen() {
 
   const finish = () => {
     repo.setOnboardingComplete();
+    // Every exit marks the evening question asked (the once-marker), so no
+    // path — early skip included — loops the question back afterwards.
+    repo.setIntroComplete();
     if (isValidHHMM(morningTime)) repo.setSetting('morning_notification_time', morningTime);
     if (isValidHHMM(eveningTime)) repo.setSetting('evening_notification_time', eveningTime);
     repo.setSetting('endings_per_session', endingsPerSession);
@@ -76,6 +102,7 @@ export default function OnboardingScreen() {
 
   const skip = () => {
     repo.setOnboardingComplete();
+    repo.setIntroComplete();
     router.replace('/');
   };
 
@@ -95,6 +122,25 @@ export default function OnboardingScreen() {
     const granted = await requestNotificationPermission();
     setNotificationsEnabled(granted);
     goToStep(3);
+  };
+
+  // Tab 4's answer (the card calls one of these): persist exactly like the
+  // standalone card does, then continue to the last tab.
+  const answerEvening = (include: boolean) => {
+    repo.setSetting('evening_practice_enabled', include);
+    repo.setIntroComplete();
+    // §6.4: reschedule on a notification-relevant setting change. No-op
+    // until permission is granted (tab 3); answering never blocks the flow.
+    rescheduleNotifications().catch((error) => {
+      if (__DEV__) console.warn('Notification reschedule failed:', error);
+    });
+    goToStep(4);
+  };
+
+  const skipEvening = () => {
+    // No write: skipping is not an answer — the §7 default (enabled) stands.
+    repo.setIntroComplete();
+    goToStep(4);
   };
 
   return (
@@ -119,19 +165,11 @@ export default function OnboardingScreen() {
           style={styles.pager}
         >
           <ThemedView style={[styles.page, { width }]}>
-            <ThemedText type="title">Finish the sentence</ThemedText>
-            <ThemedText type="default">
-              You&apos;ll get the start of a sentence and finish it, several times, quickly. Write the first
-              thing that comes, without judging it. Repetition or nonsense is fine; that&apos;s part of how it
-              works.
-            </ThemedText>
-          </ThemedView>
-
-          <ThemedView style={[styles.page, { width }]}>
             <ThemedText type="title">About the method</ThemedText>
             <ThemedText type="default">
-              This app is built on sentence completion, a technique from psychologist Nathaniel Branden. Nothing
-              here scores or interprets what you write. It just holds space for it.
+              This app is built on the Branden method: sentence completion, developed by the psychologist
+              Nathaniel Branden. The method is part of a larger approach aimed at increasing self-awareness.
+              Nothing here scores or interprets what you write. It just holds space for it.
             </ThemedText>
             {/* accessibilityRole="link" + explicit label: the link convention
                 BackHeader documents (index.tsx's Link rows); the label keeps
@@ -149,15 +187,23 @@ export default function OnboardingScreen() {
           </ThemedView>
 
           <ThemedView style={[styles.page, { width }]}>
+            <ThemedText type="title">How it works</ThemedText>
+            <ThemedText type="default">
+              You’ll get the start of a sentence and finish it, several times, quickly. Write the first
+              thing that comes, without judging it. Repetition or nonsense is fine; that’s part of how it
+              works.
+            </ThemedText>
+            <ThemedText type="default">
+              The quickness is the point: endings written before you can polish them tend to surface how you
+              actually respond, and the value is in the pattern across many endings, not in any single one.
+            </ThemedText>
+          </ThemedView>
+
+          <ThemedView style={[styles.page, { width }]}>
             <ThemedText type="title">Reminders</ThemedText>
             <ThemedText type="default">
-              This app can nudge you twice a day, at a morning and an evening time you choose: the book&apos;s own
-              suggestion is start and end of day. Notifications never show the sentence or your writing, even on
-              the lock screen.
-            </ThemedText>
-            <ThemedText type="default" themeColor="textSecondary">
-              Say no and the app stays fully usable. You can always start a session yourself, and it won&apos;t
-              ask again.
+              This app can nudge you twice a day, at a morning and an evening time you choose: the book’s own
+              suggestion is start and end of day.
             </ThemedText>
             <ThemedView style={styles.buttonRow}>
               <Button label="Allow reminders" onPress={askForNotifications} />
@@ -172,8 +218,12 @@ export default function OnboardingScreen() {
             </ThemedView>
           </ThemedView>
 
+          <ThemedView style={[styles.page, styles.pageForCard, { width }]}>
+            <EveningPracticeCard onAnswer={answerEvening} onSkip={skipEvening} />
+          </ThemedView>
+
           <ThemedView style={[styles.page, { width }]}>
-            <ThemedText type="title">A few defaults</ThemedText>
+            <ThemedText type="title">Choose your settings</ThemedText>
             <ThemedText type="default" themeColor="textSecondary">
               You can change any of this later in Settings.
             </ThemedText>
@@ -193,24 +243,22 @@ export default function OnboardingScreen() {
             />
 
             {notificationsEnabled && (
-              <ThemedView style={styles.windowRow}>
-                <ThemedText type="eyebrow">Morning</ThemedText>
-                <TextInput
-                  value={morningTime}
-                  onChangeText={setMorningTime}
-                  placeholder="08:00"
-                  placeholderTextColor={theme.textSecondary}
-                  style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+              <ThemedView style={styles.timeFields}>
+                <TimeField
+                  label="Morning"
                   accessibilityLabel="Morning notification time"
+                  value={morningTime}
+                  onConfirm={(next) => {
+                    if (isValidHHMM(next)) setMorningTime(next);
+                  }}
                 />
-                <ThemedText type="eyebrow">Evening</ThemedText>
-                <TextInput
-                  value={eveningTime}
-                  onChangeText={setEveningTime}
-                  placeholder="21:00"
-                  placeholderTextColor={theme.textSecondary}
-                  style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+                <TimeField
+                  label="Evening"
                   accessibilityLabel="Evening notification time"
+                  value={eveningTime}
+                  onConfirm={(next) => {
+                    if (isValidHHMM(next)) setEveningTime(next);
+                  }}
                 />
               </ThemedView>
             )}
@@ -250,6 +298,93 @@ export default function OnboardingScreen() {
   );
 }
 
+/** "HH:MM" → a Date for the native pickers: today at that wall-clock time. */
+function hhmmToDate(hhmm: string): Date {
+  const [hours, minutes] = hhmm.split(':').map(Number);
+  const date = new Date();
+  date.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+  return date;
+}
+
+/** A picker result → the exact "HH:MM" 24h string the settings keys store. */
+function dateToHHMM(date: Date): string {
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+/**
+ * One notification-time row, reusing the settings screen's `TimeField`
+ * pattern (v13 issue 03: tapping a time must spin up the native picker on
+ * both platforms, never a free-text field). The stored value stays the
+ * exact "HH:MM" 24h string — only the input surface is native:
+ *
+ * - iOS: the compact system picker renders inline as the row's control
+ *   (a button showing the time that opens the system popover).
+ * - Android: a row button shows the stored "HH:MM" and opens the system
+ *   time dialog via the library's imperative `DateTimePickerAndroid.open`.
+ *
+ * `onConfirm` fires only on an explicit set — a dismissal carries no date
+ * and never reaches storage. The pattern is restated here rather than
+ * imported because settings.tsx keeps its copy private this round; if the
+ * two ever drift, extraction into a shared component is the fix.
+ */
+function TimeField({
+  label,
+  accessibilityLabel,
+  value,
+  onConfirm,
+}: {
+  label: string;
+  accessibilityLabel: string;
+  value: string;
+  onConfirm: (next: string) => void;
+}) {
+  const theme = useTheme();
+
+  const confirmDate = (date?: Date) => {
+    if (date) onConfirm(dateToHHMM(date));
+  };
+
+  if (Platform.OS === 'android') {
+    return (
+      <ThemedView style={styles.windowRow}>
+        <ThemedText type="eyebrow">{label}</ThemedText>
+        <Pressable
+          onPress={() => {
+            DateTimePickerAndroid.open({
+              mode: 'time',
+              is24Hour: true,
+              value: hhmmToDate(value),
+              onChange: (_event, date) => confirmDate(date),
+            });
+          }}
+          style={[styles.timeTrigger, { backgroundColor: theme.backgroundElement }]}
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel}
+        >
+          <ThemedText type="default">{value}</ThemedText>
+        </Pressable>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ThemedView style={styles.windowRow}>
+      <ThemedText type="eyebrow">{label}</ThemedText>
+      <DateTimePicker
+        mode="time"
+        display="compact"
+        value={hhmmToDate(value)}
+        onChange={(event, date) => {
+          if (event.type === 'set') confirmDate(date);
+        }}
+        accessibilityLabel={accessibilityLabel}
+      />
+    </ThemedView>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
@@ -268,6 +403,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.three,
     padding: Spacing.four,
+  },
+  // The evening-practice tab: the card brings its own padding and max
+  // width, so the page only centers it.
+  pageForCard: {
+    gap: 0,
+    padding: 0,
   },
   dots: {
     flexDirection: 'row',
@@ -296,19 +437,22 @@ const styles = StyleSheet.create({
     minHeight: MinTouchTarget,
     textAlignVertical: 'center',
   },
+  timeFields: {
+    gap: Spacing.two,
+  },
   windowRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
-  timeInput: {
-    fontFamily: Fonts.sans,
-    fontSize: 16,
-    padding: Spacing.two,
+  // The Android trigger shows the stored "HH:MM" verbatim and opens the
+  // system time dialog; iOS renders the compact native picker instead.
+  timeTrigger: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
     borderRadius: Radius.small,
-    width: 80,
     minHeight: MinTouchTarget,
-    textAlign: 'center',
+    justifyContent: 'center',
   },
   footer: {
     paddingHorizontal: Spacing.four,

@@ -31,7 +31,7 @@ describe('Repository.getSettings', () => {
     const { repo } = freshRepository();
     const settings = repo.getSettings();
     expect(settings.timer_seconds).toBe(90);
-    expect(settings.endings_per_session).toBe(6);
+    expect(settings.endings_per_session).toBe(7);
     expect(settings.uncensored_mode).toBe(true);
   });
 });

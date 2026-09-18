@@ -94,6 +94,7 @@ describe('IntroScreen', () => {
     expect(mockSetSetting).toHaveBeenCalledWith('evening_practice_enabled', true);
     expect(mockSetIntroComplete).toHaveBeenCalledTimes(1);
     expect(mockReschedule).toHaveBeenCalledTimes(1);
+    // Direct visit with onboarding still pending: exit toward onboarding.
     expect(mockReplace).toHaveBeenCalledWith('/onboarding');
   });
 
@@ -157,18 +158,31 @@ describe('first-run gate (RootLayout)', () => {
     mockReplace.mockClear();
   });
 
-  it('routes to the intro before anything else when it has never been answered', () => {
+  it('routes a fresh install to onboarding, which carries the evening question as tab 4', () => {
     render(<RootLayout />);
-    expect(mockReplace).toHaveBeenCalledWith('/intro');
+    expect(mockReplace).toHaveBeenCalledWith('/onboarding');
   });
 
-  it('asks the upgrader too (onboarding complete, intro never answered)', () => {
+  it('asks the upgrader on the standalone card (onboarding complete, question never asked)', () => {
     mockOnboardingComplete = true;
     render(<RootLayout />);
     expect(mockReplace).toHaveBeenCalledWith('/intro');
   });
 
-  it('does not re-route when the intro screen is already in front', () => {
+  it('does not re-route when onboarding is already in front', () => {
+    mockSegments = ['onboarding'];
+    render(<RootLayout />);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('routes to onboarding even from the intro route while onboarding is incomplete (the question lives in tab 4 now)', () => {
+    mockSegments = ['intro'];
+    render(<RootLayout />);
+    expect(mockReplace).toHaveBeenCalledWith('/onboarding');
+  });
+
+  it('does not re-route when the upgrader is already on the intro card', () => {
+    mockOnboardingComplete = true;
     mockSegments = ['intro'];
     render(<RootLayout />);
     expect(mockReplace).not.toHaveBeenCalled();

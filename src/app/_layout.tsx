@@ -9,12 +9,16 @@ import { useAppLock } from '@/session/useAppLock';
 
 /**
  * Gates every route behind the first-run flow, in two stages, except the
- * stage's own route. Stage 1: the one-question introduction (§7, ADR-0005:
- * evening practice "asked once at first launch") — before anything else, on
- * every launch until answered; upgraders included, since they carry
- * `onboarding_completed` from v1 but have never been asked (exactly why the
- * gate keys on the intro marker, not on onboarding). Stage 2: the existing
- * 4-step onboarding (§6.1, ticket 17: "shown once").
+ * stage's own route. Stage 1: the five-tab onboarding (§6.1, ticket 17:
+ * "shown once") — the fresh install's whole first-run flow, with the
+ * evening-practice question folded in as tab 4 (v13 issue 03: asked
+ * "towards the end, not before the actual intro"; footer Skip and Done
+ * mark the intro marker too, so an early exit never loops the question
+ * back). Stage 2: the standalone evening-practice card (/intro) — reachable
+ * only when onboarding is already complete but the question was never
+ * asked, which is exactly the upgrader case (they carry
+ * `onboarding_completed` from v1 but have never been asked; asked exactly
+ * once, via the card's own marker exits).
  *
  * Lives in the root layout, not `index.tsx`, because `index.test.tsx` is a
  * bare `render(<HomeScreen />)` with no navigation context — touching
@@ -29,13 +33,12 @@ function useFirstRunGate(): void {
 
   useEffect(() => {
     const repo = getRepository();
-    if (!repo.isIntroComplete()) {
-      if (segments[0] !== 'intro') router.replace('/intro');
+    if (!repo.isOnboardingComplete()) {
+      if (segments[0] !== 'onboarding') router.replace('/onboarding');
       return;
     }
-    const onOnboardingRoute = segments[0] === 'onboarding';
-    if (!repo.isOnboardingComplete() && !onOnboardingRoute) {
-      router.replace('/onboarding');
+    if (!repo.isIntroComplete()) {
+      if (segments[0] !== 'intro') router.replace('/intro');
     }
   }, [router, segments]);
 }
