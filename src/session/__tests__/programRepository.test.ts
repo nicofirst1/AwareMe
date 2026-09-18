@@ -15,6 +15,7 @@ import { migrate } from '../../db/migrate';
 import { nodeSqliteExecutor } from '../../db/testSupport/nodeSqliteExecutor';
 import { Repository } from '../../db/repository';
 import { PROGRAMME_SEED_STEMS, WEEKLY_META_STEM } from '../../db/seed/stems';
+import { PROGRAMME_WEEK_CAP } from '../program';
 import { readProgrammeWeek } from '../programRead';
 
 let nextRowId = 0;
@@ -205,18 +206,20 @@ describe('programme repository reads', () => {
     const firstWeek = corpusWeeks[0];
     const w1a = repo.getProgrammeStemsForWeek(firstWeek)[0];
     const w1b = repo.getProgrammeStemsForWeek(firstWeek)[1];
-    // Only run the cross-week check if a second week exists.
-    const w2 = corpusWeeks.length > 1 ? repo.getProgrammeStemsForWeek(corpusWeeks[1])[0] : null;
+    // Cross-week scoping needs a second stemmed week; both shipped corpora
+    // have one. If a future corpus drops to a single week, fire loudly here
+    // instead of the scoping check silently evaporating.
+    expect(corpusWeeks.length).toBeGreaterThan(1);
+    // Issue 09: the seed leaves every week after the first resting, and the
+    // rotation read returns active stems only — raise the unlock frontier to
+    // the cap so the second week's stem is readable. The scoping under test
+    // is the week filter, not the activation state.
+    repo.setProgrammeWeekActive(PROGRAMME_WEEK_CAP);
+    const w2 = repo.getProgrammeStemsForWeek(corpusWeeks[1])[0];
 
     const later = insertCompletedSession(raw, w1b.id, '2026-09-03T08:00:00.000Z');
     const earlier = insertCompletedSession(raw, w1a.id, '2026-09-01T08:00:00.000Z');
-    if (w2) {
-      insertCompletedSession(raw, w2.id, '2026-09-02T08:00:00.000Z'); // other week
-    } else {
-      // Skip the test if there's no second week.
-      expect(true).toBe(true);
-      return;
-    }
+    insertCompletedSession(raw, w2.id, '2026-09-02T08:00:00.000Z'); // other week
     const endingless = insertSession(raw, { stemId: w1a.id, startedAt: '2026-09-04T08:00:00.000Z', endedAt: '2026-09-04T08:01:00.000Z' });
     insertEnding(raw, endingless, 0, '2026-09-04T08:00:30.000Z', '');
     raw.prepare('UPDATE endings SET deleted_at = ? WHERE session_id = ?').run('2026-09-04T09:00:00.000Z', endingless); // only ending soft-deleted

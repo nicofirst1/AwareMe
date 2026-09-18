@@ -45,7 +45,7 @@ export function WeekCard({
   isCurrentWeek: boolean;
   /** `program_week_override` selects this week right now. */
   isSelected: boolean;
-  /** Issue 09: week's stems are all resting (week > derived unlock threshold). */
+  /** Issue 09: week sits above the effective unlock frontier — every stem rests. Visual treatment only: the header stays tappable so the manual-enable affordance remains reachable. */
   isLocked: boolean;
   expanded: boolean;
   onToggle: () => void;
@@ -80,7 +80,7 @@ export function WeekCard({
         onPress={onToggle}
         accessibilityRole="button"
         accessibilityLabel={summaryLabel}
-        accessibilityState={{ expanded, disabled: isLocked }}
+        accessibilityState={{ expanded }}
         style={[styles.header, isLocked && styles.headerLocked]}
       >
         <View style={styles.headerText}>

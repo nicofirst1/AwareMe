@@ -91,7 +91,7 @@ export default function ProgrammeScreen() {
         stems={byWeek.get(item) ?? []}
         isCurrentWeek={week?.currentWeek === item}
         isSelected={week?.override === item}
-        isLocked={week != null && item > week.derivedWeek}
+        isLocked={week != null && item > week.unlockFrontier}
         expanded={expandedWeek === item}
         onToggle={() => setExpandedWeek((current) => (current === item ? null : item))}
         onSit={() => sitOnWeek(item)}

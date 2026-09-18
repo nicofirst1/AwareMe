@@ -25,6 +25,7 @@ type Repo = {
   listSessionsForDayMorning: (start: string, end: string) => unknown[];
   listSessionsForProgrammeWeek: (week: number) => unknown[];
   countProgrammeStemsCompletedInRange: (week: number, start: string, end: string) => number;
+  getHighestUnlockedWeek: () => number;
   getSettings: () => Settings;
   setProgrammeWeekActive: (week: number) => void;
 };
@@ -90,6 +91,17 @@ describe('readProgrammeWeek', () => {
     const week = readProgrammeWeek(repo, new Date('2026-09-16T12:00:00Z'));
     expect(week.derivedWeek).toBe(2);
     expect(week.currentWeek).toBe(7);
+    // Issue 09: the frontier rides the override — the manual-enable floor.
+    expect(week.unlockFrontier).toBe(7);
+  });
+
+  it('unlockFrontier floors at the highest stored active week (legacy installs never regress)', () => {
+    // A pre-c10 install has every stem active: the stored floor (30) outranks
+    // both the null override and the low derived week.
+    const repo = makeRepo({ getHighestUnlockedWeek: () => 30 });
+    const week = readProgrammeWeek(repo, new Date('2026-09-16T12:00:00Z'));
+    expect(week.derivedWeek).toBe(1);
+    expect(week.unlockFrontier).toBe(30);
   });
 });
 
@@ -284,5 +296,15 @@ describe('applyWeekSetActivation (issue 09: cumulative unlock with regression gu
     const { activated, repo } = makeRepoWithRecording();
     applyWeekSetActivation(repo, new Date('2026-09-16T10:00:00Z'));
     expect(activated).toEqual([1]); // unlocks week 1
+  });
+
+  it('refuses the write on an out-of-range frontier (house guard, not a clamp)', () => {
+    // A corrupted raw override must not clamp to the cap and unlock the
+    // whole corpus — the house pattern is a no-op.
+    const { activated, repo } = makeRepoWithRecording({
+      getSettings: () => ({ ...DEFAULT_SETTINGS, program_week_override: 45 }),
+    });
+    applyWeekSetActivation(repo, new Date('2026-09-16T10:00:00Z'));
+    expect(activated).toEqual([]);
   });
 });
