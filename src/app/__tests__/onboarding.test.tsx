@@ -165,10 +165,12 @@ describe('OnboardingScreen', () => {
     expect(screen.getByText('80')).toBeTruthy();
   });
 
-  it('asks the evening question on tab 4 and continues to the settings tab on answer', () => {
+  it('asks the evening question on tab 4; the no-answer exit pins the morning default and advances', () => {
     render(<OnboardingScreen />);
 
-    fireEvent.press(screen.getByText('Start with the morning sitting'));
+    // v14 issue 05: exactly two options — "Skip for now" is the no-answer
+    // exit and persists the morning default (false).
+    fireEvent.press(screen.getByText('Skip for now'));
 
     expect(mockSetSetting).toHaveBeenCalledWith('evening_practice_enabled', false);
     expect(mockSetIntroComplete).toHaveBeenCalledTimes(1);
@@ -181,16 +183,6 @@ describe('OnboardingScreen', () => {
     fireEvent.press(screen.getByText('Include evening practice'));
 
     expect(mockSetSetting).toHaveBeenCalledWith('evening_practice_enabled', true);
-    expect(mockSetIntroComplete).toHaveBeenCalledTimes(1);
-    expect(screen.getByLabelText('Step 5 of 5')).toBeTruthy();
-  });
-
-  it('skip on the evening question writes nothing but marks the question asked', () => {
-    render(<OnboardingScreen />);
-
-    fireEvent.press(screen.getByText('Skip for now'));
-
-    expect(mockSetSetting).not.toHaveBeenCalled();
     expect(mockSetIntroComplete).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText('Step 5 of 5')).toBeTruthy();
   });
@@ -219,7 +211,7 @@ describe('OnboardingScreen', () => {
 
     await waitFor(() => expect(screen.getByText('Morning')).toBeTruthy());
     fireEvent(screen.getByLabelText('Morning notification time'), 'onChange', { type: 'set' }, pickerDate('09:05'));
-    fireEvent.press(screen.getByText('Start with the morning sitting')); // → tab 5
+    fireEvent.press(screen.getByText('Skip for now')); // → tab 5
     fireEvent.press(screen.getByText('Done'));
 
     expect(mockSetOnboardingComplete).toHaveBeenCalledTimes(1);

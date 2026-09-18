@@ -138,7 +138,9 @@ export default function OnboardingScreen() {
   };
 
   const skipEvening = () => {
-    // No write: skipping is not an answer — the §7 default (enabled) stands.
+    // No answer = the morning default (v14 issue 05): pinned explicitly, so
+    // the §7 factory default (enabled) never survives the question.
+    repo.setSetting('evening_practice_enabled', false);
     repo.setIntroComplete();
     goToStep(4);
   };

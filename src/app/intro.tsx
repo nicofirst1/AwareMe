@@ -23,13 +23,16 @@ import { rescheduleNotifications } from '@/notifications/scheduler';
  * - tab 4 of `/onboarding` — the same question at the flow's end, for
  *   fresh installs.
  *
- * The default selection is the morning path, unconditionally (owner
- * feedback 2026-09-16): "Start with the morning sitting" is the primary
- * button and persists `evening_practice_enabled = false`, even when the
- * user onboards in the evening. The default is never clock-sensitive —
- * deliberately nothing here reads the time. "Include evening practice"
- * is the explicit opt-in; "Skip for now" writes nothing (the §7 default
- * `true` stands, stated on the card).
+ * Two options only (owner feedback 2026-09-18, superseding the
+ * 2026-09-16 instruction that made "Start with the morning sitting" the
+ * primary button): "Include evening practice" is the primary button, the
+ * explicit opt-in, and "Skip for now" is the no-answer exit. The morning
+ * sitting is the default state and needs no button of its own: an omitted
+ * answer keeps `evening_practice_enabled = false`, so the flow pins the
+ * answer explicitly on every exit (true on include, false on skip). The
+ * §7 factory default (`true`, riding the settings seed and migration
+ * 0004) applies only to rows the question has never reached. The default
+ * is never clock-sensitive — deliberately nothing here reads the time.
  *
  * The card carries the method's purpose, not just the mechanics (owner
  * feedback 2026-09-16): the exercise exists to increase self-awareness,
@@ -66,12 +69,11 @@ export function EveningPracticeCard({
         more, then one reflection sentence to finish. The app works just as well without it.
       </ThemedText>
       <ThemedView style={styles.buttonRow}>
-        <Button label="Start with the morning sitting" variant="primary" onPress={() => onAnswer(false)} />
-        <Button label="Include evening practice" variant="text" onPress={() => onAnswer(true)} />
+        <Button label="Include evening practice" variant="primary" onPress={() => onAnswer(true)} />
         <Button label="Skip for now" variant="text" onPress={onSkip} />
       </ThemedView>
       <ThemedText type="small" themeColor="textSecondary">
-        Skipping keeps the evening practice on. You can change this anytime in Settings.
+        Skipping keeps just the morning sitting. You can change this anytime in Settings.
       </ThemedText>
     </ThemedView>
   );
@@ -91,10 +93,16 @@ export function EveningPracticeCard({
  *
  * "Shown once" is `Repository.isIntroComplete()` (the `settings`-table
  * marker `intro_completed`, mirroring the documented `onboarding_completed`
- * pattern). All three exits mark it complete — so no path can loop the
- * user back into this card. "Skip for now" writes no answer (the §7
- * default `true` stands, stated on the card); everything else keeps
- * defaults and lives in Settings.
+ * pattern). Both exits mark it complete — so no path can loop the user
+ * back into this card. "Skip for now" is the no-answer exit: it pins the
+ * morning default (`evening_practice_enabled = false`, v14 issue 05) and
+ * reschedules (§6.4) like the answer does; everything else keeps its
+ * default and lives in Settings.
+ *
+ * The screen opens with a welcome beat before anything is explained
+ * (v14 issue 02): a greeting naming the app, plus the thirty-week framing
+ * the stems screen's programme row uses ("Thirty weeks of guided
+ * sittings"), then the evening question.
  */
 export default function IntroScreen() {
   const router = useRouter();
@@ -113,7 +121,8 @@ export default function IntroScreen() {
     if (done) router.replace(exitTarget());
   }, [done, router, exitTarget]);
 
-  // Both answers persist explicitly; only skip relies on the §7 default.
+  // Both exits persist explicitly (v14 issue 05): include = true, skip =
+  // the morning default (false).
   const answer = (include: boolean) => {
     repo.setSetting('evening_practice_enabled', include);
     repo.setIntroComplete();
@@ -127,8 +136,16 @@ export default function IntroScreen() {
   };
 
   const skip = () => {
-    // No write: skipping is not an answer — the §7 default (enabled) stands.
+    // No answer = the morning default (v14 issue 05): pin it explicitly —
+    // the §7 factory default is enabled, so leaving the row untouched
+    // would keep the evening practice on, the opposite of what skipping
+    // now means. Reschedule for the same reason (§6.4): the evening
+    // notification only fires while the setting is on.
+    repo.setSetting('evening_practice_enabled', false);
     repo.setIntroComplete();
+    rescheduleNotifications().catch((error) => {
+      if (__DEV__) console.warn('Notification reschedule failed:', error);
+    });
     router.replace(exitTarget());
   };
 
@@ -137,6 +154,13 @@ export default function IntroScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
+        <ThemedView style={styles.welcome}>
+          <ThemedText type="title">Welcome to AwareMe</ThemedText>
+          <ThemedText type="default">
+            This is a thirty-week guided challenge: short sittings, one day at a time. Before you start, one
+            question.
+          </ThemedText>
+        </ThemedView>
         <EveningPracticeCard onAnswer={answer} onSkip={skip} />
       </SafeAreaView>
     </ThemedView>
@@ -146,6 +170,13 @@ export default function IntroScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1, justifyContent: 'center' },
+  welcome: {
+    gap: Spacing.three,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.four,
+  },
   card: {
     gap: Spacing.three,
     padding: Spacing.four,
