@@ -1,6 +1,7 @@
 ---
 name: awareme-app-work
 description: Implementing, reviewing, or auditing AwareMe (six endings) app changes here — UI verification with pi-droid and vision models, emulator protocol, evidence standards, and round protocol for delegated cycles.
+version: 1.1.0
 ---
 
 # Working on AwareMe
@@ -32,6 +33,7 @@ The failure mode this skill exists to prevent: wandering around the app clicking
 4. **Look at it.** The capture must be SEEN by a vision-capable reader before anything is claimed. If your own session model renders images, read the capture yourself and describe what it actually shows (colors, layout, text) against the hypothesis. If it does not (text-only model: the read tool rejects image attachments), delegate the visual inspection to a vision-capable agent (registry agent "eyes" or equivalent) and record its description verbatim as the evidence. A claim backed only by "the flow worked" is not evidence.
 5. **Classify.** Every claim in a report or comment states its evidence class: live observation, UI dump, capture file, or logcat, with the exact filename.
 6. **Preserve.** Evidence lives under `.coordination/<round>-captures/` or the round's evidence dir: real files, no 0-byte stubs, no duplicate files cited as distinct observations. If two captures are identical, say so and cite one.
+7. **Capture-set integrity (device campaigns).** Verify a screen's identity from its UI dump BEFORE naming the capture file after it. After any theme or density change, capture a probe frame and hash it: the md5 must differ from the previous state's probe, or the change did not take effect. Before banking a capture set, post an md5 list across the whole set. A vision-reader content pass over the banked set is a merge gate, not a formality.
 
 For color/layout claims: name the palette token from `src/constants/theme.ts` you expect, then verify the rendered pixels or the UI tree against it. Use pixel-count scripts to supplement visual inspection, not replace it.
 
