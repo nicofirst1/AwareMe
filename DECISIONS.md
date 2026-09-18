@@ -20,6 +20,7 @@ This file is an index, not the record: each entry points at the authoritative do
 4. **Review period** — default 7 days, selectable at review time from presets; `reviews` stores explicit `period_start`/`period_end`.
 
 ## Standing decisions
+- **2026-09-18, audit sequencing (amendment 11):** the methodology auditor runs AFTER the review loop settles (reviewer verdict in + requested changes verified), analyzing the complete trail including the review exchange; it never runs in parallel with the reviewer. Owner directive; codified in the app skill Round protocol (r11, v1.3.0).
 
 - **Dependencies beyond spec §3** are non-discretionary or sanctioned, never casual: `expo-linking` (hard peer of expo-router), `expo-crypto` (UUIDv7 randomness), `@expo/vector-icons` (2026-09-11 redesign, sanctioned).
 - **Stems are editable in place** — sanctioned by spec §4.4; `sessions.stem_text_snapshot` is what preserves "what was on screen". Not an append-only breach.
