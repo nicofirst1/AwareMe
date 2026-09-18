@@ -1,17 +1,15 @@
 ---
 name: mobile-app-ui-design
-description: Design high-quality mobile app UI/UX screens, flows, and components. Use this skill whenever the user asks to design a mobile app screen, create app mockups, build mobile UI components, improve an existing mobile app design, create onboarding flows, design mobile navigation, or requests any mobile-first interface work. Also trigger when the user mentions app design, mobile UI, mobile UX, screen design, app mockups, wireframes, or wants to build React Native / Flutter / SwiftUI style interfaces as visual prototypes. Even if the user just says "design an app" or "make this screen look better", use this skill.
+description: Mobile app UI/UX design. Trigger when the user asks to design screens, create app mockups, build mobile UI components, improve existing designs, create onboarding flows, design mobile navigation, build React Native/Flutter/SwiftUI interfaces, or mentions app design, mobile UI/UX, wireframes, or screen design.
 ---
 
 # Mobile App UI/UX Design Skill
 
-This skill guides the creation of professional, polished mobile app interfaces that follow proven design principles used by top-tier apps like Airbnb, Duolingo, Spotify, Revolut, and Phantom.
+Design mobile interfaces that are intentional, smooth, and alive — every pixel, spacing value, and color choice serves the user.
 
 ## Core Philosophy
 
-Great mobile UI isn't about flashiness — it's about intentionality. Every pixel, every spacing value, every color choice should serve the user. The goal is to create interfaces that feel smooth, personal, and alive — not just functional.
-
-Before designing anything, understand three things:
+Great mobile UI is about intentionality. Before designing anything, understand three things:
 1. **What is the user trying to accomplish?** (reduce friction to that goal)
 2. **How should this make the user feel?** (trust, delight, confidence, calm)
 3. **What's the one thing they should notice first?** (visual hierarchy)
@@ -43,7 +41,7 @@ Follow these rules in order:
 - Maximum **4 font sizes** and **2 font weights**
 - Use monospace variants for large numbers (prices, stats, metrics)
 - Keep text containers under 600px wide for readability
-- Create hierarchy with size, weight, and opacity — not just bold everything
+- Use **size, weight, and opacity** for hierarchy
 
 #### Color System (60/30/10 Rule)
 - **60%** — neutral base (white, light gray, or dark background)
@@ -92,7 +90,7 @@ The user will remember two moments: the **peak** (most intense) and the **end** 
 - Consider micro-animations for state changes
 - Ensure all tap targets are at least 44×44pt
 - Check contrast ratios for accessibility
-- Design error states, empty states, loading states, and success states
+- Design error, empty, loading, and success states
 
 ## Smart Patterns to Apply
 
@@ -102,7 +100,7 @@ The user will remember two moments: the **peak** (most intense) and the **end** 
 - **Power users**: advanced stats, optimization tools, dense information
 
 ### Smarter Search
-Never show a blank search screen. Include:
+Include on the search screen:
 - Recent searches
 - Popular/trending items
 - Personalized recommendations
@@ -121,29 +119,5 @@ Never show a blank search screen. Include:
 - Offer tappable selections for common options (job titles, preferences, etc.)
 - Include icons/emojis alongside options for personality
 - Provide an "Other" option with manual input as fallback
-
-## Anti-Patterns to Avoid
-- Overusing flashy gradients and blur effects (unless you can truly pull it off)
-- More than 4 font sizes or 3 font weights
-- Random spacing values (use the 8-point grid!)
-- Hiding key content behind banners or extra taps
-- Placing CTAs outside the thumb zone
-- Generic empty states with no guidance
-- Using sliders for frequent/precise data entry
-- Making all information the same visual weight (no hierarchy)
-- Emphasizing labels over values (e.g., making "Sales" bigger than "591")
-- Pure gray/black shadows on colored backgrounds
-
-## Implementation Notes
-
-When building these designs as React artifacts or HTML:
-- Use Tailwind CSS utility classes for spacing, colors, and typography
-- Import Lucide React for clean, consistent iconography
-- Use Recharts for any data visualization
-- Apply CSS transitions for micro-interactions and state changes
-- Use CSS variables for the color system
-- Mobile-first: design for 375px width (iPhone SE) as baseline
-- Use `rounded-2xl` or `rounded-3xl` for modern card aesthetics
-- Apply `backdrop-blur` for glassmorphism effects where appropriate
 
 For deeper guidance on industry-specific conventions and emotional design patterns, read `references/industry-conventions.md`.
