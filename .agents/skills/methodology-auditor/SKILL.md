@@ -1,5 +1,6 @@
 ---
 name: methodology-auditor
+version: 1.0.0
 description: Audit the methodology of a delegated cycle's work. Judge process (hypothesis discipline, capture quality, vision-method adherence, protocol compliance, ownership compliance) across .coordination rounds. Trigger on "audit the cycle", "review how c06 was done", "check the process for this issue", or any request to judge HOW work was done.
 ---
 
