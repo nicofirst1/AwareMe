@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { CREATOR_SITE_URL, withAppTag } from '@/constants/links';
 import { MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -84,7 +85,7 @@ export default function AboutScreen() {
 
             <Pressable
               style={styles.linkRow}
-              onPress={() => Linking.openURL('https://nicolobrandizzi.com/')}
+              onPress={() => Linking.openURL(withAppTag(CREATOR_SITE_URL))}
               accessibilityRole="link"
             >
               <ThemedText type="default">Created by Nicolo&apos; Brandizzi</ThemedText>

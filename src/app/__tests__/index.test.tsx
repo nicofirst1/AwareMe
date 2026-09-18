@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Linking, StyleSheet } from 'react-native';
 
 import HomeScreen from '@/app/index';
 import { Colors } from '@/constants/theme';
@@ -222,5 +222,14 @@ describe('HomeScreen', () => {
   it('has a tappable creator footer', () => {
     render(<HomeScreen />);
     expect(screen.getByText("Created by Nicolo’ Brandizzi")).toBeTruthy();
+  });
+
+  it('opens the creator site with the app tag', () => {
+    const openURL = jest.spyOn(Linking, 'openURL').mockImplementation(async () => {});
+    render(<HomeScreen />);
+
+    // Issue 09: the footer link carries `utm_source=awareme`.
+    fireEvent.press(screen.getByText("Created by Nicolo’ Brandizzi"));
+    expect(openURL).toHaveBeenCalledWith('https://nicolobrandizzi.com/?utm_source=awareme');
   });
 });
