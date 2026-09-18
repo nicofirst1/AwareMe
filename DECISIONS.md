@@ -57,8 +57,12 @@ This file is an index, not the record: each entry points at the authoritative do
 
 Weighted stem selection, the random-window scheduler, and the 2026-09-11 "fixed mode" addition (tickets 06, 09, 10) were deleted outright by ADR-0004; their entries here are historical.
 
+- **Evening-practice skip persists the morning default (2026-09-18, v14-feedback c02):** "Skip for now" on the evening question persists `evening_practice_enabled = false` explicitly on every exit - the §7 factory default (enabled) must not survive a no-answer. Supersedes the 2026-09-16 reporter feedback that made the morning button primary; the card now asks exactly two options ("Include evening practice" / "Skip for now"). Full record: `.scratch/v14-feedback/issues/05-evening-question-two-options.md` (Comments + hub ARBITRATION 13:55).
+
 ## Parked owner arbitrations
 
+- Small-viewport intro layout (2026-09-18, c02 device finding): whether the /intro welcome beat clips at 320x640 (SafeAreaView centering content taller than the screen); the eyes pass could not reproduce the clip on the capture. Owner decides scrollable-vs-fixed.
 - Whether the About screen should also carry a one-line book credit (c04 reviewer finding, 2026-09-16).
 - Identity FLAGs (issue 14): deep-link scheme, Android package / iOS bundle ids, DB filename.
 - Spec §5.1/§5.4 and ADR-0005 quote remainders: amend spec to match the overlay architecture (owner call).
+- jest content-consistency gating (2026-09-18, v14 GATE-BASELINE): the migrate/programmeSeed consistency tests fail on machines where the verbatim snapshot is present but the private `stems.content.ts` is absent (seed falls back to example text); restore the private file or sanction test-gating (owner call).
