@@ -391,7 +391,7 @@ describe('WriteScreen — weekly reflection (/write?origin=weekly, §6.5.1)', ()
 describe('WriteScreen — open review sessions resume into their flow (c05-queued bug)', () => {
   it('an open weekly meta-stem session resumes into the weekly flow — never "No stems set"', async () => {
     // The c05 repro: kill the app during Review's meta-stem phase, then
-    // open sixendings://write (no params). The old resumeQueue built its
+    // open awareme://write (no params). The old resumeQueue built its
     // fallback from listAllStems, which excludes meta stems, so the screen
     // rendered the empty state forever until the row was closed by hand.
     mockRepoState.openSession = openSessionRow(mockWeeklyMeta.id, mockWeeklyMeta.text, { origin: 'review', targetEndings: 1 });

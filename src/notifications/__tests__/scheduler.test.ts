@@ -67,16 +67,16 @@ describe('rescheduleNotifications', () => {
     expect(mockSchedule).toHaveBeenCalledTimes(3);
 
     const morning = callFor(MORNING_NOTIFICATION_ID);
-    expect(morning?.content.data).toEqual({ kind: 'six-endings/writing-prompt', timeOfDay: 'morning' });
+    expect(morning?.content.data).toEqual({ kind: 'awareme/writing-prompt', timeOfDay: 'morning' });
     expect(morning?.trigger).toEqual({ type: 'daily', hour: 8, minute: 0 });
 
     const evening = callFor(EVENING_NOTIFICATION_ID);
-    expect(evening?.content.data).toEqual({ kind: 'six-endings/writing-prompt', timeOfDay: 'evening' });
+    expect(evening?.content.data).toEqual({ kind: 'awareme/writing-prompt', timeOfDay: 'evening' });
     expect(evening?.trigger).toEqual({ type: 'daily', hour: 21, minute: 0 });
 
     const weekly = callFor(WEEKLY_NOTIFICATION_ID);
     expect(weekly?.content.body).toBe(WEEKLY_NOTIFICATION_BODY);
-    expect(weekly?.content.data).toEqual({ kind: 'six-endings/writing-prompt', period: 'weekly' });
+    expect(weekly?.content.data).toEqual({ kind: 'awareme/writing-prompt', period: 'weekly' });
     expect(weekly?.trigger).toEqual({ type: 'weekly', weekday: 1, hour: 21, minute: 0 });
   });
 
@@ -120,7 +120,7 @@ describe('rescheduleNotifications', () => {
       expect(call.content.body).toMatch(/^Time for your (morning|evening|weekly) (practice|reflection)\.$/);
       // The silent payload carries only fixed markers — never stem or user text.
       for (const value of Object.values(call.content.data)) {
-        expect(['six-endings/writing-prompt', 'morning', 'evening', 'weekly']).toContain(value);
+        expect(['awareme/writing-prompt', 'morning', 'evening', 'weekly']).toContain(value);
       }
     }
   });
