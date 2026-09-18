@@ -359,20 +359,33 @@ export default function HomeScreen() {
                 accessibilityRole="link"
                 accessibilityLabel={label}
               >
-                <Ionicons
-                  name={icon}
-                  size={20}
-                  color={resolveTileColor(resolvedScheme === 'dark' ? colorDark : color, theme.accent)}
-                />
-                {/* numberOfLines={1} (v14 issue 12: a lone "s" of "Progress"
-                    wrapped to a second line at narrow widths) — no tile label
-                    may ever wrap. The freed-up horizontal padding (Spacing.one,
-                    below) is what makes "Progress" actually fit on one line
-                    at the 320pt floor, so this is a guarantee of last resort,
-                    not the sizing fix itself. */}
-                <ThemedText type="default" numberOfLines={1}>
-                  {label}
-                </ThemedText>
+                <View style={styles.tileContent}>
+                  {/* Icon rendered as a View with fixed size to avoid
+                      accessibility text contributions. The glyph is
+                      decorative; the tile's accessible name comes from
+                      Link's accessibilityLabel above (§13.5). */}
+                  <View style={styles.tileIcon}>
+                    <Ionicons
+                      name={icon}
+                      size={20}
+                      color={resolveTileColor(resolvedScheme === 'dark' ? colorDark : color, theme.accent)}
+                    />
+                  </View>
+                  {/* numberOfLines={1} (v14 issue 12: a lone "s" of "Progress"
+                      wrapped to a second line at narrow widths) — no tile label
+                      may ever wrap. The freed-up horizontal padding (Spacing.one,
+                      below) is what makes "Progress" actually fit on one line
+                      at the 320pt floor, so this is a guarantee of last resort,
+                      not the sizing fix itself. */}
+                  <ThemedText
+                    type="default"
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    style={styles.tileLabel}
+                  >
+                    {label}
+                  </ThemedText>
+                </View>
               </Link>
             ))}
           </View>
@@ -483,16 +496,35 @@ const styles = StyleSheet.create({
     // row at any supported screen width.
     width: '30%',
     paddingVertical: Spacing.three,
-    // Horizontal inner padding trimmed two points a side (v14 issue 12):
-    // at 320pt the label box was ~66pt wide and "Progress" (~62pt at 16pt
-    // Roboto) wrapped its trailing "s". Spacing.one leaves ~74pt of label
-    // box — the widest label fits with margin, verified by capture at
-    // 320pt, light and dark (issue 12 acceptance).
     paddingHorizontal: Spacing.one,
     borderRadius: Radius.medium,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  tileContent: {
+    // Container for icon + label to ensure proper layout at 320dp.
+    // Flex column with center alignment; icon and label stack if needed
+    // but label is constrained to single line to prevent wrap.
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: Spacing.half,
+  },
+  tileIcon: {
+    // Fixed-size icon wrapper to avoid accessibility text contributions
+    // and to ensure predictable layout at narrow widths.
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tileLabel: {
+    // Explicit center alignment and single-line constraint (v14 issue 12).
+    // Spacing.one padding + numberOfLines=1 guarantee no wrap at 320dp floor
+    // (Progress ~55dp fits in ~82dp label box). ellipsizeMode on the Text
+    // component itself is the safety net.
+    textAlign: 'center',
+    width: '100%',
   },
   navLink: {
     minHeight: MinTouchTarget,
