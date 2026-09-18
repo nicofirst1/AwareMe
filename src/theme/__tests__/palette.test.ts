@@ -85,6 +85,27 @@ describe('theme color tokens', () => {
     expect(contrast(label, Colors[scheme].accent)).toBeGreaterThanOrEqual(AA);
   });
 
+  it('dark: the control outline clears 3:1 on background and backgroundElement', () => {
+    // `borderStrong` outlines non-text controls (Button secondary, LockScreen
+    // Unlock); WCAG 1.4.11 sets the 3:1 bar for non-text UI boundaries, not
+    // the 4.5:1 text bar. Dark buttons sit on `background` (the black screen)
+    // and on `backgroundElement` cards (the sitting card), so both pairings
+    // are asserted — the v14 report's "buttons not really visible in dark"
+    // measured 1.25:1 (fill) and 1.39:1 (the old shared 15% border) against
+    // these very surfaces (v14 issue 07).
+    const c = Colors.dark;
+    for (const surface of [c.background, c.backgroundElement]) {
+      expect(contrast(c.borderStrong, surface)).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('light: the control outline coincides with the border hairline (light rendering unchanged by issue 07)', () => {
+    // Issue 07's contrast finding is dark-scoped: light keeps today's
+    // quiet hairline, so the token pins the existing light `border` value
+    // rather than introducing a new light figure.
+    expect(Colors.light.borderStrong).toBe(Colors.light.border);
+  });
+
   it.each(THEMES)('%s: the pressure gradient never drops below AA against background', (scheme) => {
     for (let i = 0; i <= 20; i++) {
       expect(contrast(pressureColorAt(i / 20, scheme), Colors[scheme].background)).toBeGreaterThanOrEqual(AA);
