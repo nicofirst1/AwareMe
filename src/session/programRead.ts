@@ -66,7 +66,7 @@ export function readProgrammeWeek(repo: Repository, now: Date = new Date()): Pro
  * to the derived week and a derived advance).
  */
 export function applyWeekSetActivation(repo: Repository, now: Date = new Date()): void {
-  const { currentWeek, override, derivedWeek } = readProgrammeWeek(repo, now);
+  const { override, derivedWeek } = readProgrammeWeek(repo, now);
   
   // Find the highest week that currently has any active stems (preserve old unlock).
   const highestActiveFromDb = repo.getHighestUnlockedWeek();
