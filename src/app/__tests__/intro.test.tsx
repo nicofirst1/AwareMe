@@ -60,17 +60,30 @@ describe('IntroScreen', () => {
     mockReschedule.mockClear();
   });
 
-  it('renders the one question card with the morning path as the default selection, the opt-in, and a skip exit', () => {
+  it('greets the user first and then asks the evening question with exactly two options', () => {
     render(<IntroScreen />);
 
+    // The opening beat (v14 issue 02): a greeting naming the app, with the
+    // thirty-week framing the stems screen's programme row uses.
+    expect(screen.getByText('Welcome to AwareMe')).toBeTruthy();
+    expect(screen.getByText(/thirty-week guided challenge/)).toBeTruthy();
     expect(screen.getByText('Include an evening practice?')).toBeTruthy();
-    // The default selection is the morning path — unconditional, never
-    // clock-sensitive (owner feedback 2026-09-16).
-    expect(screen.getByText('Start with the morning sitting')).toBeTruthy();
+    // Exactly two options (v14 issue 05): "Include evening practice" is
+    // the primary opt-in; "Skip for now" is the no-answer exit. The
+    // morning default needs no button of its own.
     expect(screen.getByText('Include evening practice')).toBeTruthy();
     expect(screen.getByText('Skip for now')).toBeTruthy();
+    expect(screen.queryByText('Start with the morning sitting')).toBeNull();
     // Non-trap promise, on the card itself: the answer lives in Settings.
-    expect(screen.getByText('Skipping keeps the evening practice on. You can change this anytime in Settings.')).toBeTruthy();
+    expect(screen.getByText('Skipping keeps just the morning sitting. You can change this anytime in Settings.')).toBeTruthy();
+  });
+
+  it('greets before explaining: the welcome beat renders above the question card', () => {
+    const { toJSON } = render(<IntroScreen />);
+
+    const tree = JSON.stringify(toJSON());
+    expect(tree.indexOf('Welcome to AwareMe')).toBeGreaterThan(-1);
+    expect(tree.indexOf('Welcome to AwareMe')).toBeLessThan(tree.indexOf('Include an evening practice?'));
   });
 
   it('states the purpose of the exercise and the evening + weekly note', () => {
@@ -100,15 +113,16 @@ describe('IntroScreen', () => {
 
   it('defaults to the morning path even at an evening clock time (21:30 local)', () => {
     // The clock is mocked to an evening hour to pin the owner requirement:
-    // the default must stay the morning path regardless of the time of
-    // day. Nothing in the component reads the clock today; this fails if
-    // anyone makes the default clock-sensitive later.
+    // the default (the no-answer exit) must stay the morning path
+    // regardless of the time of day. Nothing in the component reads the
+    // clock today; this fails if anyone makes the default clock-sensitive
+    // later.
     const hoursSpy = jest.spyOn(Date.prototype, 'getHours').mockReturnValue(21);
     const minutesSpy = jest.spyOn(Date.prototype, 'getMinutes').mockReturnValue(30);
     try {
       render(<IntroScreen />);
 
-      fireEvent.press(screen.getByText('Start with the morning sitting'));
+      fireEvent.press(screen.getByText('Skip for now'));
 
       expect(mockSetSetting).toHaveBeenCalledWith('evening_practice_enabled', false);
       expect(mockSetIntroComplete).toHaveBeenCalledTimes(1);
@@ -120,24 +134,26 @@ describe('IntroScreen', () => {
     }
   });
 
-  it('routes an upgrader (onboarding already complete) home after choosing the morning path', () => {
+  it('routes an upgrader (onboarding already complete) home after the no-answer exit', () => {
     mockOnboardingComplete = true;
     render(<IntroScreen />);
 
-    fireEvent.press(screen.getByText('Start with the morning sitting'));
+    fireEvent.press(screen.getByText('Skip for now'));
 
     expect(mockSetSetting).toHaveBeenCalledWith('evening_practice_enabled', false);
     expect(mockReplace).toHaveBeenCalledWith('/');
   });
 
-  it('skip persists no answer (the §7 default stands) and still never shows the intro again', () => {
+  it('skip persists the morning default (false) and still never shows the intro again', () => {
     render(<IntroScreen />);
 
     fireEvent.press(screen.getByText('Skip for now'));
 
-    expect(mockSetSetting).not.toHaveBeenCalled();
-    expect(mockReschedule).not.toHaveBeenCalled();
+    // v14 issue 05: no answer = morning-only, pinned explicitly. The §7
+    // factory default (enabled) must not survive the question.
+    expect(mockSetSetting).toHaveBeenCalledWith('evening_practice_enabled', false);
     expect(mockSetIntroComplete).toHaveBeenCalledTimes(1);
+    expect(mockReschedule).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith('/onboarding');
   });
 
