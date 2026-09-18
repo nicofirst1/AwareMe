@@ -54,6 +54,8 @@ const WEEK_OPTIONS: { label: string; value: WeekFilter }[] = [
 // origin carry a Palette hue the way the category chips already do. Neutral
 // options (All, Mine, Imported, Unset, the State row) stay uncolored: the
 // hue marks the dimension, not every choice.
+// Issue 08: the same mapping now also colors the per-stem chips on the
+// library rows, so a tag and its filter can never drift apart.
 const TIME_OF_DAY_HUES: Record<'morning' | 'evening', PaletteName> = {
   morning: 'amber',
   evening: 'indigo',
@@ -215,6 +217,29 @@ export default function StemsScreen() {
             <ThemedText type="default">Official programme</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
               Thirty weeks of guided sittings
+            </ThemedText>
+          </View>
+          <Ionicons name="chevron-forward-outline" size={18} color={theme.textSecondary} />
+        </Pressable>
+
+        {/*
+          Issue 15: custom authoring exists (add/edit/archive on /stem-edit,
+          bulk import on /stem-import), but nothing in the library said so in
+          plain words — the header's "Add" names no object. A labeled sibling
+          in the programme row's exact anatomy, on the first screen, gives a
+          first-run user the affordance without hunting the header. The write
+          flow stays untouched (§6: no clutter where the writing happens).
+        */}
+        <Pressable
+          onPress={() => router.push('/stem-edit')}
+          accessibilityRole="button"
+          accessibilityLabel="Add your own. Write your own sentence and add it to the library."
+          style={[styles.programmeRow, { backgroundColor: theme.backgroundElement }]}
+        >
+          <View style={styles.programmeText}>
+            <ThemedText type="default">Add your own</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Write your own sentence and add it to the library
             </ThemedText>
           </View>
           <Ionicons name="chevron-forward-outline" size={18} color={theme.textSecondary} />
@@ -396,6 +421,28 @@ const StemRow = memo(function StemRow({
   const categoryColors = isCategoryName(item.category) ? CategoryColors[item.category][dark ? 'dark' : 'light'] : null;
   const stateBadge = isDeleted ? null : (item.active ? STATE_BADGE.active : STATE_BADGE.resting)[dark ? 'dark' : 'light'];
 
+  // Issue 08: the per-stem time-of-day and programme-origin tags render as
+  // colored chips in the same anatomy as the filter row's chips (issue 07's
+  // hue mechanism, resolved from the same TIME_OF_DAY_HUES mapping the
+  // Time-of-day filter chips read, so the row tag and its filter can never
+  // drift apart). Programme rows carry their week on the origin chip;
+  // user/imported origins stay uncolored text, as in the filter row (the
+  // hue marks the dimension, not every choice). Identity, not state — the
+  // chips show on soft-deleted rows too, which stay dimmed like today.
+  const timeOfDayChip = item.time_of_day
+    ? {
+        ...Palette[TIME_OF_DAY_HUES[item.time_of_day]][dark ? 'dark' : 'light'],
+        label: item.time_of_day === 'morning' ? 'Morning' : 'Evening',
+      }
+    : null;
+  const programmeChip =
+    item.origin === 'seed'
+      ? {
+          ...Palette[PROGRAMME_ORIGIN_HUE][dark ? 'dark' : 'light'],
+          label: item.weekNumber === null ? 'Programme' : `Programme · Week ${item.weekNumber}`,
+        }
+      : null;
+
   // Issue 03: the state is named in the accessible label too, so it never
   // depends on seeing the badge or the edge tint.
   const label = isDeleted
@@ -437,6 +484,13 @@ const StemRow = memo(function StemRow({
               </ThemedText>
             </ThemedView>
           )}
+          {timeOfDayChip && (
+            <ThemedView style={[styles.categoryChip, { backgroundColor: timeOfDayChip.bg }]}>
+              <ThemedText type="small" style={{ color: timeOfDayChip.text }}>
+                {timeOfDayChip.label}
+              </ThemedText>
+            </ThemedView>
+          )}
           {reflectionPair && (
             <ThemedView style={[styles.categoryChip, { backgroundColor: reflectionPair.bg }]}>
               <ThemedText type="small" style={{ color: reflectionPair.text }}>
@@ -452,13 +506,20 @@ const StemRow = memo(function StemRow({
               </ThemedText>
             </ThemedView>
           )}
+          {programmeChip && (
+            <ThemedView style={[styles.categoryChip, { backgroundColor: programmeChip.bg }]}>
+              <ThemedText type="small" style={{ color: programmeChip.text }}>
+                {programmeChip.label}
+              </ThemedText>
+            </ThemedView>
+          )}
           <ThemedText type="small" themeColor="textSecondary">
             {[
               categoryColors ? null : item.category, // shown as a colored chip instead, when we have one
-              item.time_of_day,
-              // 'meta' is never shown as copy: the Reflection tag above names
-              // the row (issue 07).
-              item.origin === 'seed' ? 'Programme' : isMeta ? null : item.origin, // display-only rename (issue 03)
+              // time_of_day and origin 'seed' render as the colored chips
+              // above (issue 08); 'meta' is never shown as copy: the
+              // Reflection tag above names the row (issue 07).
+              item.origin === 'user' || item.origin === 'imported' ? item.origin : null, // display-only rename (issue 03)
               isDeleted ? 'deleted' : null,
             ]
               .filter(Boolean)

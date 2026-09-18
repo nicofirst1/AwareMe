@@ -1,7 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 import StemsScreen from '@/app/stems';
 import { LibraryStemRow } from '@/db';
+import { Palette } from '@/constants/theme';
 
 // `useFocusEffect` no-ops without a real navigation tree (see
 // node_modules/expo-router/build/useFocusEffect.js); run the effect once on
@@ -212,5 +214,57 @@ describe('StemsScreen', () => {
     ).toBeTruthy();
     // The developer vocabulary never leaks as copy.
     expect(screen.queryByText(/meta/)).toBeNull();
+  });
+
+  // Issue 08: the per-stem tags read as colored chips in the filter chips'
+  // anatomy. Colors are asserted symbolically against the palette (house
+  // rule since the palette round — no hex literals in assertions): a tag
+  // resolved from TIME_OF_DAY_HUES must carry the very pair a FilterChip
+  // with hue='amber'/'indigo' would render, per theme.
+  it('renders time of day and programme origin as colored chips, with the week on programme rows', () => {
+    // One controlled stem per branch, so each chip color is read off
+    // exactly one row: a seed morning stem of week 7, a user evening stem
+    // (no week), and a seed stem with no week backfilled (plain chip).
+    mockStemsOverride = [
+      { ...makeStem(0), time_of_day: 'morning', weekNumber: 7 },
+      { ...makeStem(3), time_of_day: 'evening', origin: 'user', category: null, weekNumber: null },
+      { ...makeStem(5), time_of_day: null, weekNumber: null },
+    ];
+    render(<StemsScreen />);
+
+    // The chip's fill sits on the pill View wrapping the label Text, so the
+    // assertion walks up from the text node until a fill-bearing style —
+    // the first hit IS the chip pill (its Text carries only a color).
+    const chipBackground = (label: string) => {
+      let node = screen.getByText(label);
+      let flat = StyleSheet.flatten(node.props.style);
+      while (typeof flat?.backgroundColor === 'undefined' && node.parent) {
+        node = node.parent;
+        flat = StyleSheet.flatten(node.props.style);
+      }
+      return flat?.backgroundColor;
+    };
+    expect(chipBackground('Morning')).toBe(Palette.amber.light.bg); // same pair a Morning filter chip gets
+    expect(chipBackground('Evening')).toBe(Palette.indigo.light.bg);
+    expect(chipBackground('Programme · Week 7')).toBe(Palette.jade.light.bg);
+    // The user origin stays uncolored text, as in the filter row.
+    expect(screen.getByText('user')).toBeTruthy();
+    // A seed row with no week (pre-backfill edge) still names its origin.
+    expect(screen.getByText('Programme')).toBeTruthy();
+    // The raw enum never leaks as copy.
+    expect(screen.queryByText('morning')).toBeNull();
+    expect(screen.queryByText(/seed/)).toBeNull();
+  });
+
+  // Issue 15: custom authoring is discoverable from the library itself — a
+  // labeled entry point in plain words (not just the header's terse "Add"),
+  // pressing it opens the bare add form on /stem-edit.
+  it('offers a labeled add-your-own entry point that opens the stem editor', () => {
+    render(<StemsScreen />);
+
+    expect(screen.getByText('Add your own')).toBeTruthy();
+    expect(screen.getByText('Write your own sentence and add it to the library')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Add your own. Write your own sentence and add it to the library.'));
+    expect(mockRouter.push).toHaveBeenCalledWith('/stem-edit');
   });
 });
