@@ -586,11 +586,15 @@ export class Repository {
 
   /**
    * The evening reflection's re-read (§6.2/§6.5.2): non-deleted sessions on
-   * morning-tagged stems with at least one non-deleted ending started in
-   * `[dayStart, dayEnd)` — the caller passes today's local-day bounds in
-   * UTC ISO (`utcBoundsOfLocalDay`). Scoped to `time_of_day = 'morning'`
-   * stems: the evening sits down to reflect the morning's practice, not
-   * everything touched today.
+   * non-deleted morning-tagged stems with at least one non-deleted ending
+   * started in `[dayStart, dayEnd)` — the caller passes today's local-day
+   * bounds in UTC ISO (`utcBoundsOfLocalDay`). Scoped to `time_of_day =
+   * 'morning'` stems: the evening sits down to reflect the morning's
+   * practice, not everything touched today. The stem join carries its own
+   * `deleted_at IS NULL` (issue 10): a stem soft-deleted between the
+   * morning's writing and the evening's reflection must not surface in the
+   * reread — the endings stay in history/exports (§4.1.5), the practice
+   * surface just stops showing them.
    */
   listSessionsForDayMorning(dayStart: string, dayEnd: string): { session: SessionRow; endings: EndingRow[] }[] {
     const sessionIds = this.db
@@ -599,7 +603,7 @@ export class Repository {
          FROM sessions s
          JOIN stems st ON st.id = s.stem_id
          JOIN endings e ON e.session_id = s.id
-         WHERE s.deleted_at IS NULL AND e.deleted_at IS NULL
+         WHERE s.deleted_at IS NULL AND e.deleted_at IS NULL AND st.deleted_at IS NULL
            AND st.time_of_day = 'morning'
            AND e.started_at >= ? AND e.started_at < ?
          ORDER BY s.started_at`,
