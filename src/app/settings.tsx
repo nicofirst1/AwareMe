@@ -6,16 +6,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 
 import { Card } from '@/components/card';
-import { FilterChip } from '@/components/filter-chip';
 import { ScreenHeader } from '@/components/screen-header';
 import { SectionHeader } from '@/components/section-header';
 import { StepperRow } from '@/components/stepper-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, MinTouchTarget, Radius, Spacing } from '@/constants/theme';
+import { Palette, MaxContentWidth, MinTouchTarget, Radius, Spacing } from '@/constants/theme';
 import { getRepository, Settings } from '@/db';
-import { cancelAllPendingNotifications, rescheduleNotifications, WEEKDAY_NAMES } from '@/notifications/scheduler';
+import { cancelAllPendingNotifications, rescheduleNotifications, WEEKDAY_NAMES, type WeekdayName } from '@/notifications/scheduler';
 import { isValidHHMM } from '@/session/settingsValidation';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { resyncThemePreference, setThemePreference, THEME_PREFERENCE_VALUES, useThemePreference } from '@/theme/themePreference';
 
@@ -24,7 +24,18 @@ const TERMINATORS = ['...', '—'] as const;
 /** The three settings keys a `TimeField` writes; all store the same "HH:MM" 24h format. */
 type TimeKey = 'morning_notification_time' | 'evening_notification_time' | 'weekly_meta_time';
 
-function ChipToggle<T extends string>({
+/**
+ * The "pick one of a short row of options" control (on/off pairs, the
+ * terminator, the theme) in the screen's unified control anatomy: a pill
+ * row with no borders and no fill equal to the surface it sits on, so no
+ * option can render as the white square the 2026-09-17 vision audit
+ * caught (v13 issue 08, defect C). Unselected options stay quiet text
+ * (textSecondary on the element card, 5.08:1 light / 8.08:1 dark per
+ * theme.ts); the selected option carries the palette's anchor hue
+ * consumed through the c04 token contract: the `Palette.indigo` bg/text
+ * pair, the measured AA pairing for chip/tint fills.
+ */
+function OptionToggle<T extends string>({
   label,
   options,
   value,
@@ -37,6 +48,9 @@ function ChipToggle<T extends string>({
   onChange: (next: T) => void;
   display?: (opt: T) => string;
 }) {
+  const scheme = useColorScheme();
+  const selectedPair = scheme === 'dark' ? Palette.indigo.dark : Palette.indigo.light;
+
   return (
     <ThemedView style={styles.section}>
       {label && (
@@ -45,9 +59,26 @@ function ChipToggle<T extends string>({
         </ThemedText>
       )}
       <ThemedView style={styles.chipRow}>
-        {options.map((opt) => (
-          <FilterChip key={opt} label={display ? display(opt) : opt} selected={value === opt} onPress={() => onChange(opt)} />
-        ))}
+        {options.map((opt) => {
+          const selected = value === opt;
+          return (
+            <Pressable
+              key={opt}
+              onPress={() => onChange(opt)}
+              style={[styles.optionPill, selected && { backgroundColor: selectedPair.bg }]}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+            >
+              <ThemedText
+                type="small"
+                themeColor="textSecondary"
+                style={selected ? { color: selectedPair.text } : undefined}
+              >
+                {display ? display(opt) : opt}
+              </ThemedText>
+            </Pressable>
+          );
+        })}
       </ThemedView>
     </ThemedView>
   );
@@ -127,7 +158,7 @@ function TimeField({
               onChange: (_event, date) => confirmDate(date),
             });
           }}
-          style={[styles.timeTrigger, { backgroundColor: theme.backgroundElement }]}
+          style={[styles.pillTrigger, { backgroundColor: theme.backgroundSelected }]}
           accessibilityRole="button"
           accessibilityLabel={accessibilityLabel}
         >
@@ -154,6 +185,87 @@ function TimeField({
 }
 
 /**
+ * A stored weekday name → the next date falling on that weekday (local
+ * noon, clear of DST edges): the seed the native date picker opens on.
+ * An out-of-range stored name seeds today; confirming then stores the
+ * weekday the user actually picked.
+ */
+function weekdayToDate(day: WeekdayName): Date {
+  const date = new Date();
+  const target = WEEKDAY_NAMES.indexOf(day);
+  if (target >= 0) date.setDate(date.getDate() + ((target - date.getDay() + 7) % 7));
+  date.setHours(12, 0, 0, 0);
+  return date;
+}
+
+/**
+ * The weekly reflection day as a native picker (2026-09-17 owner
+ * feedback: "weekly reflections needs a day picker instead of a list"),
+ * mirroring `TimeField`: the stored value stays the lowercase weekday
+ * name the scheduler consumes, only the input surface is native. The
+ * date picker has no weekday-only mode, so it seeds with the next date
+ * on the stored day and `onConfirm` derives the day back from the
+ * picked date's weekday — `WEEKDAY_NAMES` is the single mapping in both
+ * directions. Same contract as the time fields: `onConfirm` fires only
+ * on an explicit set; a dismissal never reaches storage.
+ */
+function DayField({
+  label,
+  accessibilityLabel,
+  value,
+  onConfirm,
+}: {
+  label: string;
+  accessibilityLabel: string;
+  value: WeekdayName;
+  onConfirm: (next: WeekdayName) => void;
+}) {
+  const theme = useTheme();
+
+  const confirmDate = (date?: Date) => {
+    const day = date ? WEEKDAY_NAMES[date.getDay()] : undefined;
+    if (day) onConfirm(day);
+  };
+
+  if (Platform.OS === 'android') {
+    return (
+      <ThemedView style={styles.windowRow}>
+        <ThemedText type="eyebrow">{label}</ThemedText>
+        <Pressable
+          onPress={() => {
+            DateTimePickerAndroid.open({
+              mode: 'date',
+              value: weekdayToDate(value),
+              onChange: (_event, date) => confirmDate(date),
+            });
+          }}
+          style={[styles.pillTrigger, { backgroundColor: theme.backgroundSelected }]}
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel}
+        >
+          <ThemedText type="default">{value}</ThemedText>
+        </Pressable>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ThemedView style={styles.windowRow}>
+      <ThemedText type="eyebrow">{label}</ThemedText>
+      <DateTimePicker
+        mode="date"
+        display="compact"
+        value={weekdayToDate(value)}
+        onChange={(event, date) => {
+          if (event.type === 'set') confirmDate(date);
+        }}
+        accessibilityLabel={accessibilityLabel}
+      />
+    </ThemedView>
+  );
+}
+
+/**
  * Settings (§7): every tunable, its stated range, persisted one key at a
  * time via `Repository.setSetting` (JSON-encoded in the `settings` table,
  * `updated_at` stamped per write — the existing settings-table pattern, no
@@ -163,17 +275,26 @@ function TimeField({
  * recreates the app's triggers from the freshly saved settings, scheduling
  * the evening one only when `evening_practice_enabled` is true.
  *
- * Notification times are native pickers (2026-09-16 owner feedback) via
- * `@react-native-community/datetimepicker`; the picker can only emit a
- * Date, and `isValidHHMM` remains the validation boundary at the storage
- * edge (`saveTime`) before any key is written. Stored values stay the
- * exact "HH:MM" 24h strings; the reschedule-on-change contract is
- * untouched.
+ * Notification times and the weekly reflection day are native pickers
+ * (2026-09-16 and 2026-09-17 owner feedback) via
+ * `@react-native-community/datetimepicker`; the time picker can only
+ * emit a Date, and `isValidHHMM` remains the validation boundary at the
+ * storage edge (`saveTime`) before any key is written. Stored values
+ * stay the exact "HH:MM" 24h strings and the lowercase weekday name;
+ * the reschedule-on-change contract is untouched.
  *
  * Sub-groups are inset cards (2026-09-16 owner feedback: the screen lacked
  * visual separation between groups) using the shared `Card`, with the
  * existing `SectionHeader` per group. Structure only — no setting moved
  * between keys.
+ *
+ * Controls share one anatomy (2026-09-17 audit, defect C): pill shapes
+ * (`Radius.chip`) with no borders and no fill equal to the surface they
+ * sit on. Options are quiet text until selected, then carry the
+ * `Palette.indigo` bg/text pair (c04's anchor hue for selected states);
+ * value triggers (times, day) fill with `backgroundSelected`, the
+ * theme's deeper neutral step, visible on the element card they sit on.
+ * The steppers keep the same anatomy via the shared `StepperRow`.
  *
  * The theme preference is applied through `src/theme/themePreference` (the
  * same fix): the chip reads the reactive store and writes through it, so
@@ -303,7 +424,7 @@ export default function SettingsScreen() {
                   An optional per-stem countdown, separate from the session timer above. Off by default; the
                   writing screen scopes it to the field you’re on.
                 </Hint>
-                <ChipToggle
+                <OptionToggle
                   options={['off', 'on'] as const}
                   value={settings.stem_timer_enabled ? 'on' : 'off'}
                   onChange={(v) => set('stem_timer_enabled', v === 'on')}
@@ -346,7 +467,7 @@ export default function SettingsScreen() {
               <Divider />
 
               <ThemedView style={styles.setting}>
-                <ChipToggle
+                <OptionToggle
                   label="Evening practice"
                   options={['on', 'off'] as const}
                   value={settings.evening_practice_enabled ? 'on' : 'off'}
@@ -364,11 +485,15 @@ export default function SettingsScreen() {
                 <ThemedText type="small" themeColor="textSecondary">
                   Weekly reflection
                 </ThemedText>
-                <Hint>A weekly reminder to sit with the week&apos;s writing, on one day at an exact time.</Hint>
-                <ChipToggle
-                  options={WEEKDAY_NAMES}
-                  value={settings.weekly_meta_day as (typeof WEEKDAY_NAMES)[number]}
-                  onChange={setWeeklyDay}
+                <Hint>
+                  A weekly reminder to sit with the week&apos;s writing, on one day at an exact time. Pick any
+                  date: the day it falls on is saved.
+                </Hint>
+                <DayField
+                  label="Day"
+                  accessibilityLabel="Weekly reflection day"
+                  value={settings.weekly_meta_day as WeekdayName}
+                  onConfirm={setWeeklyDay}
                 />
                 <TimeField
                   label="Time"
@@ -381,7 +506,7 @@ export default function SettingsScreen() {
               <Divider />
 
               <ThemedView style={styles.setting}>
-                <ChipToggle
+                <OptionToggle
                   label="Weekly review prompt"
                   options={['on', 'off'] as const}
                   value={settings.weekly_review_prompt ? 'on' : 'off'}
@@ -396,7 +521,7 @@ export default function SettingsScreen() {
             <SectionHeader label="Writing" />
             <Card style={styles.cardGap}>
               <ThemedView style={styles.setting}>
-                <ChipToggle
+                <OptionToggle
                   label="Uncensored mode"
                   options={['on', 'off'] as const}
                   value={settings.uncensored_mode ? 'on' : 'off'}
@@ -411,7 +536,7 @@ export default function SettingsScreen() {
               <Divider />
 
               <ThemedView style={styles.setting}>
-                <ChipToggle
+                <OptionToggle
                   label="Stem terminator"
                   options={TERMINATORS}
                   value={settings.stem_terminator as (typeof TERMINATORS)[number]}
@@ -426,7 +551,7 @@ export default function SettingsScreen() {
             <SectionHeader label="App" />
             <Card style={styles.cardGap}>
               <ThemedView style={styles.setting}>
-                <ChipToggle
+                <OptionToggle
                   label="App lock"
                   options={['on', 'off'] as const}
                   value={settings.app_lock_enabled ? 'on' : 'off'}
@@ -437,7 +562,7 @@ export default function SettingsScreen() {
 
               <Divider />
 
-              <ChipToggle
+              <OptionToggle
                 label="Theme"
                 options={THEME_PREFERENCE_VALUES}
                 value={themePreference}
@@ -527,14 +652,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
-  // The Android trigger shows the stored "HH:MM" verbatim and opens the
-  // system time dialog; iOS renders the compact native picker instead.
-  timeTrigger: {
+  // The Android trigger shows the stored "HH:MM" or weekday name verbatim
+  // and opens the system dialog; iOS renders the compact native picker
+  // instead. The pill sits on a backgroundElement card, so its fill is
+  // the theme's deeper neutral step (backgroundSelected): element-on-
+  // element vanished after the c04 retheme, and the stadium shape matches
+  // every other control on this screen.
+  pillTrigger: {
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
-    borderRadius: Radius.small,
+    borderRadius: Radius.chip,
     minHeight: MinTouchTarget,
     justifyContent: 'center',
+  },
+  optionPill: {
+    minHeight: MinTouchTarget,
+    justifyContent: 'center',
+    paddingVertical: Spacing.one,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radius.chip,
   },
   deleteButton: {
     paddingVertical: Spacing.two,

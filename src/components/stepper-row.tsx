@@ -53,7 +53,7 @@ export function StepperRow({
       <View style={styles.stepper}>
         <Pressable
           onPress={() => onChange(clampSetting(rangeKey, value - step))}
-          style={[styles.stepperButton, { backgroundColor: theme.backgroundElement }]}
+          style={[styles.stepperButton, { backgroundColor: theme.backgroundSelected }]}
           accessibilityRole="button"
           accessibilityLabel={`Decrease ${label}`}
         >
@@ -64,7 +64,7 @@ export function StepperRow({
         </ThemedText>
         <Pressable
           onPress={() => onChange(clampSetting(rangeKey, value + step))}
-          style={[styles.stepperButton, { backgroundColor: theme.backgroundElement }]}
+          style={[styles.stepperButton, { backgroundColor: theme.backgroundSelected }]}
           accessibilityRole="button"
           accessibilityLabel={`Increase ${label}`}
         >
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   stepperButton: {
     width: MinTouchTarget,
     height: MinTouchTarget,
-    borderRadius: Radius.small,
+    borderRadius: Radius.chip,
     alignItems: 'center',
     justifyContent: 'center',
   },

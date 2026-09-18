@@ -139,16 +139,38 @@ describe('SettingsScreen', () => {
     expect(rescheduleNotifications).toHaveBeenCalledTimes(1);
   });
 
-  it('offers all seven lowercase weekdays for the weekly reflection and reschedules on change', () => {
+  it('picks the weekly reflection day from the native date picker and reschedules on set', () => {
     render(<SettingsScreen />);
 
-    for (const day of ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']) {
-      expect(screen.getByText(day)).toBeTruthy();
-    }
+    // The seven-chip list is gone (2026-09-17 owner feedback): no weekday
+    // other than the trigger's own value renders as a control.
+    expect(screen.queryByText('thursday')).toBeNull();
 
-    fireEvent.press(screen.getByText('monday'));
+    // 2026-09-14 is a Monday: the stored day is the picked date's weekday.
+    fireEvent(screen.getByLabelText('Weekly reflection day'), 'onChange', { type: 'set' }, new Date(2026, 8, 14));
+
     expect(mockSetSetting).toHaveBeenCalledWith('weekly_meta_day', 'monday');
     expect(rescheduleNotifications).toHaveBeenCalledTimes(1);
+  });
+
+  it('seeds the weekly day picker with a date on the stored weekday', () => {
+    mockSettings = { ...DEFAULT_SETTINGS, weekly_meta_day: 'tuesday' };
+    render(<SettingsScreen />);
+
+    const picker = screen.getByLabelText('Weekly reflection day');
+    expect(picker.props.mode).toBe('date');
+    expect(picker.props.value.getDay()).toBe(2);
+  });
+
+  it('round-trips a persisted weekly day: the picker is reseeded from it on the next mount', () => {
+    const first = render(<SettingsScreen />);
+    fireEvent(screen.getByLabelText('Weekly reflection day'), 'onChange', { type: 'set' }, new Date(2026, 8, 14));
+    expect(mockSetSetting).toHaveBeenCalledWith('weekly_meta_day', 'monday');
+    first.unmount();
+
+    mockSettings = { ...DEFAULT_SETTINGS, weekly_meta_day: 'monday' };
+    render(<SettingsScreen />);
+    expect(screen.getByLabelText('Weekly reflection day').props.value.getDay()).toBe(1);
   });
 
   it('renders the three notification times as native pickers seeded from the stored HH:MM values', () => {
@@ -191,12 +213,14 @@ describe('SettingsScreen', () => {
     expect(rescheduleNotifications).toHaveBeenCalledTimes(1);
   });
 
-  it('ignores a picker dismissal: no setSetting, no reschedule', () => {
+  it('ignores a picker dismissal: no setSetting, no reschedule (time and day)', () => {
     render(<SettingsScreen />);
 
     fireEvent(screen.getByLabelText('Weekly notification time'), 'onChange', { type: 'dismissed' }, undefined);
+    fireEvent(screen.getByLabelText('Weekly reflection day'), 'onChange', { type: 'dismissed' }, undefined);
 
     expect(mockSetSetting).not.toHaveBeenCalledWith('weekly_meta_time', expect.anything());
+    expect(mockSetSetting).not.toHaveBeenCalledWith('weekly_meta_day', expect.anything());
     expect(rescheduleNotifications).not.toHaveBeenCalled();
   });
 
