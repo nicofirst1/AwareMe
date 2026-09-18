@@ -44,6 +44,7 @@ function makeRepo(overrides: Partial<Repo> = {}): Repository {
     listSessionsForDayMorning: () => [],
     listSessionsForProgrammeWeek: () => [],
     countProgrammeStemsCompletedInRange: () => 0,
+    getHighestUnlockedWeek: () => 0,
     getSettings: () => DEFAULT_SETTINGS,
     ...overrides,
   } as unknown as Repository;
@@ -248,7 +249,7 @@ describe('shouldClearOverride (§6.2 clearing rule)', () => {
   });
 });
 
-describe('applyWeekSetActivation (issue 04: the effective week is the active one)', () => {
+describe('applyWeekSetActivation (issue 09: cumulative unlock with regression guard)', () => {
   const makeRepoWithRecording = (overrides: Partial<Repo> = {}) => {
     const activated: number[] = [];
     const repo = makeRepo({
@@ -260,28 +261,28 @@ describe('applyWeekSetActivation (issue 04: the effective week is the active one
     return { activated, repo };
   };
 
-  it('activates the override week while one is set', () => {
+  it('activates weeks 1..override while one is set (cumulative unlock)', () => {
     const { activated, repo } = makeRepoWithRecording({
       ...ANCHOR,
       getSettings: () => ({ ...DEFAULT_SETTINGS, program_week_override: 12 }),
     });
     applyWeekSetActivation(repo, new Date('2026-09-16T10:00:00Z'));
-    expect(activated).toEqual([12]); // the override wins (§6.2/§7)
+    expect(activated).toEqual([12]); // unlocks weeks 1..12 (§6.2/§7 + issue 09)
   });
 
-  it('on clear (override null) it activates the derived week, not the last selection', () => {
+  it('on clear (override null) it activates weeks 1..derived, not the last selection', () => {
     // Anchor week Mon 2026-08-31 + two anchored reflection weeks → derived 3.
     const { activated, repo } = makeRepoWithRecording({
       ...ANCHOR,
       listCompletedWeeklyReflections: () => [atIso('2026-09-06T21:00:00Z'), atIso('2026-09-13T21:00:00Z')],
     });
     applyWeekSetActivation(repo, new Date('2026-09-16T10:00:00Z'));
-    expect(activated).toEqual([3]);
+    expect(activated).toEqual([3]); // unlocks weeks 1..3
   });
 
-  it('with no anchor at all it activates week 1 (the derivation starts at 1)', () => {
+  it('with no anchor at all it activates weeks 1..1 (the derivation starts at 1)', () => {
     const { activated, repo } = makeRepoWithRecording();
     applyWeekSetActivation(repo, new Date('2026-09-16T10:00:00Z'));
-    expect(activated).toEqual([1]);
+    expect(activated).toEqual([1]); // unlocks week 1
   });
 });

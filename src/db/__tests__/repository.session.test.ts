@@ -6,6 +6,12 @@ import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
 import { EVENING_META_STEMS, EVENING_PRACTICE_SEED_STEMS, PROGRAMME_SEED_STEMS, RETIRED_SEED_STEMS } from '../seed/stems';
 import { computeReturnAction } from '@/session/sessionMachine';
 
+// Issue 09: only the first corpus week's programme stems are active at seed
+// (weeks 2..30 rest). Derived from the loaded content module's shape, so the
+// suite holds under both the owner's licensed corpus and the example corpus.
+const WEEK1_ACTIVE_STEMS = PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === 1).length;
+const ACTIVE_AT_SEED = WEEK1_ACTIVE_STEMS + EVENING_PRACTICE_SEED_STEMS.length;
+
 function freshRepository(): { db: DatabaseSync; repo: Repository } {
   const raw = new DatabaseSync(':memory:');
   const executor = nodeSqliteExecutor(raw);
@@ -40,15 +46,16 @@ describe('Repository.listActiveStems', () => {
   it('excludes archived and deleted stems (and the weekly meta-stem)', () => {
     const { db, repo } = freshRepository();
     const activeBefore = repo.listActiveStems();
-    // 142 programme stems; the weekly meta-stem (active, is_weekly_meta=1)
-    // is review machinery and excluded here, the retired originals are
-    // soft-deleted at seed, the evening meta-stems are inactive; the
-    // evening practice starter set (issue 17) is active and evening-tagged.
-    expect(activeBefore.length).toBe(PROGRAMME_SEED_STEMS.length + EVENING_PRACTICE_SEED_STEMS.length);
+    // Issue 09: only the first corpus week's programme stems are active at
+    // seed; weeks 2..30 rest. The weekly meta-stem (active, is_weekly_meta=1)
+    // is review machinery and excluded here. The retired originals are
+    // soft-deleted at seed, the evening meta-stems are inactive. The evening
+    // practice starter set (issue 17) is active and evening-tagged.
+    expect(activeBefore.length).toBe(ACTIVE_AT_SEED);
 
     const someId = activeBefore[0].id;
     db.prepare('UPDATE stems SET active = 0 WHERE id = ?').run(someId);
-    expect(repo.listActiveStems().length).toBe(PROGRAMME_SEED_STEMS.length + EVENING_PRACTICE_SEED_STEMS.length - 1);
+    expect(repo.listActiveStems().length).toBe(ACTIVE_AT_SEED - 1);
   });
 });
 
@@ -71,7 +78,8 @@ describe('Repository.listAllStems', () => {
         EVENING_PRACTICE_SEED_STEMS.length +
         RETIRED_SEED_STEMS.length,
     );
-    expect(repo.listActiveStems().length).toBe(PROGRAMME_SEED_STEMS.length + EVENING_PRACTICE_SEED_STEMS.length - 2);
+    // ACTIVE_AT_SEED - 2: two of the seeded-active rows were touched above.
+    expect(repo.listActiveStems().length).toBe(ACTIVE_AT_SEED - 2);
 
     const archived = all.find((s) => s.id === someId)!;
     expect(archived.active).toBe(0);

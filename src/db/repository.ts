@@ -172,12 +172,18 @@ export class Repository {
     if (this.hasStems()) return;
 
     this.db.withTransactionSync(() => {
+      // Issue 09 (v14-feedback): hybrid week unlock — fresh installs seed
+      // ONLY week 1 active, weeks 2..30 resting. Programme stems are inserted
+      // in week order (seed array is week-sorted), so we activate the first
+      // week's stems and rest the rest.
       for (const stem of PROGRAMME_SEED_STEMS) {
         const { at, tz, offsetMin } = nowEventTime();
+        // Activate only week 1; all later weeks rest.
+        const active = stem.weekNumber === 1 ? 1 : 0;
         this.db.runSync(
           `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
-           VALUES (?, ?, 'seed', ?, 'en', 1.0, 1, ?, ?, ?, 'morning', ?, 0)`,
-          [newId(), stem.text, programmeStemCategory(stem.weekNumber, stem.text), at, tz, offsetMin, stem.weekNumber],
+           VALUES (?, ?, 'seed', ?, 'en', 1.0, ?, ?, ?, ?, 'morning', ?, 0)`,
+          [newId(), stem.text, programmeStemCategory(stem.weekNumber, stem.text), active, at, tz, offsetMin, stem.weekNumber],
         );
       }
 
@@ -532,19 +538,27 @@ export class Repository {
   // -------------------------------------------------------------------
 
   /**
-   * Week-set activation (issue 04): makes `week` the programme's ONE active
-   * week — its stems `active = 1`, every other programme week's stems
-   * `active = 0`, in one statement so the frontier never has a half-applied
-   * state. Called at every point the effective week can change: setting or
-   * clearing `program_week_override` (the programme page) and completing a
-   * weekly reflection (write.tsx — override-clear back to the derived week,
-   * or a derived advance). Idempotent; out-of-range weeks are a no-op,
+   * Week-set activation (issue 09, v14-feedback): CUMULATIVE unlock.
+   * Makes weeks 1..week the programme's active weeks — all programme stems
+   * whose `week_number <= week` get `active = 1`, all others (including week
+   * itself if it was previously locked) get `active = 0`. This implements
+   * the hybrid unlock rule: auto-unlock on prior week completion (derived
+   week advances → unlock 1..N) plus manual enable ("make this my week" on
+   week M → unlock 1..M). Weeks never re-lock once unlocked.
+   *
+   * Called at every point the effective week can change: setting or clearing
+   * `program_week_override` (the programme page) and completing a weekly
+   * reflection (write.tsx — override-clear back to the derived week, or a
+   * derived advance). Idempotent; out-of-range weeks are a no-op,
    * same guard as `getProgrammeStemsForWeek`.
    */
   setProgrammeWeekActive(week: number): void {
     if (!Number.isInteger(week) || week < 1 || week > PROGRAMME_WEEK_CAP) return;
+    // Activate weeks 1..target; rest every higher week. Scoped to programme
+    // rows: user stems, the weekly meta-stem and the evening meta-stems have
+    // `week_number IS NULL` and keep their own active flags.
     this.db.runSync(
-      'UPDATE stems SET active = CASE WHEN week_number = ? THEN 1 ELSE 0 END WHERE week_number IS NOT NULL',
+      'UPDATE stems SET active = CASE WHEN week_number <= ? THEN 1 ELSE 0 END WHERE week_number IS NOT NULL',
       [week],
     );
   }
@@ -567,6 +581,24 @@ export class Repository {
        ORDER BY rowid`,
       [week],
     );
+  }
+
+  /**
+   * Week-set unlock threshold: returns the highest `week_number` that has any
+   * active stems. If no programme stems are active, returns 0. This is used
+   * by `applyWeekSetActivation` to preserve existing unlock state when
+   * migrating from the old single-week model to the new cumulative model
+   * (issue 09).
+   */
+  getHighestUnlockedWeek(): number {
+    const row = this.db.getFirstSync<{ week: number }>(
+      `SELECT week_number as week FROM stems
+       WHERE week_number IS NOT NULL AND active = 1
+       ORDER BY week_number DESC
+       LIMIT 1`,
+      [],
+    );
+    return row?.week ?? 0;
   }
 
   /**

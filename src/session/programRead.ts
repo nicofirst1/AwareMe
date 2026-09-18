@@ -51,19 +51,33 @@ export function readProgrammeWeek(repo: Repository, now: Date = new Date()): Pro
 }
 
 /**
- * Week-set activation (issue 04): the effective week's programme stems are
- * the active ones — that week's stems active, every other programme week's
- * stems resting, user stems and the weekly meta-stem untouched (they have no
- * `week_number`). Called at every point the effective week can change:
+ * Week-set activation (issue 09): the effective week's programme stems are
+ * the active ones — weeks 1..effectiveUnlock active (`active = 1`), weeks
+ * effectiveUnlock+1..30 resting (`active = 0`). The weekly meta-stem, user
+ * stems, and non-programme stems are untouched (they have no `week_number`).
+ *
+ * effectiveUnlock = max(override, derivedWeek, highestActiveFromDb). This
+ * ensures existing installs don't regress: if a user previously had week N
+ * active (old single-week model), they keep unlock to N. Fresh logic then
+ * applies: setting override unlocks 1..override; completing reflection unlocks
+ * 1..newDerivedWeek. Called at every point the effective week can change:
  * setting/clearing `program_week_override` (the programme page) and
  * completing a weekly reflection (write.tsx — both the override-clear back
- * to the derived week and a derived advance; coordinator-approved hub FLAG
- * 2026-09-16). §4.1: `active` is the state column, so this is allowed state
- * mutation — no history row is ever rewritten. Idempotent by construction.
+ * to the derived week and a derived advance).
  */
 export function applyWeekSetActivation(repo: Repository, now: Date = new Date()): void {
-  const { currentWeek } = readProgrammeWeek(repo, now);
-  repo.setProgrammeWeekActive(currentWeek);
+  const { currentWeek, override, derivedWeek } = readProgrammeWeek(repo, now);
+  
+  // Find the highest week that currently has any active stems (preserve old unlock).
+  const highestActiveFromDb = repo.getHighestUnlockedWeek();
+  
+  // effectiveUnlock = max of override, derived week, and highest existing active week.
+  const effectiveUnlock = Math.max(override ?? 0, derivedWeek, highestActiveFromDb);
+  
+  // Guard against out-of-range.
+  const unlocked = effectiveUnlock < 1 ? 1 : effectiveUnlock > 30 ? 30 : effectiveUnlock;
+  
+  repo.setProgrammeWeekActive(unlocked);
 }
 
 /** The morning sitting's queue (§6.2): every active programme stem of the effective week, seed order. */

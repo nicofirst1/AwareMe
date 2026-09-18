@@ -33,6 +33,7 @@ export function WeekCard({
   stems,
   isCurrentWeek,
   isSelected,
+  isLocked,
   expanded,
   onToggle,
   onSit,
@@ -44,6 +45,8 @@ export function WeekCard({
   isCurrentWeek: boolean;
   /** `program_week_override` selects this week right now. */
   isSelected: boolean;
+  /** Issue 09: week's stems are all resting (week > derived unlock threshold). */
+  isLocked: boolean;
   expanded: boolean;
   onToggle: () => void;
   onSit: () => void;
@@ -57,7 +60,11 @@ export function WeekCard({
   // Marker precedence: the override's selection is the more informative
   // marker (it names the §6.2 state that clears on reflection completion),
   // so a week that is both current AND selected reads "Your week".
-  const markers = [isSelected ? 'Your week' : isCurrentWeek ? 'Current week' : null].filter(Boolean);
+  // A user-selected week is unlocked; suppress Locked when selected.
+  const markers = [
+    isSelected ? null : isLocked ? 'Locked' : null,
+    isSelected ? 'Your week' : isCurrentWeek ? 'Current week' : null,
+  ].filter(Boolean);
   const countLabel = stems.length === 1 ? '1 stem' : `${stems.length} stems`;
   const summaryLabel = [
     `Week ${weekNumber}, ${countLabel}.`,
@@ -68,13 +75,13 @@ export function WeekCard({
     .join(' ');
 
   return (
-    <ThemedView style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
+    <ThemedView style={[styles.card, isLocked && styles.cardLocked, { backgroundColor: theme.backgroundElement }]}>
       <Pressable
         onPress={onToggle}
         accessibilityRole="button"
         accessibilityLabel={summaryLabel}
-        accessibilityState={{ expanded }}
-        style={styles.header}
+        accessibilityState={{ expanded, disabled: isLocked }}
+        style={[styles.header, isLocked && styles.headerLocked]}
       >
         <View style={styles.headerText}>
           <ThemedText type="default">
@@ -141,11 +148,17 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     gap: Spacing.two,
   },
+  cardLocked: {
+    opacity: 0.6,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: MinTouchTarget,
+  },
+  headerLocked: {
+    opacity: 0.5,
   },
   headerText: {
     gap: Spacing.half,

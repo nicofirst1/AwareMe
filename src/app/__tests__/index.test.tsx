@@ -49,6 +49,7 @@ const mockRepository: {
   listCompletedEveningReflections: () => { startedAt: string; offsetMin: number }[];
   getProgrammeStemsForWeek: (week: number) => { id: string }[];
   countProgrammeStemsCompletedInRange: (week: number, start: string, end: string) => number;
+  getHighestUnlockedWeek: () => number;
   getSettings?: () => Settings;
 } = {
   listSessionsForHistory: () => [{ id: 'session-1' }],
@@ -59,6 +60,7 @@ const mockRepository: {
   listCompletedEveningReflections: () => [],
   getProgrammeStemsForWeek: () => [{ id: 'stem-1' }],
   countProgrammeStemsCompletedInRange: () => 0,
+  getHighestUnlockedWeek: () => 0,
   getSettings: () => DEFAULT_SETTINGS,
 };
 

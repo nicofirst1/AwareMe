@@ -68,6 +68,7 @@ jest.mock('@/db', () => {
       setProgrammeWeekActive: (week: number) => {
         mockRepoState.activationCalls.push(week);
       },
+      getHighestUnlockedWeek: () => 0,
     }),
   };
 });
@@ -83,10 +84,9 @@ describe('ProgrammeScreen (week library)', () => {
 
   it('renders all 30 week cards with stem counts, ordered', () => {
     render(<ProgrammeScreen />);
-    // No anchor yet → derived week 1, so Week 1 carries the marker and the
-    // others don't (§6.2: the derivation starts at week 1).
+    // Week 1 is active; week 2 is locked (not unlocked yet).
     expect(screen.getByText('Week 1 · Current week')).toBeTruthy();
-    expect(screen.getByText('Week 2')).toBeTruthy();
+    expect(screen.getByText('Week 2 · Locked')).toBeTruthy();
     expect(screen.getAllByText('4 stems')).toHaveLength(2);
     expect(screen.getAllByText('No active stems')).toHaveLength(28);
   });
@@ -109,7 +109,7 @@ describe('ProgrammeScreen (week library)', () => {
 
   it('renders the category chip on expanded stems that carry one (issue 04)', () => {
     render(<ProgrammeScreen />);
-    fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Collapsed.'));
+    fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Locked. Collapsed.'));
     expect(screen.getByText('awareness')).toBeTruthy();
     expect(screen.getByText('self_acceptance')).toBeTruthy();
     expect(screen.getByText('purpose')).toBeTruthy();
@@ -118,7 +118,7 @@ describe('ProgrammeScreen (week library)', () => {
 
   it('one-off sitting routes to /write?week=N with manual origin semantics (never rotates)', () => {
     render(<ProgrammeScreen />);
-    fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Collapsed.'));
+    fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Locked. Collapsed.'));
     fireEvent.press(screen.getByText('Write this week’s sitting'));
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/write', params: { week: '2' } });
     expect(mockRepoState.settingWrites).toEqual([]); // a one-off sit never writes anything
@@ -126,7 +126,7 @@ describe('ProgrammeScreen (week library)', () => {
 
   it('"make this my week" sets the override; a selected week offers clearing it', () => {
     render(<ProgrammeScreen />);
-    fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Collapsed.'));
+    fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Locked. Collapsed.'));
     fireEvent.press(screen.getByText('Make this my week'));
     expect(mockRepoState.settingWrites).toEqual([['program_week_override', 2]]);
     // Week-set activation (issue 04) rides the same write: the chosen week
@@ -150,7 +150,7 @@ describe('ProgrammeScreen (week library)', () => {
 
   it('does not offer sitting actions on an empty week', () => {
     render(<ProgrammeScreen />);
-    fireEvent.press(screen.getByLabelText('Week 3, 0 stems. Collapsed.'));
+    fireEvent.press(screen.getByLabelText('Week 30, 0 stems. Locked. Collapsed.'));
     expect(screen.getByText('The sitting actions appear once this week has active stems.')).toBeTruthy();
     expect(screen.queryByText('Write this week’s sitting')).toBeNull();
   });
