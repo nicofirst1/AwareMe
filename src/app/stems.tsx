@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { FlatList, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
@@ -10,7 +10,7 @@ import { FilterChip } from '@/components/filter-chip';
 import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { CategoryColors, MinTouchTarget, Radius, Spacing, type CategoryName } from '@/constants/theme';
+import { CategoryColors, MinTouchTarget, Palette, Radius, Spacing, type CategoryName, type PaletteName } from '@/constants/theme';
 import { getRepository, LibraryStemRow } from '@/db';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
@@ -41,6 +41,24 @@ type Theme = ReturnType<typeof useTheme>;
 type Router = ReturnType<typeof useRouter>;
 
 const ALL_WEEKS = Array.from({ length: PROGRAMME_WEEK_CAP }, (_, i) => i + 1);
+
+// Issue 03's week filter, as a picker's option list (v13-feedback issue 07:
+// "program week should be a picker instead of a list of numbers").
+const WEEK_OPTIONS: { label: string; value: WeekFilter }[] = [
+  { label: 'All weeks', value: 'all' },
+  ...ALL_WEEKS.map((w) => ({ label: `Week ${w}`, value: w })),
+];
+
+// The hue-bearing filter options (v13-feedback issue 07, owner feedback
+// "morning and programme have no color"): time-of-day and the programme
+// origin carry a Palette hue the way the category chips already do. Neutral
+// options (All, Mine, Imported, Unset, the State row) stay uncolored: the
+// hue marks the dimension, not every choice.
+const TIME_OF_DAY_HUES: Record<'morning' | 'evening', PaletteName> = {
+  morning: 'amber',
+  evening: 'indigo',
+};
+const PROGRAMME_ORIGIN_HUE: PaletteName = 'jade';
 
 /**
  * The stem library (§6.6): every stem, filterable and searchable, with a
@@ -86,12 +104,12 @@ export default function StemsScreen() {
 
   // Issue 03: the at-a-glance state counts, always visible above the list
   // (§13.7: computed at read time, nothing stored). Deleted stems are
-  // neither active nor resting — they are out of the pool entirely and
+  // neither active nor disabled — they are out of the pool entirely and
   // render with their own 'deleted' marker.
-  const { activeCount, restingCount } = useMemo(
+  const { activeCount, disabledCount } = useMemo(
     () => ({
       activeCount: stems.filter((s) => s.active && s.deleted_at === null).length,
-      restingCount: stems.filter((s) => !s.active && s.deleted_at === null).length,
+      disabledCount: stems.filter((s) => !s.active && s.deleted_at === null).length,
     }),
     [stems],
   );
@@ -223,7 +241,7 @@ export default function StemsScreen() {
         </ThemedView>
 
         <ThemedText type="small" themeColor="textSecondary" style={styles.stateSummary}>
-          {`${activeCount} active · ${restingCount} resting`}
+          {`${activeCount} active · ${disabledCount} disabled`}
         </ThemedText>
 
         {categories.length > 0 && (
@@ -248,13 +266,16 @@ export default function StemsScreen() {
 
         {moreFiltersOpen && (
           <ThemedView style={styles.moreFilters}>
-            <WeekFilterRow value={weekFilter} onChange={setWeekFilter} />
+            <WeekPicker value={weekFilter} onChange={setWeekFilter} />
 
             <FilterRow
               label="State"
               options={[
                 { value: 'active', label: 'Active' },
-                { value: 'archived', label: 'Resting' },
+                // Display-only rename (v13-feedback issue 07, owner feedback
+                // "instead of restive use disabled"): the filter VALUE stays
+                // 'archived' in storage, exports, and the filter module.
+                { value: 'archived', label: 'Disabled' },
                 { value: 'all', label: 'All' },
               ]}
               value={activeFilter}
@@ -267,7 +288,7 @@ export default function StemsScreen() {
                 { value: 'all', label: 'All' },
                 // Display-only rename (issue 03): origin value stays 'seed'
                 // in DB, exports, and tests.
-                { value: 'seed', label: 'Programme' },
+                { value: 'seed', label: 'Programme', hue: PROGRAMME_ORIGIN_HUE },
                 { value: 'user', label: 'Mine' },
                 { value: 'imported', label: 'Imported' },
               ]}
@@ -279,8 +300,8 @@ export default function StemsScreen() {
               label="Time of day"
               options={[
                 { value: 'all', label: 'All' },
-                { value: 'morning', label: 'Morning' },
-                { value: 'evening', label: 'Evening' },
+                { value: 'morning', label: 'Morning', hue: TIME_OF_DAY_HUES.morning },
+                { value: 'evening', label: 'Evening', hue: TIME_OF_DAY_HUES.evening },
                 { value: 'none', label: 'Unset' },
               ]}
               value={timeOfDayFilter}
@@ -362,6 +383,15 @@ const StemRow = memo(function StemRow({
   const scheme = useColorScheme();
   const dark = scheme === 'dark';
   const isDeleted = item.deleted_at !== null;
+  // v13-feedback issue 07 (c06 carry-forward): the library now lists the two
+  // evening reflection meta-stems (origin 'meta'), so the row names them:
+  // the meta line's bare 'meta' is developer vocabulary. The tag carries the
+  // identity; the caption below the meta line carries the honesty: the
+  // reflection alternation reads these rows regardless of their state
+  // (listMetaStems has no active filter), so activating one is never the
+  // only path. Its state only ever gates the generic active-stem reads.
+  const isMeta = item.origin === 'meta';
+  const reflectionPair = isMeta ? Palette.rose[dark ? 'dark' : 'light'] : null;
   const edgeColor = isDeleted ? 'transparent' : (item.active ? ACTIVE_EDGE : INACTIVE_EDGE)[dark ? 'dark' : 'light'];
   const categoryColors = isCategoryName(item.category) ? CategoryColors[item.category][dark ? 'dark' : 'light'] : null;
   const stateBadge = isDeleted ? null : (item.active ? STATE_BADGE.active : STATE_BADGE.resting)[dark ? 'dark' : 'light'];
@@ -372,7 +402,9 @@ const StemRow = memo(function StemRow({
     ? item.text
     : selectionMode
       ? `${item.text}. ${selected ? 'Selected' : 'Not selected'}.`
-      : `Write on: ${item.text}. ${item.active ? 'Active' : 'Resting'}. Long-press to select.`;
+      : `Write on: ${item.text}. ${item.active ? 'Active' : 'Disabled'}.${
+          isMeta ? ' Part of the evening reflection, whether Active or Disabled.' : ''
+        } Long-press to select.`;
 
   return (
     <ThemedView
@@ -401,7 +433,14 @@ const StemRow = memo(function StemRow({
           {stateBadge && (
             <ThemedView style={[styles.stateBadge, { backgroundColor: stateBadge.bg }]}>
               <ThemedText type="small" style={{ color: stateBadge.text }}>
-                {item.active ? 'Active' : 'Resting'}
+                {item.active ? 'Active' : 'Disabled'}
+              </ThemedText>
+            </ThemedView>
+          )}
+          {reflectionPair && (
+            <ThemedView style={[styles.categoryChip, { backgroundColor: reflectionPair.bg }]}>
+              <ThemedText type="small" style={{ color: reflectionPair.text }}>
+                Reflection
               </ThemedText>
             </ThemedView>
           )}
@@ -417,13 +456,20 @@ const StemRow = memo(function StemRow({
             {[
               categoryColors ? null : item.category, // shown as a colored chip instead, when we have one
               item.time_of_day,
-              item.origin === 'seed' ? 'Programme' : item.origin, // display-only rename (issue 03)
+              // 'meta' is never shown as copy: the Reflection tag above names
+              // the row (issue 07).
+              item.origin === 'seed' ? 'Programme' : isMeta ? null : item.origin, // display-only rename (issue 03)
               isDeleted ? 'deleted' : null,
             ]
               .filter(Boolean)
               .join(' · ')}
           </ThemedText>
         </ThemedView>
+        {isMeta && !isDeleted && (
+          <ThemedText type="small" themeColor="textSecondary">
+            Part of the evening reflection, whether Active or Disabled.
+          </ThemedText>
+        )}
       </Pressable>
       <ThemedView style={styles.rowAction}>
         {selectionMode ? (
@@ -452,7 +498,7 @@ function FilterRow<T extends string>({
   onChange,
 }: {
   label: string;
-  options: { value: T; label: string }[];
+  options: { value: T; label: string; hue?: PaletteName }[];
   value: T;
   onChange: (v: T) => void;
 }) {
@@ -463,36 +509,82 @@ function FilterRow<T extends string>({
       </ThemedText>
       <ThemedView style={styles.filterOptions}>
         {options.map((opt) => (
-          <FilterChip key={opt.value} label={opt.label} selected={opt.value === value} onPress={() => onChange(opt.value)} />
+          <FilterChip
+            key={opt.value}
+            label={opt.label}
+            hue={opt.hue}
+            selected={opt.value === value}
+            onPress={() => onChange(opt.value)}
+          />
         ))}
       </ThemedView>
     </ThemedView>
   );
 }
 
-// Issue 03's week filter: 'All' + weeks 1–30 as one horizontal chip row —
-// thirty wrapping chips would stack ~4 rows tall inside the filter panel,
-// so this row scrolls like the category row above instead. Fixed height
-// per the categoryScrollContainer note (an unbounded horizontal ScrollView
-// beside a flex:1 FlatList sibling collapses to zero).
-function WeekFilterRow({ value, onChange }: { value: WeekFilter; onChange: (v: WeekFilter) => void }) {
+// Issue 03's week filter, rebuilt as a picker (v13-feedback issue 07, owner
+// feedback: "program week should be a picker instead of a list of numbers"):
+// a compact select-style trigger opening a modal menu of All + weeks 1-30.
+// No new dependency: Modal, ScrollView, Pressable are React Native core.
+function WeekPicker({ value, onChange }: { value: WeekFilter; onChange: (v: WeekFilter) => void }) {
+  const theme = useTheme();
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
+  const summary = value === 'all' ? 'All weeks' : `Week ${value}`;
+
   return (
     <ThemedView style={styles.filterRow}>
       <ThemedText type="small" themeColor="textSecondary" style={styles.filterLabel}>
         Programme week
       </ThemedText>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.weekScrollContent}
-        style={styles.weekScroll}
-        accessibilityLabel="Filter by programme week"
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`Programme week: ${summary}`}
+        accessibilityState={{ expanded: open }}
+        style={[styles.weekPickerTrigger, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
       >
-        <FilterChip label="All" selected={value === 'all'} onPress={() => onChange('all')} />
-        {ALL_WEEKS.map((w) => (
-          <FilterChip key={w} label={String(w)} selected={value === w} onPress={() => onChange(w)} />
-        ))}
-      </ScrollView>
+        <ThemedText type="small" style={styles.weekPickerLabel}>
+          {summary}
+        </ThemedText>
+        <Ionicons name="chevron-down-outline" size={16} color={theme.textSecondary} />
+      </Pressable>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
+        <Pressable style={styles.weekScrim} onPress={close} accessibilityLabel="Close programme week picker">
+          {/* Absorbs presses on the sheet's blank area so only the scrim and
+              the options close/change the picker. */}
+          <View
+            style={[styles.weekSheet, { backgroundColor: theme.backgroundElement }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <ThemedText type="default">Programme week</ThemedText>
+            <ScrollView style={styles.weekSheetScroll}>
+              {WEEK_OPTIONS.map((opt) => {
+                const selected = opt.value === value;
+                return (
+                  <Pressable
+                    key={String(opt.value)}
+                    onPress={() => {
+                      onChange(opt.value);
+                      close();
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={opt.label}
+                    accessibilityState={{ selected }}
+                    style={styles.weekOption}
+                  >
+                    <ThemedText type="small" style={selected ? { color: theme.accent } : undefined}>
+                      {opt.label}
+                    </ThemedText>
+                    {selected && <Ionicons name="checkmark" size={16} color={theme.accent} />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
     </ThemedView>
   );
 }
@@ -575,15 +667,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     gap: Spacing.one,
   },
-  weekScroll: {
-    height: MinTouchTarget,
-    flexGrow: 0,
-    flexShrink: 0,
-  },
-  weekScrollContent: {
+  weekPickerTrigger: {
+    minHeight: MinTouchTarget,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: Spacing.one,
+    borderWidth: 1,
+    borderRadius: Radius.small,
+    paddingHorizontal: Spacing.three,
+  },
+  weekPickerLabel: {
+    flexShrink: 1,
+  },
+  weekScrim: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.five,
+  },
+  weekSheet: {
+    maxHeight: '70%',
+    borderRadius: Radius.medium,
+    padding: Spacing.three,
+    gap: Spacing.one,
+  },
+  weekSheetScroll: {
+    flexGrow: 0,
+  },
+  weekOption: {
+    minHeight: MinTouchTarget,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.one,
+    paddingHorizontal: Spacing.two,
   },
   moreFilters: {
     paddingHorizontal: Spacing.four,
@@ -667,14 +785,14 @@ const styles = StyleSheet.create({
     gap: 3,
     paddingHorizontal: Spacing.one,
     paddingVertical: 1,
-    borderRadius: Radius.small,
+    borderRadius: Radius.chip,
   },
   // Same chip anatomy as `categoryChip`, state-tinted via the caller
   // (STATE_BADGE), so the two read as one family.
   stateBadge: {
     paddingHorizontal: Spacing.one,
     paddingVertical: 1,
-    borderRadius: Radius.small,
+    borderRadius: Radius.chip,
   },
   stateSummary: {
     paddingHorizontal: Spacing.four,
