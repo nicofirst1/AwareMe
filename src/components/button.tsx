@@ -58,8 +58,8 @@ export function Button({
       ]}
     >
       {/* Symmetric with theme.ts's accent-as-text measurement: white passes
-          on light's accent fill (4.94:1), black passes on dark's accent
-          fill (7.97:1) — see the `accent` comment in constants/theme.ts. */}
+          on light's accent fill (5.79:1), black passes on dark's accent
+          fill (6.03:1) — see the `accent` comment in constants/theme.ts. */}
       <ThemedText type="default" style={variant === 'primary' ? { color: primaryLabelColor(scheme) } : undefined}>
         {label}
       </ThemedText>
@@ -68,7 +68,8 @@ export function Button({
 }
 
 /**
- * `accent` is per-theme (light: terracotta, dark: amber) precisely so a
+ * `accent` is per-theme (light: the palette's raw indigo, dark: its
+ * lightened derivation) precisely so a
  * *single* label color can't serve both — light needs white on its accent,
  * dark needs black on its (lighter) accent. Reads the actual color scheme
  * rather than pattern-matching `theme.text`'s hex (fragile: broke the
