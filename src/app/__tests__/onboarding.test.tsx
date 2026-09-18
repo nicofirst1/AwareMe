@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import type { ReactNode } from 'react';
 
+import { Colors } from '@/constants/theme';
 import OnboardingScreen from '@/app/onboarding';
 
 const mockReplace = jest.fn();
@@ -90,7 +92,7 @@ describe('OnboardingScreen', () => {
     // Every tab's title is mounted (the pager keeps offscreen pages), and
     // the visual order is pinned by the step sequence asserted below.
     expect(screen.getByText('About the method')).toBeTruthy();
-    expect(screen.getByText('How it works')).toBeTruthy();
+    expect(screen.getByText('Here is how it works!')).toBeTruthy();
     expect(screen.getByText('Reminders')).toBeTruthy();
     expect(screen.getByText('Include an evening practice?')).toBeTruthy();
     expect(screen.getByText('Choose your settings')).toBeTruthy();
@@ -116,8 +118,40 @@ describe('OnboardingScreen', () => {
   it('keeps the mechanics copy and adds how and why it works on tab 2', () => {
     render(<OnboardingScreen />);
 
+    expect(screen.getByText('Here is how it works!')).toBeTruthy();
     expect(screen.getByText(/finish it, several times, quickly/)).toBeTruthy();
+    // v14 issue 03: the semicolon sentence split into two, and the quickness
+    // paragraph broken into short sentences without losing the meaning.
+    expect(screen.getByText(/Repetition or nonsense is fine\. That’s part of how it works\./)).toBeTruthy();
+    expect(screen.getByText(/The quickness is the point\. Endings written before you can polish them/)).toBeTruthy();
     expect(screen.getByText(/how you actually respond/)).toBeTruthy();
+    expect(screen.getByText(/The value is in the pattern across many endings, not in any single one\./)).toBeTruthy();
+    expect(screen.queryByText(/is fine; that’s part/)).toBeNull();
+  });
+
+  it('makes Allow reminders unmistakably a button, with Not now as the quiet alternative', () => {
+    render(<OnboardingScreen />);
+
+    // v14 issue 04: the default secondary fill read as body text. Primary is
+    // the flow's one-action styling; the flatten pattern is button.test.tsx's.
+    const allow = StyleSheet.flatten(screen.getByRole('button', { name: 'Allow reminders' }).props.style);
+    // Scheme is 'unspecified' in tests → light fallback (use-theme.ts).
+    expect(allow.backgroundColor).toBe(Colors.light.accent);
+
+    const notNow = StyleSheet.flatten(screen.getByRole('button', { name: 'Not now' }).props.style);
+    expect(notNow.backgroundColor).toBe('transparent');
+    expect(notNow.borderWidth).toBeUndefined();
+
+    // The hint states what allowing does (and what declining costs: nothing).
+    expect(screen.getByText(/Allowing lets the app send those two daily nudges/)).toBeTruthy();
+  });
+
+  it('explains the endings-per-session setting in one plain line', () => {
+    render(<OnboardingScreen />);
+
+    // v14 issue 06: the stepper label names a number, not a meaning; the
+    // hint carries the meaning (settings.tsx's Hint pattern, LC3 anatomy).
+    expect(screen.getByText('How many endings you write in one sitting.')).toBeTruthy();
   });
 
   it('ends the Reminders copy at "end of day" and drops the old reassurance paragraphs', () => {
@@ -203,8 +237,8 @@ describe('OnboardingScreen', () => {
     fireEvent.press(screen.getByText('Next')); // Reminders tab
     fireEvent.press(screen.getByText('Allow reminders'));
 
-    await waitFor(() => expect(screen.getByText('Morning')).toBeTruthy());
-    expect(screen.getByText('Evening')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Morning reminder')).toBeTruthy());
+    expect(screen.getByText('Evening reminder')).toBeTruthy();
     expect(screen.getByLabelText('Morning notification time')).toBeTruthy();
     expect(screen.getByLabelText('Evening notification time')).toBeTruthy();
   });
@@ -217,7 +251,7 @@ describe('OnboardingScreen', () => {
     fireEvent.press(screen.getByText('Next')); // Reminders tab
     fireEvent.press(screen.getByText('Allow reminders'));
 
-    await waitFor(() => expect(screen.getByText('Morning')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Morning reminder')).toBeTruthy());
     fireEvent(screen.getByLabelText('Morning notification time'), 'onChange', { type: 'set' }, pickerDate('09:05'));
     fireEvent.press(screen.getByText('Start with the morning sitting')); // → tab 5
     fireEvent.press(screen.getByText('Done'));
@@ -240,7 +274,7 @@ describe('OnboardingScreen', () => {
     fireEvent.press(screen.getByText('Next')); // Reminders tab
     fireEvent.press(screen.getByText('Allow reminders'));
 
-    await waitFor(() => expect(screen.getByText('Morning')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Morning reminder')).toBeTruthy());
     fireEvent(screen.getByLabelText('Evening notification time'), 'onChange', { type: 'dismissed' }, undefined);
     fireEvent.press(screen.getByText('Done'));
 
