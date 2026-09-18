@@ -40,13 +40,38 @@ function makeStem(i: number): LibraryStemRow {
 
 const mockStems = Array.from({ length: 30 }, (_, i) => makeStem(i));
 
+// v13-feedback issue 07: one test swaps the whole library for a focused
+// fixture (the evening reflection meta-stem). Null = the default 30-stem list.
+let mockStemsOverride: LibraryStemRow[] | null = null;
+
 jest.mock('@/db', () => {
   const actual = jest.requireActual('@/db');
   return {
     ...actual,
-    getRepository: () => ({ listAllStems: () => mockStems }),
+    getRepository: () => ({ listAllStems: () => mockStemsOverride ?? mockStems }),
   };
 });
+
+afterEach(() => {
+  mockStemsOverride = null;
+});
+
+// v13-feedback issue 07 fixture: the seeded evening reflection meta-stem
+// (c06's backfill tagged it `evening`; it is resting by seed, `origin: 'meta'`).
+function makeEveningMetaStem(): LibraryStemRow {
+  return {
+    id: 'stem-meta-evening',
+    text: 'Evening reflection stem',
+    origin: 'meta',
+    category: null,
+    weight: 1,
+    time_of_day: 'evening',
+    active: 0,
+    deleted_at: null,
+    created_at: '2026-01-01T00:00:00.000Z',
+    weekNumber: null,
+  };
+}
 
 describe('StemsScreen', () => {
   // Structural guard for the 375f6b3 regression: an unbounded horizontal
@@ -75,60 +100,64 @@ describe('StemsScreen', () => {
 
   // Issue 03: state is visible at all times — a per-row badge plus the
   // always-visible summary line. The default State filter is 'active'
-  // (pre-existing), so resting/deleted rows surface only under another
-  // State choice; the summary names them regardless (28 active + 1 resting;
-  // stem 2 is soft-deleted and counted nowhere).
-  it('shows the active/resting summary and an Active badge on every listed row', () => {
+  // (pre-existing), so disabled/deleted rows surface only under another
+  // State choice; the summary names them regardless (28 active + 1 disabled;
+  // stem 2 is soft-deleted and counted nowhere). v13-feedback issue 07: the
+  // visible word for the resting state is "Disabled" now.
+  it('shows the active/disabled summary and an Active badge on every listed row', () => {
     render(<StemsScreen />);
 
-    expect(screen.getByText('28 active · 1 resting')).toBeTruthy();
+    expect(screen.getByText('28 active · 1 disabled')).toBeTruthy();
     expect(screen.getByLabelText('Write on: Stem number 0. Active. Long-press to select.')).toBeTruthy();
     expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(5); // one badge per rendered active row
-    // Resting rows are outside the default State filter — but counted above.
-    expect(screen.queryByLabelText('Write on: Stem number 1. Resting. Long-press to select.')).toBeNull();
+    // Disabled rows are outside the default State filter — but counted above.
+    expect(screen.queryByLabelText('Write on: Stem number 1. Disabled. Long-press to select.')).toBeNull();
   });
 
-  // Issue 03: switching the State filter surfaces resting and soft-deleted
-  // rows, still with their state on the row — 'Resting' as a badge; a
-  // soft-deleted row is neither active nor resting (no badge, no write
+  // Issue 03: switching the State filter surfaces disabled and soft-deleted
+  // rows, still with their state on the row — 'Disabled' as a badge; a
+  // soft-deleted row is neither active nor disabled (no badge, no write
   // entry point, just the dimmed 'deleted' marker, §4.1).
-  it('shows Resting and deleted rows with their state once the State filter includes them', () => {
+  it('shows Disabled and deleted rows with their state once the State filter includes them', () => {
     render(<StemsScreen />);
 
     fireEvent.press(screen.getByLabelText('More filters'));
-    // With the default State filter ('active') no resting badges exist, so
-    // the chip is the only 'Resting' text on screen.
-    fireEvent.press(screen.getByText('Resting'));
-    expect(screen.getByLabelText('Write on: Stem number 1. Resting. Long-press to select.')).toBeTruthy();
+    // With the default State filter ('active') no disabled badges exist, so
+    // the chip is the only 'Disabled' text on screen.
+    fireEvent.press(screen.getByText('Disabled'));
+    expect(screen.getByLabelText('Write on: Stem number 1. Disabled. Long-press to select.')).toBeTruthy();
 
-    // Five 'All' chips now: category row, Programme week, State, Origin,
-    // Time of day — document order makes index 2 the State row's. The
-    // length guard turns any structural drift into a loud failure instead
-    // of a wrong press.
+    // Four 'All' chips: category row, State, Origin, Time of day — the week
+    // filter became a picker in v13-feedback issue 07 and carries no 'All'
+    // chip. Document order makes index 1 the State row's. The length guard
+    // turns any structural drift into a loud failure instead of a wrong press.
     const allChips = screen.getAllByText('All');
-    expect(allChips).toHaveLength(5);
-    fireEvent.press(allChips[2]);
+    expect(allChips).toHaveLength(4);
+    fireEvent.press(allChips[1]);
     expect(screen.getByText('Stem number 2')).toBeTruthy(); // soft-deleted: visible for context
     expect(screen.queryByLabelText('Write on: Stem number 2. Active. Long-press to select.')).toBeNull();
-    expect(screen.queryByLabelText('Write on: Stem number 2. Resting. Long-press to select.')).toBeNull();
+    expect(screen.queryByLabelText('Write on: Stem number 2. Disabled. Long-press to select.')).toBeNull();
     expect(screen.getAllByText(/deleted/).length).toBeGreaterThan(0); // the meta marker, not a state badge
   });
 
-  // Issue 03: the week picker reaches any programme week 1–30 from the
-  // library. Filtering to Week 2 (with the default State filter) shows the
-  // active week-2 stems only; the bare number chips are unique on screen
-  // (no other filter uses numeric labels).
-  it('filters the list to a chosen programme week', () => {
+  // Issue 03's week filter, rebuilt as a picker (v13-feedback issue 07):
+  // selecting a week from the menu filters the list exactly as the old chip
+  // row did, and the trigger names the selection.
+  it('filters the list to a chosen programme week via the picker', () => {
     render(<StemsScreen />);
 
     fireEvent.press(screen.getByLabelText('More filters'));
-    fireEvent.press(screen.getByText('2'));
+    // The picker opens as a menu of All + weeks 1–30; "Week 2" is unique.
+    fireEvent.press(screen.getByLabelText('Programme week: All weeks'));
+    fireEvent.press(screen.getByLabelText('Week 2'));
     // Fixture weeks cycle 1,2,3: active week-2 stems in the window are
-    // stems 4, 7, 10 (stem 1 is the resting week-2 stem, hidden by the
+    // stems 4, 7, 10 (stem 1 is the disabled week-2 stem, hidden by the
     // default State filter); week-1/3 stems are gone.
     expect(screen.getByLabelText('Write on: Stem number 4. Active. Long-press to select.')).toBeTruthy();
     expect(screen.queryByLabelText(/Write on: Stem number 0\./)).toBeNull();
     expect(screen.queryByLabelText(/Write on: Stem number 3\./)).toBeNull();
+    // The trigger reflects the selection.
+    expect(screen.getByLabelText('Programme week: Week 2')).toBeTruthy();
   });
 
   // Issue 03: origin 'seed' surfaces as "Programme" — display only, the
@@ -141,5 +170,47 @@ describe('StemsScreen', () => {
     expect(screen.getAllByText(/Programme/).length).toBeGreaterThan(0); // row meta lines
     fireEvent.press(screen.getByLabelText('More filters'));
     expect(screen.getByText('Programme')).toBeTruthy(); // the Origin filter chip
+  });
+
+  // v13-feedback issue 07, c06 carry-forward: the library lists the two
+  // evening reflection meta-stems (origin 'meta', seeded resting and
+  // evening-tagged). The row must treat them honestly: a visible Reflection
+  // tag (the bare 'meta' is developer vocabulary), the same state badge as
+  // every row so an activation is visible, and copy that never suggests
+  // activation is the only path — the reflection alternation reads these
+  // rows whatever their state (listMetaStems has no active filter).
+  it('treats the evening reflection meta-stem honestly: Reflection tag, state badge, state-honest copy', () => {
+    mockStemsOverride = [makeEveningMetaStem()];
+    render(<StemsScreen />);
+
+    // Counted in the summary; hidden under the default 'active' State filter.
+    expect(screen.getByText('0 active · 1 disabled')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('More filters'));
+    // The Evening time-of-day filter matches it — but the 'active' State
+    // filter still hides the resting row, so the list stays empty.
+    fireEvent.press(screen.getByText('Evening'));
+    expect(screen.queryByText('Evening reflection stem')).toBeNull();
+
+    // State 'All': with no categories in this fixture there is no category
+    // chip row, so the State row's 'All' is the first of three.
+    const allChips = screen.getAllByText('All');
+    expect(allChips).toHaveLength(3);
+    fireEvent.press(allChips[0]);
+
+    // Visible: the stem, its Reflection tag (replacing a bare 'meta'), the
+    // Disabled badge any row would carry, and the caption that says state
+    // is not what gates the reflection.
+    expect(screen.getByText('Evening reflection stem')).toBeTruthy();
+    expect(screen.getByText('Reflection')).toBeTruthy();
+    expect(screen.getAllByText('Disabled').length).toBeGreaterThanOrEqual(2); // State chip + row badge
+    expect(screen.getByText('Part of the evening reflection, whether Active or Disabled.')).toBeTruthy();
+    expect(
+      screen.getByLabelText(
+        'Write on: Evening reflection stem. Disabled. Part of the evening reflection, whether Active or Disabled. Long-press to select.',
+      ),
+    ).toBeTruthy();
+    // The developer vocabulary never leaks as copy.
+    expect(screen.queryByText(/meta/)).toBeNull();
   });
 });
