@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, Link } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Linking, StyleSheet, View } from 'react-native';
+import { Image, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
@@ -147,8 +147,31 @@ export default function HomeScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.content}>
+        {/* Scrolls when content exceeds the viewport instead of center-
+            clipping both ends (v13 issue 05): the app icon + title must be
+            the first thing on screen on short devices too — measured on the
+            320x640 audit AVD, the pre-icon layout already clipped the header
+            and footer, invisibly, because overflow had nowhere to go. */}
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.header}>
+            {/* The app icon above the title (v13 issue 05): the same committed
+                asset the native splash shows, at that splash's own imageWidth
+                (app.json), so launcher → splash → home read as one identity.
+                Decorative: no accessible name of its own, like the tile
+                glyphs below — the header's name comes from its text. */}
+            <Image
+              // Relative, not the `@/assets` alias: the jest-expo tsconfig
+              // mapping takes the first matching rule, and `@/*` (→ src/)
+              // shadows `@/assets/*` there. Relative requires resolve in
+              // metro AND jest; app.json's own asset lines are relative too.
+              source={require('../../assets/images/icon.png')}
+              style={styles.appIcon}
+              testID="home-app-icon"
+            />
             <ThemedText type="title">AwareMe</ThemedText>
             {/* Owner feedback 2026-09-16 (v12 issue 02): the old tagline read
                 as "finish sentences" with no stated purpose. This names the
@@ -324,10 +347,10 @@ export default function HomeScreen() {
               <Link
                 key={href}
                 href={href}
-                style={[
-                  styles.tile,
-                  { backgroundColor: label === 'Progress' ? theme.accentMuted : theme.backgroundElement },
-                ]}
+                // One shared fill for all eight tiles (v13 issue 05): the
+                // 2026-09-11 audit's lone accentMuted Progress tile read as a
+                // bug, not a hierarchy — no tile is singled out anymore.
+                style={[styles.tile, { backgroundColor: theme.backgroundElement }]}
                 accessibilityRole="link"
                 accessibilityLabel={label}
               >
@@ -363,7 +386,7 @@ export default function HomeScreen() {
           >
             Created by Nicolo’ Brandizzi
           </ThemedText>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -375,10 +398,13 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  },
+  scroll: {
+    flex: 1,
   },
   content: {
+    flexGrow: 1,
+    justifyContent: 'center',
     gap: Spacing.four,
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.five,
@@ -389,6 +415,11 @@ const styles = StyleSheet.create({
   header: {
     gap: Spacing.one,
     alignItems: 'center',
+  },
+  appIcon: {
+    width: 76,
+    height: 76,
+    borderRadius: Radius.large,
   },
   sittingCard: {
     gap: Spacing.two,

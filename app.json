@@ -14,7 +14,7 @@
       "package": "com.nicolobrandizzi.awareme",
       "versionCode": 2,
       "adaptiveIcon": {
-        "backgroundColor": "#F6EAE4",
+        "backgroundColor": "#fef5e8",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       }
@@ -27,7 +27,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F6EAE4",
+          "backgroundColor": "#fef5e8",
           "image": "./assets/images/icon.png",
           "imageWidth": 76
         }
