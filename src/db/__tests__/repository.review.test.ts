@@ -67,6 +67,38 @@ describe('Repository.listSessionsForReview', () => {
   });
 });
 
+describe('Repository.listSessionsForDayMorning (issue 10: deleted stems in the evening reread)', () => {
+  it('hides the day’s session on a stem soft-deleted before the evening reflection', () => {
+    const { repo } = freshRepository();
+    const [deletedStem, keptStem] = repo.listActiveStems();
+
+    // The morning: two completed sittings with endings, inside the day window.
+    const deletedSession = sessionWithEnding(repo, deletedStem.id, '2026-09-10T08:00:00.000Z');
+    const keptSession = sessionWithEnding(repo, keptStem.id, '2026-09-10T08:30:00.000Z');
+
+    // Before the evening reflection, the user soft-deletes one stem.
+    repo.softDeleteStem(deletedStem.id, '2026-09-10T12:00:00.000Z');
+
+    const reviewed = repo.listSessionsForDayMorning('2026-09-10T00:00:00.000Z', '2026-09-11T00:00:00.000Z');
+    // The deleted stem’s session is gone from the evening reread...
+    expect(reviewed.map((r) => r.session.id)).toEqual([keptSession]);
+    expect(reviewed.map((r) => r.session.id)).not.toContain(deletedSession);
+  });
+
+  it('still leaves the soft-deleted row visible to the library read (deliberate resting/provenance behavior, untouched)', () => {
+    const { repo } = freshRepository();
+    const [victim] = repo.listActiveStems();
+
+    repo.softDeleteStem(victim.id, '2026-09-10T12:00:00.000Z');
+
+    const library = repo.listAllStems();
+    const row = library.find((s) => s.id === victim.id);
+    expect(row?.deleted_at).toBe('2026-09-10T12:00:00.000Z');
+    // The reflection meta-stems stay in the alternation pool too (§6.5.2).
+    expect(repo.listMetaStems()).toHaveLength(3);
+  });
+});
+
 describe('end-to-end review flow', () => {
   it('a meta-stem session (a real session/endings pair, stem_id pointing at a real stems row) feeds createReview', () => {
     const { db, repo } = freshRepository();
