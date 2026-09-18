@@ -1,6 +1,6 @@
 import { newId } from './id';
 import { SqlBindValue, SqlExecutor } from './executor';
-import { EVENING_META_STEMS, PROGRAMME_SEED_STEMS, programmeStemCategory, RETIRED_SEED_STEMS, TimeOfDay, WEEKLY_META_STEM } from './seed/stems';
+import { EVENING_META_STEMS, EVENING_PRACTICE_SEED_STEMS, PROGRAMME_SEED_STEMS, programmeStemCategory, RETIRED_SEED_STEMS, TimeOfDay, WEEKLY_META_STEM } from './seed/stems';
 import { DEFAULT_SETTINGS, Settings } from './seed/settings';
 import { nowEventTime } from './time';
 import { EndReason, SessionOrigin } from '@/session/sessionMachine';
@@ -158,7 +158,15 @@ export class Repository {
    *    Evening filter matches them;
    * 4. the 26 retired v1 originals — soft-deleted AT SEED TIME
    *    (`deleted_at` set, `active = 0`): present for provenance/exports,
-   *    never active, never shown in the library (spec §5.3).
+   *    never active, never shown in the library (spec §5.3);
+   * 5. the evening practice starter set (issue 17, 2026-09-18 owner
+   *    decision): seven app-original evening practice stems, seeded
+   *    ACTIVE and `time_of_day = 'evening'` — real content for the
+   *    library's Evening filter and the evening practice surface. The
+   *    §5.4 meta-stems (item 3) keep their resting role beside them.
+   *    Installs predating the set receive these rows through migration
+   *    0007 instead — seeding happens once per install, and this method
+   *    never re-runs on a database that already has stems.
    */
   seedIfEmpty(): void {
     if (this.hasStems()) return;
@@ -216,6 +224,24 @@ export class Repository {
           `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta, deleted_at)
            VALUES (?, ?, 'seed', ?, 'en', 1.0, 0, ?, ?, ?, ?, NULL, 0, ?)`,
           [newId(), stem.text, stem.category, at, tz, offsetMin, stem.timeOfDay, at],
+        );
+      }
+
+      // The evening practice starter set (issue 17, 2026-09-18 owner
+      // decision): app-original placeholder text (spec §5.1 clean — never
+      // programme or Branden text, never transcribed from any source),
+      // seeded ACTIVE and evening-tagged so the Evening filter and the
+      // evening practice surface real content; the meta-stems above keep
+      // their resting role beside them. week_number NULL keeps the rows
+      // outside the programme, so week-set activation never touches them.
+      // Installs predating the set receive these rows through migration
+      // 0007 — seeding happens once per install, never again.
+      for (const stem of EVENING_PRACTICE_SEED_STEMS) {
+        const { at, tz, offsetMin } = nowEventTime();
+        this.db.runSync(
+          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
+           VALUES (?, ?, 'seed', ?, 'en', 1.0, 1, ?, ?, ?, 'evening', NULL, 0)`,
+          [newId(), stem.text, stem.category, at, tz, offsetMin],
         );
       }
 

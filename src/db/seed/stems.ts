@@ -3,7 +3,7 @@
  * content-overlay seam (issue 10, 2026-09-16 owner decision: the official
  * programme text is not published with this repository).
  *
- * Three corpora:
+ * Four corpora:
  *
  * 1. `PROGRAMME_SEED_STEMS` — the official Sentence Completion I programme,
  *    Weeks 1–30, together with the official weekly reflection stem. This is
@@ -35,6 +35,11 @@
  *    they are never active and never shown in the library. Text, categories
  *    and time-of-day tags are kept verbatim from v1. App-original text —
  *    committed.
+ *
+ * 4. `EVENING_PRACTICE_SEED_STEMS` — the evening practice starter set
+ *    (issue 17, 2026-09-18 owner decision): seven app-original practice
+ *    stems for the evening surface, seeded active and evening-tagged.
+ *    App-original text — committed.
  *
  * The retired "general" pair still have no `category`: spec §5.2 defines
  * exactly six categories and "general" isn't one of them (DECISIONS.md).
@@ -179,4 +184,38 @@ export const RETIRED_SEED_STEMS: readonly RetiredSeedStem[] = [
   { text: 'If I were five percent braver this week', category: 'integrity', timeOfDay: 'morning' },
   { text: 'Something the people closest to me would say about me that I resist is', category: null, timeOfDay: 'evening' },
   { text: 'If I am not as stuck as I tell myself I am', category: null, timeOfDay: 'morning' },
+] as const;
+
+/**
+ * An evening practice starter-set stem: its text and its §5.2 category
+ * (the retired corpus's convention — the categories are not derivable, so
+ * they travel on the entry).
+ */
+export interface EveningPracticeSeedStem {
+  text: string;
+  category: StemCategory;
+}
+
+/**
+ * The evening practice starter set (issue 17, 2026-09-18 owner decision):
+ * seven app-original evening practice stems. A STARTER SET of placeholder
+ * content — original text written for the app, never programme or Branden
+ * text, never transcribed from any source (spec §5.1); the owner decision
+ * sanctions this set against §5.1's "no new stems" line and may replace or
+ * grow it in a later round. Seeded ACTIVE and `time_of_day = 'evening'` so
+ * the library's Evening filter and the evening practice surface real
+ * content; `week_number = NULL` keeps the rows outside the programme, so
+ * week-set activation never touches them; `origin = 'seed'`, since they
+ * are seed-authored app content. Fresh installs only: `seedIfEmpty` never
+ * re-runs, so installs that predate this set are untouched (append-only,
+ * §4.1) — the same precedence the retirement above set.
+ */
+export const EVENING_PRACTICE_SEED_STEMS: readonly EveningPracticeSeedStem[] = [
+  { text: 'If I take one honest look at the day I actually had', category: 'awareness' },
+  { text: 'If I end the day on speaking terms with myself', category: 'self_acceptance' },
+  { text: 'If I take my share of today, and only my share', category: 'responsibility' },
+  { text: 'The thing I wanted to say today and kept back is', category: 'assertiveness' },
+  { text: 'If the first hour of tomorrow goes to what matters most', category: 'purpose' },
+  { text: 'Where my words and my actions parted ways today is', category: 'integrity' },
+  { text: 'If I set down the unfinished parts of today until morning', category: 'self_acceptance' },
 ] as const;

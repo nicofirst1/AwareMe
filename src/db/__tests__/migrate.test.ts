@@ -7,8 +7,9 @@ import { migrate } from '../migrate';
 import { MIGRATIONS, CURRENT_SCHEMA_VERSION } from '../migrations';
 import { MIGRATION_0004_OFFICIAL_PROGRAMME } from '../migrations/0004_official_programme';
 import { MIGRATION_0006_EVENING_META_TIME_OF_DAY } from '../migrations/0006_evening_meta_time_of_day';
+import { MIGRATION_0007_EVENING_PRACTICE_STARTER_SET } from '../migrations/0007_evening_practice_starter_set';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
-import { EVENING_META_STEMS, PROGRAMME_SEED_STEMS, programmeStemCategory, WEEKLY_META_STEM } from '../seed/stems';
+import { EVENING_META_STEMS, EVENING_PRACTICE_SEED_STEMS, PROGRAMME_SEED_STEMS, programmeStemCategory, WEEKLY_META_STEM } from '../seed/stems';
 
 const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures');
 
@@ -351,8 +352,11 @@ describe('migrate', () => {
     const meta = db.getFirstSync<{ schema_version: number }>('SELECT schema_version FROM schema_meta WHERE id = 1', []);
     expect(meta?.schema_version).toBe(CURRENT_SCHEMA_VERSION);
 
+    // Since issue 17 the upgrade also lands the evening practice starter
+    // set (migration 0007) — the tagging assertion scopes to the meta rows
+    // 0006 governs; the starter rows are pinned by the 0007 suite below.
     const tagged = db.getAllSync<{ id: string; text: string; time_of_day: string | null; active: number }>(
-      "SELECT id, text, time_of_day, active FROM stems WHERE time_of_day = 'evening' ORDER BY id",
+      "SELECT id, text, time_of_day, active FROM stems WHERE origin = 'meta' AND time_of_day = 'evening' ORDER BY id",
       [],
     );
     expect(tagged.map((r) => r.id).sort()).toEqual(['evening-meta-0', 'evening-meta-1']);
@@ -367,11 +371,122 @@ describe('migrate', () => {
     const lookalike = db.getFirstSync<{ time_of_day: string | null }>('SELECT time_of_day FROM stems WHERE id = ?', ['user-lookalike']);
     expect(lookalike?.time_of_day).toBeNull();
 
-    // Idempotent at the SQL level: re-running the shipped statement is a no-op.
+    // Idempotent at the SQL level: re-running the shipped statement is a
+    // no-op. The evening rows now comprise the two meta-stems 0006 tags
+    // plus the starter set 0007 seeds on this upgrade path.
     db.execSync(MIGRATION_0006_EVENING_META_TIME_OF_DAY);
     expect(
       (db.getFirstSync<{ c: number }>("SELECT COUNT(*) AS c FROM stems WHERE time_of_day = 'evening'", []) as { c: number }).c,
-    ).toBe(2);
+    ).toBe(EVENING_META_STEMS.length + EVENING_PRACTICE_SEED_STEMS.length);
+
+    raw.close();
+    fs.rmSync(path.dirname(scratch), { recursive: true, force: true });
+  });
+
+  // Issue 17: the shipped 0007 SQL and the live seed constant cannot drift —
+  // the migration freezes the starter set's texts and categories, so a
+  // seed-side edit without a matching migration fails here. Runs in BOTH
+  // modes: the starter set is committed app-original text, independent of
+  // the content module.
+  it('migration 0007 freezes exactly the live starter set, text and category, in seed order', () => {
+    // The shipped SQL writes one INSERT...SELECT per stem; the frozen text
+    // and category are the 2nd and 4th literals. sqlString doubles single
+    // quotes, so the extraction accepts doubled quotes too and would only
+    // produce garbage (never a silent mismatch) if a future text carried one.
+    const frozen = [
+      ...MIGRATION_0007_EVENING_PRACTICE_STARTER_SET.matchAll(
+        /SELECT 'm0007-evening-\d{2}', '((?:[^']|'')*)', 'seed', '([a-z_]+)'/g,
+      ),
+    ].map((m) => ({ text: m[1].replace(/''/g, "'"), category: m[2] }));
+    expect(frozen).toEqual(EVENING_PRACTICE_SEED_STEMS.map((s) => ({ text: s.text, category: s.category })));
+  });
+
+  it('upgrading the v6 fixture seeds the evening practice starter set active and evening-tagged, skipping a text the install already has', () => {
+    const scratch = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'six-endings-migrate-')), 'copy.db');
+    fs.copyFileSync(fixturePath(6), scratch);
+    const raw = new DatabaseSync(scratch);
+    const db = nodeSqliteExecutor(raw);
+
+    // Mimic a real pre-issue-17 install's stems: one user-authored row
+    // verbatim-identical to a starter-set text (possible — the §6.6
+    // duplicate check on that install could not have known these texts
+    // yet) and one ordinary programme row. The lookalike keeps its own row
+    // (the migration 0006 ruling), so the other six texts land.
+    db.runSync(
+      `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
+       VALUES ('user-lookalike', ?, 'user', NULL, 'en', 1.0, 1, '2026-01-01T00:00:00.000Z', 'UTC', 0, NULL, NULL, 0)`,
+      [EVENING_PRACTICE_SEED_STEMS[0].text],
+    );
+    db.runSync(
+      `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
+       VALUES ('programme-1', ?, 'seed', 'awareness', 'en', 1.0, 1, '2026-01-01T00:00:00.000Z', 'UTC', 0, 'morning', 1, 0)`,
+      [PROGRAMME_SEED_STEMS[0].text],
+    );
+
+    migrate(db, '9.9.9');
+
+    const meta = db.getFirstSync<{ schema_version: number }>('SELECT schema_version FROM schema_meta WHERE id = 1', []);
+    expect(meta?.schema_version).toBe(CURRENT_SCHEMA_VERSION);
+
+    // The six texts the install did not have land exactly as the fresh-install
+    // seed writes them: active, evening-tagged, seed-origin, outside the
+    // programme, with their frozen categories.
+    const landed = db.getAllSync<{
+      text: string;
+      origin: string;
+      category: string | null;
+      active: number;
+      time_of_day: string | null;
+      week_number: number | null;
+      is_weekly_meta: number;
+      deleted_at: string | null;
+    }>(
+      "SELECT text, origin, category, active, time_of_day, week_number, is_weekly_meta, deleted_at FROM stems WHERE origin = 'seed' AND text IN (?, ?, ?, ?, ?, ?, ?)",
+      EVENING_PRACTICE_SEED_STEMS.map((s) => s.text),
+    );
+    expect(landed).toHaveLength(EVENING_PRACTICE_SEED_STEMS.length - 1);
+    for (const row of landed) {
+      expect(row.active).toBe(1);
+      expect(row.time_of_day).toBe('evening');
+      expect(row.week_number).toBeNull();
+      expect(row.is_weekly_meta).toBe(0);
+      expect(row.deleted_at).toBeNull();
+      expect(row.category).toBe(EVENING_PRACTICE_SEED_STEMS.find((s) => s.text === row.text)!.category);
+    }
+
+    // The lookalike text still belongs to exactly one row: the user's own,
+    // untouched — no twin created.
+    const lookalike = db.getAllSync<{ id: string; origin: string; active: number }>(
+      'SELECT id, origin, active FROM stems WHERE text = ?',
+      [EVENING_PRACTICE_SEED_STEMS[0].text],
+    );
+    expect(lookalike).toHaveLength(1);
+    expect(lookalike[0]).toMatchObject({ id: 'user-lookalike', origin: 'user', active: 1 });
+
+    // Idempotent at the SQL level: re-running the shipped statement is a no-op.
+    const totalBefore = (db.getFirstSync<{ c: number }>('SELECT COUNT(*) AS c FROM stems', []) as { c: number }).c;
+    db.execSync(MIGRATION_0007_EVENING_PRACTICE_STARTER_SET);
+    const totalAfter = (db.getFirstSync<{ c: number }>('SELECT COUNT(*) AS c FROM stems', []) as { c: number }).c;
+    expect(totalAfter).toBe(totalBefore);
+
+    raw.close();
+    fs.rmSync(path.dirname(scratch), { recursive: true, force: true });
+  });
+
+  it('migration 0007 is a no-op on an empty stems table: a fresh install seeds the starter set itself', () => {
+    const scratch = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'six-endings-migrate-')), 'copy.db');
+    fs.copyFileSync(fixturePath(6), scratch);
+    const raw = new DatabaseSync(scratch);
+    const db = nodeSqliteExecutor(raw);
+
+    migrate(db, '9.9.9');
+
+    // The row-count guard kept the table empty: seedIfEmpty's hasStems()
+    // check must still see a fresh install, so the full corpus — starter
+    // set included — seeds normally after migrate.
+    expect((db.getFirstSync<{ c: number }>('SELECT COUNT(*) AS c FROM stems', []) as { c: number }).c).toBe(0);
+    const meta = db.getFirstSync<{ schema_version: number }>('SELECT schema_version FROM schema_meta WHERE id = 1', []);
+    expect(meta?.schema_version).toBe(CURRENT_SCHEMA_VERSION);
 
     raw.close();
     fs.rmSync(path.dirname(scratch), { recursive: true, force: true });

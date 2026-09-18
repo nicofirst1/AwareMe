@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { migrate } from '../migrate';
 import { Repository } from '../repository';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
-import { EVENING_META_STEMS, PROGRAMME_SEED_STEMS, RETIRED_SEED_STEMS } from '../seed/stems';
+import { EVENING_META_STEMS, EVENING_PRACTICE_SEED_STEMS, PROGRAMME_SEED_STEMS, RETIRED_SEED_STEMS } from '../seed/stems';
 import { computeReturnAction } from '@/session/sessionMachine';
 
 function freshRepository(): { db: DatabaseSync; repo: Repository } {
@@ -42,12 +42,13 @@ describe('Repository.listActiveStems', () => {
     const activeBefore = repo.listActiveStems();
     // 142 programme stems; the weekly meta-stem (active, is_weekly_meta=1)
     // is review machinery and excluded here, the retired originals are
-    // soft-deleted at seed, the evening meta-stems are inactive.
-    expect(activeBefore.length).toBe(PROGRAMME_SEED_STEMS.length);
+    // soft-deleted at seed, the evening meta-stems are inactive; the
+    // evening practice starter set (issue 17) is active and evening-tagged.
+    expect(activeBefore.length).toBe(PROGRAMME_SEED_STEMS.length + EVENING_PRACTICE_SEED_STEMS.length);
 
     const someId = activeBefore[0].id;
     db.prepare('UPDATE stems SET active = 0 WHERE id = ?').run(someId);
-    expect(repo.listActiveStems().length).toBe(PROGRAMME_SEED_STEMS.length - 1);
+    expect(repo.listActiveStems().length).toBe(PROGRAMME_SEED_STEMS.length + EVENING_PRACTICE_SEED_STEMS.length - 1);
   });
 });
 
@@ -62,11 +63,15 @@ describe('Repository.listAllStems', () => {
     const all = repo.listAllStems();
     // Programme (all 142, whatever their flags) + the 26 retired originals
     // + the 2 evening meta-stems (issue 06: the library lists them, resting
-    // and evening-tagged); never the weekly meta-stem.
+    // and evening-tagged) + the evening practice starter set (issue 17);
+    // never the weekly meta-stem.
     expect(all).toHaveLength(
-      PROGRAMME_SEED_STEMS.length + EVENING_META_STEMS.length + RETIRED_SEED_STEMS.length,
+      PROGRAMME_SEED_STEMS.length +
+        EVENING_META_STEMS.length +
+        EVENING_PRACTICE_SEED_STEMS.length +
+        RETIRED_SEED_STEMS.length,
     );
-    expect(repo.listActiveStems().length).toBe(PROGRAMME_SEED_STEMS.length - 2);
+    expect(repo.listActiveStems().length).toBe(PROGRAMME_SEED_STEMS.length + EVENING_PRACTICE_SEED_STEMS.length - 2);
 
     const archived = all.find((s) => s.id === someId)!;
     expect(archived.active).toBe(0);

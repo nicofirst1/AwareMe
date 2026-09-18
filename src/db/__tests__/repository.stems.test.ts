@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { migrate } from '../migrate';
 import { Repository } from '../repository';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
-import { EVENING_META_STEMS, PROGRAMME_SEED_STEMS, RETIRED_SEED_STEMS, WEEKLY_META_STEM } from '../seed/stems';
+import { EVENING_META_STEMS, EVENING_PRACTICE_SEED_STEMS, PROGRAMME_SEED_STEMS, RETIRED_SEED_STEMS, WEEKLY_META_STEM } from '../seed/stems';
 import { matchesStemFilters } from '@/session/stemLibraryFilter';
 
 function freshRepository(): { db: DatabaseSync; repo: Repository } {
@@ -45,9 +45,10 @@ describe('Repository.listStemTexts', () => {
     const { db, repo } = freshRepository();
     const texts = repo.listStemTexts();
     // 142 programme stems + the weekly meta-stem (origin='seed' since
-    // migration 0004; its text should block verbatim duplicates too).
+    // migration 0004; its text should block verbatim duplicates too) +
+    // the evening practice starter set (issue 17, origin='seed').
     // The 26 retired originals are soft-deleted at seed — excluded.
-    expect(texts.length).toBe(PROGRAMME_SEED_STEMS.length + 1);
+    expect(texts.length).toBe(PROGRAMME_SEED_STEMS.length + 1 + EVENING_PRACTICE_SEED_STEMS.length);
 
     const id = repo.addStem({ text: 'Freshly added', category: null, origin: 'user' });
     expect(repo.listStemTexts()).toContain('Freshly added');
@@ -116,12 +117,14 @@ describe('Repository.getActiveStemsForTimeOfDay', () => {
     const morning = repo.getActiveStemsForTimeOfDay('morning');
     const evening = repo.getActiveStemsForTimeOfDay('evening');
     // The official programme (ADR-0005) is mornings-only: every programme
-    // stem is tagged 'morning'; the evening meta-stems and the weekly
-    // meta-stem carry time_of_day = NULL; the retired originals are
-    // soft-deleted at seed. A fresh seed therefore has no evening stems.
-    expect(morning.length).toBeGreaterThan(0);
-    expect(morning.length + evening.length).toBe(PROGRAMME_SEED_STEMS.length);
-    expect(evening).toHaveLength(0);
+    // stem is tagged 'morning'; the weekly meta-stem carries NULL and the
+    // retired originals are soft-deleted at seed. Since issue 17 the seed's
+    // ACTIVE evening rows are exactly the practice starter set: the two
+    // evening meta-stems stay inactive (resting, issue 06) and are never
+    // drawn.
+    expect(morning.length).toBe(PROGRAMME_SEED_STEMS.length);
+    expect(evening.length).toBe(EVENING_PRACTICE_SEED_STEMS.length);
+    expect(evening.every((s) => EVENING_PRACTICE_SEED_STEMS.some((p) => p.text === s.text))).toBe(true);
     expect(morning.some((s) => evening.some((e) => e.id === s.id))).toBe(false);
 
     // A newly added stem has no time_of_day (NULL) and never surfaces here.
@@ -160,9 +163,13 @@ describe('Repository.bulkImportStems', () => {
   it('is a no-op for an empty list', () => {
     const { repo } = freshRepository();
     expect(repo.bulkImportStems([], null)).toBe(0);
-    // Programme + the 2 evening meta-stems (issue 06) + the retired originals.
+    // Programme + the 2 evening meta-stems (issue 06) + the retired
+    // originals + the evening practice starter set (issue 17).
     expect(repo.listAllStems()).toHaveLength(
-      PROGRAMME_SEED_STEMS.length + EVENING_META_STEMS.length + RETIRED_SEED_STEMS.length,
+      PROGRAMME_SEED_STEMS.length +
+        EVENING_META_STEMS.length +
+        EVENING_PRACTICE_SEED_STEMS.length +
+        RETIRED_SEED_STEMS.length,
     );
   });
 });

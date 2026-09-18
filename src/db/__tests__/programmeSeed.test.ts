@@ -28,7 +28,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { migrate } from '../migrate';
 import { CURRENT_SCHEMA_VERSION } from '../migrations';
 import { Repository } from '../repository';
-import { EVENING_META_STEMS, PROGRAMME_SEED_STEMS, programmeStemCategory, PROGRAMME_WEEK_CATEGORY, RETIRED_SEED_STEMS, StemCategory, WEEKLY_META_STEM } from '../seed/stems';
+import { EVENING_META_STEMS, EVENING_PRACTICE_SEED_STEMS, PROGRAMME_SEED_STEMS, programmeStemCategory, PROGRAMME_WEEK_CATEGORY, RETIRED_SEED_STEMS, StemCategory, WEEKLY_META_STEM } from '../seed/stems';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
 
 const SNAPSHOT_PATH = path.join(__dirname, '..', '..', '..', '.scratch', 'official-program', 'official-program-verbatim.txt');
@@ -303,7 +303,7 @@ describe('fresh-install seed lands the programme in the database (both modes)', 
     }
   });
 
-  it('seeds exactly one active weekly meta-stem, plus the two inactive evening meta-stems, plus the 26 soft-deleted retired originals — and nothing else', () => {
+  it('seeds exactly one active weekly meta-stem, plus the two inactive evening meta-stems, plus the evening practice starter set, plus the 26 soft-deleted retired originals — and nothing else', () => {
     const { db, repo } = freshDatabase();
     repo.seedIfEmpty();
 
@@ -344,10 +344,52 @@ describe('fresh-install seed lands the programme in the database (both modes)', 
     expect(retired.map((r) => r.text)).toEqual(RETIRED_SEED_STEMS.map((s) => s.text));
     expect(retired.every((r) => r.active === 0 && r.deleted_at !== null)).toBe(true);
 
-    // Nothing else: the whole corpus + 1 weekly + 2 evening metas + 26 retired.
+    // Nothing else: the whole corpus + 1 weekly + 2 evening metas + the
+    // starter set + 26 retired.
     expect((db.prepare('SELECT COUNT(*) AS c FROM stems').get() as { c: number }).c).toBe(
-      PROGRAMME_SEED_STEMS.length + 1 + 2 + RETIRED_SEED_STEMS.length,
+      PROGRAMME_SEED_STEMS.length + 1 + 2 + EVENING_PRACTICE_SEED_STEMS.length + RETIRED_SEED_STEMS.length,
     );
+  });
+
+  it('seeds the evening practice starter set active and evening-tagged (issue 17)', () => {
+    const { db, repo } = freshDatabase();
+    repo.seedIfEmpty();
+
+    const rows = db
+      .prepare(
+        `SELECT text, origin, category, active, time_of_day, week_number, is_weekly_meta, deleted_at
+         FROM stems WHERE time_of_day = 'evening' AND active = 1 ORDER BY rowid`,
+      )
+      .all() as {
+      text: string;
+      origin: string;
+      category: string | null;
+      active: number;
+      time_of_day: string | null;
+      week_number: number | null;
+      is_weekly_meta: number;
+      deleted_at: string | null;
+    }[];
+
+    // The seed's only active evening rows are the starter set, in seed order.
+    expect(rows).toHaveLength(EVENING_PRACTICE_SEED_STEMS.length);
+    for (let i = 0; i < EVENING_PRACTICE_SEED_STEMS.length; i++) {
+      expect(rows[i].text).toBe(EVENING_PRACTICE_SEED_STEMS[i].text);
+      expect(rows[i].origin).toBe('seed');
+      expect(rows[i].category).toBe(EVENING_PRACTICE_SEED_STEMS[i].category);
+      expect(rows[i].active).toBe(1);
+      expect(rows[i].time_of_day).toBe('evening');
+      expect(rows[i].week_number).toBeNull();
+      expect(rows[i].is_weekly_meta).toBe(0);
+      expect(rows[i].deleted_at).toBeNull();
+    }
+
+    // The §5.4 meta-stems keep their resting role beside the set: still
+    // inactive, so no sitting draw ever picks them (issue 06's contract).
+    const resting = db.prepare("SELECT COUNT(*) AS c FROM stems WHERE origin = 'meta' AND active = 0").get() as {
+      c: number;
+    };
+    expect(resting.c).toBe(EVENING_META_STEMS.length);
   });
 
   it('reaches the current schema version on a fresh install', () => {
