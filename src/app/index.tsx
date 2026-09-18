@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
+import { SplashSequence } from '@/components/splash/SplashSequence';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CREATOR_SITE_URL, withAppTag } from '@/constants/links';
@@ -159,11 +160,14 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            {/* The app icon above the title (v13 issue 05): the same committed
-                asset the native splash shows, at that splash's own imageWidth
-                (app.json), so launcher → splash → home read as one identity.
-                Decorative: no accessible name of its own, like the tile
-                glyphs below — the header's name comes from its text. */}
+            {/* The app icon above the title (v13 issue 05): the launcher
+                asset, so launcher → home read as one identity. (The native
+                splash and the entrance overlay now use the borderless
+                foreground artwork at a larger size — v14 issue 01 — but the
+                header keeps the rounded tile treatment the home screen was
+                designed around.) Decorative: no accessible name of its own,
+                like the tile glyphs below — the header's name comes from its
+                text. */}
             <Image
               // Relative, not the `@/assets` alias: the jest-expo tsconfig
               // mapping takes the first matching rule, and `@/*` (→ src/)
@@ -360,7 +364,15 @@ export default function HomeScreen() {
                   size={20}
                   color={resolveTileColor(resolvedScheme === 'dark' ? colorDark : color, theme.accent)}
                 />
-                <ThemedText type="default">{label}</ThemedText>
+                {/* numberOfLines={1} (v14 issue 12: a lone "s" of "Progress"
+                    wrapped to a second line at narrow widths) — no tile label
+                    may ever wrap. The freed-up horizontal padding (Spacing.one,
+                    below) is what makes "Progress" actually fit on one line
+                    at the 320pt floor, so this is a guarantee of last resort,
+                    not the sizing fix itself. */}
+                <ThemedText type="default" numberOfLines={1}>
+                  {label}
+                </ThemedText>
               </Link>
             ))}
           </View>
@@ -389,6 +401,13 @@ export default function HomeScreen() {
           </ThemedText>
         </ScrollView>
       </SafeAreaView>
+
+      {/* The animated entrance sequence (v14 issue 01): logo → AwareMe →
+          quote, played once per app open. The component is self-dismissing
+          (it renders null when done), so the home screen carries no splash
+          state; it paints itself with the theme's background token over the
+          full screen, above the SafeAreaView. */}
+      <SplashSequence />
     </ThemedView>
   );
 }
@@ -464,7 +483,12 @@ const styles = StyleSheet.create({
     // row at any supported screen width.
     width: '30%',
     paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.two,
+    // Horizontal inner padding trimmed two points a side (v14 issue 12):
+    // at 320pt the label box was ~66pt wide and "Progress" (~62pt at 16pt
+    // Roboto) wrapped its trailing "s". Spacing.one leaves ~74pt of label
+    // box — the widest label fits with margin, verified by capture at
+    // 320pt, light and dark (issue 12 acceptance).
+    paddingHorizontal: Spacing.one,
     borderRadius: Radius.medium,
     alignItems: 'center',
     justifyContent: 'center',
