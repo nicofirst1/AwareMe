@@ -68,7 +68,7 @@ import { CONTENT } from './stems.content';
 
 export type StemCategory = 'awareness' | 'self_acceptance' | 'responsibility' | 'assertiveness' | 'purpose' | 'integrity';
 
-/** Morning/evening pivot (migration 0003): which fixed daily notification a stem belongs to. The weekly meta-stem carries `null`; the two evening reflection meta-stems carry `evening` (issue 06) so the library's Evening filter matches them — either way, never surfaced by a sitting draw. */
+/** Morning/evening pivot (migration 0003): which fixed daily notification a stem belongs to. The weekly meta-stem carries `null`; the two evening reflection meta-stems carry `evening` (issue 06) so the library's Evening filter matches them — either way, never surfaced by a practice draw. */
 export type TimeOfDay = 'morning' | 'evening';
 
 /** One official programme stem: its Week 1–30 block and its byte-exact text (no trailing terminator). Categories are NOT stored on the entries — they resolve through `programmeStemCategory` below, so this array stays byte-identical to the snapshot transcription. */
@@ -86,12 +86,12 @@ export interface RetiredSeedStem {
 
 /**
  * The official Sentence Completion I programme, Weeks 1–30, in snapshot
- * order (which is also seed order — the order sittings present them).
+ * order (which is also seed order — the order practice present them).
  * DO NOT hand-edit: see the file header.
  */
 export const PROGRAMME_SEED_STEMS: readonly ProgrammeSeedStem[] = CONTENT.programmeStems;
 
-/** The two non-weekly review meta-stems — the evening reflection sitting's deterministic pair (§6.2, ADR-0005). App-original text. */
+/** The two non-weekly review meta-stems — the evening reflection practice's deterministic pair (§6.2, ADR-0005). App-original text. */
 export const EVENING_META_STEMS: readonly string[] = [
   'Reading these back, the thing I notice myself circling is',
   'If I take these endings seriously rather than dismissing them',

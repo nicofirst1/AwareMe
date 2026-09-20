@@ -203,20 +203,20 @@ export default function StemsScreen() {
         {/*
           The official programme's entry point (issue 02, §6.6/ADR-0005): the
           30 week blocks live on their own screen with the week grouping, the
-          one-off sitting action, and "make this my week". A quiet list-row
+          one-off practice action, and "make this my week". A quiet list-row
           sibling above the search/filter block — the library's flat list
           (all stems, filterable) is unchanged below it.
         */}
         <Pressable
           onPress={() => router.push('/week')}
           accessibilityRole="button"
-          accessibilityLabel="Official programme. Thirty weeks of guided sittings."
+          accessibilityLabel="Official programme. Thirty weeks of guided practice."
           style={[styles.programmeRow, { backgroundColor: theme.backgroundElement }]}
         >
           <View style={styles.programmeText}>
             <ThemedText type="default">Official programme</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Thirty weeks of guided sittings
+              Thirty weeks of guided practice
             </ThemedText>
           </View>
           <Ionicons name="chevron-forward-outline" size={18} color={theme.textSecondary} />

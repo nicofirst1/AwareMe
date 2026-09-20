@@ -94,7 +94,7 @@ describe('StemsScreen', () => {
   // flat list, not one row among the seed corpus.
   it("offers the official programme as the list's first entry", () => {
     const { getByLabelText } = render(<StemsScreen />);
-    const row = getByLabelText('Official programme. Thirty weeks of guided sittings.');
+    const row = getByLabelText('Official programme. Thirty weeks of guided practices.');
     expect(row).toBeTruthy();
     fireEvent.press(row);
     expect(mockRouter.push).toHaveBeenCalledWith('/week');

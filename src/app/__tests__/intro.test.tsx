@@ -73,9 +73,9 @@ describe('IntroScreen', () => {
     // morning default needs no button of its own.
     expect(screen.getByText('Include evening practice')).toBeTruthy();
     expect(screen.getByText('Skip for now')).toBeTruthy();
-    expect(screen.queryByText('Start with the morning sitting')).toBeNull();
+    expect(screen.queryByText('Start with the morning practice')).toBeNull();
     // Non-trap promise, on the card itself: the answer lives in Settings.
-    expect(screen.getByText('Skipping keeps just the morning sitting. You can change this anytime in Settings.')).toBeTruthy();
+    expect(screen.getByText('Skipping keeps just the morning practice. You can change this anytime in Settings.')).toBeTruthy();
   });
 
   it('greets before explaining: the welcome beat renders above the question card', () => {
@@ -91,8 +91,8 @@ describe('IntroScreen', () => {
 
     // Purpose framing (owner feedback 2026-09-16): what the exercise is
     // FOR, not merely the mechanics — factual, no outcome promises.
-    expect(screen.getByText(/self-awareness/)).toBeTruthy();
-    expect(screen.getByText(/self-esteem/i)).toBeTruthy();
+    // REMOVED by owner (paragraph deleted from intro.tsx)
+    // REMOVED by owner (paragraph deleted from intro.tsx)
     // The evening explanation: the original method practised morning and
     // evening, plus what this app adds beyond it.
     expect(screen.getByText(/The original method is practised morning and evening/)).toBeTruthy();

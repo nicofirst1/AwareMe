@@ -89,7 +89,7 @@ export function applyWeekSetActivation(repo: Repository, now: Date = new Date())
   repo.setProgrammeWeekActive(unlockFrontier);
 }
 
-/** The morning sitting's queue (§6.2): every active programme stem of the effective week, seed order. */
+/** The morning practice's queue (§6.2): every active programme stem of the effective week, seed order. */
 export function readMorningSittingQueue(repo: Repository, now: Date = new Date()): StemRow[] {
   const { currentWeek } = readProgrammeWeek(repo, now);
   return repo.getProgrammeStemsForWeek(currentWeek);
@@ -97,12 +97,12 @@ export function readMorningSittingQueue(repo: Repository, now: Date = new Date()
 
 export interface HomeProgrammeStatus {
   week: ProgrammeWeek;
-  /** Active programme stems of the effective week — the sitting's size, read at render time. */
+  /** Active programme stems of the effective week — the practice's size, read at render time. */
   weekStemCount: number;
-  /** Every stem of the week has a completed session today (§6.2's sitting-completion rule). */
+  /** Every stem of the week has a completed session today (§6.2's practice-completion rule). */
   morningDone: boolean;
   eveningEnabled: boolean;
-  /** A completed evening reflection exists today (§6.2's evening sitting). */
+  /** A completed evening reflection exists today (§6.2's evening practice). */
   eveningDone: boolean;
   /** Today is the weekly reflection's target day (§7 `weekly_meta_day`) — the weekend card shows. */
   weeklyCardToday: boolean;

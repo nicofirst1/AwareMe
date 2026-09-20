@@ -67,3 +67,4 @@ Weighted stem selection, the random-window scheduler, and the 2026-09-11 "fixed 
 - Identity FLAGs (issue 14): deep-link scheme, Android package / iOS bundle ids, DB filename.
 - Spec §5.1/§5.4 and ADR-0005 quote remainders: amend spec to match the overlay architecture (owner call).
 - jest content-consistency gating (2026-09-18, v14 GATE-BASELINE): the migrate/programmeSeed consistency tests fail on machines where the verbatim snapshot is present but the private `stems.content.ts` is absent (seed falls back to example text); restore the private file or sanction test-gating (owner call).
+- **2026-09-19, terminology: 'sitting' renamed to 'practice'** across user-facing copy and code (owner decision; resolves C19 session/sitting inconsistency). Updates spec.md, DECISIONS.md, all UI copy, and repository method names.

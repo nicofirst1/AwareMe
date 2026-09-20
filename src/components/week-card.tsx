@@ -20,7 +20,7 @@ export interface WeekCardStem {
  * One programme week (Week 1–30) in the library's programme list (§6.6, ADR-0005):
  * a collapsed summary row — week number, stem count, and the two calm
  * markers — that expands to the week's stems and its two actions: a one-off
- * sitting of the whole block (`origin='manual'`, never moves the programme)
+ * practice of the whole block (`origin='manual'`, never moves the programme)
  * and "make this my week" (sets/clears `program_week_override`, §6.2/§7).
  * Markers are informational only; nothing here is an achievement (§13.4).
  *
@@ -123,7 +123,7 @@ export function WeekCard({
           })}
           {stems.length > 0 ? (
             <View style={styles.actions}>
-              <Button label="Write this week’s sitting" onPress={onSit} variant="secondary" style={styles.actionButton} />
+              <Button label="Write this week’s practice" onPress={onSit} variant="secondary" style={styles.actionButton} />
               <Button
                 label={isSelected ? 'Clear my week selection' : 'Make this my week'}
                 onPress={onToggleMyWeek}
@@ -133,7 +133,7 @@ export function WeekCard({
             </View>
           ) : (
             <ThemedText type="small" themeColor="textSecondary">
-              The sitting actions appear once this week has active stems.
+              The practice actions appear once this week has active stems.
             </ThemedText>
           )}
         </View>

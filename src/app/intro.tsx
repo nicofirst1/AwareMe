@@ -24,10 +24,10 @@ import { rescheduleNotifications } from '@/notifications/scheduler';
  *   fresh installs.
  *
  * Two options only (owner feedback 2026-09-18, superseding the
- * 2026-09-16 instruction that made "Start with the morning sitting" the
+ * 2026-09-16 instruction that made "Start with the morning practice" the
  * primary button): "Include evening practice" is the primary button, the
  * explicit opt-in, and "Skip for now" is the no-answer exit. The morning
- * sitting is the default state and needs no button of its own: an omitted
+ * practice is the default state and needs no button of its own: an omitted
  * answer keeps `evening_practice_enabled = false`, so the flow pins the
  * answer explicitly on every exit (true on include, false on skip). The
  * §7 factory default (`true`, riding the settings seed and migration
@@ -60,20 +60,16 @@ export function EveningPracticeCard({
     <ThemedView style={styles.card}>
       <ThemedText type="title">Include an evening practice?</ThemedText>
       <ThemedText type="default">
-        The exercise is for self-awareness: finishing the beginnings of sentences about yourself, quickly
-        and without evaluation. Self-esteem is the method’s stated purpose.
-      </ThemedText>
-      <ThemedText type="default">
         The original method is practised morning and evening, and this app also gives you a weekly
-        reflection. The evening practice adds a short second sitting: the morning’s endings shown once
-        more, then one reflection sentence to finish. The app works just as well without it.
+        reflection. The evening practice adds a short second practice to reflect on your day. 
+        The app works just as well without it.
       </ThemedText>
       <ThemedView style={styles.buttonRow}>
         <Button label="Include evening practice" variant="primary" onPress={() => onAnswer(true)} />
         <Button label="Skip for now" variant="text" onPress={onSkip} />
       </ThemedView>
       <ThemedText type="small" themeColor="textSecondary">
-        Skipping keeps just the morning sitting. You can change this anytime in Settings.
+        Skipping keeps just the morning practice. You can change this anytime in Settings.
       </ThemedText>
     </ThemedView>
   );
@@ -102,7 +98,7 @@ export function EveningPracticeCard({
  * The screen opens with a welcome beat before anything is explained
  * (v14 issue 02): a greeting naming the app, plus the thirty-week framing
  * the stems screen's programme row uses ("Thirty weeks of guided
- * sittings"), then the evening question.
+ * practice"), then the evening question.
  */
 export default function IntroScreen() {
   const router = useRouter();
@@ -157,7 +153,7 @@ export default function IntroScreen() {
         <ThemedView style={styles.welcome}>
           <ThemedText type="title">Welcome to AwareMe</ThemedText>
           <ThemedText type="default">
-            This is a thirty-week guided challenge: short sittings, one day at a time. Before you start, one
+            This is a thirty-week guided challenge: short practice, one day at a time. Before you start, one
             question.
           </ThemedText>
         </ThemedView>

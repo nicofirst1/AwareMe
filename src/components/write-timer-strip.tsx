@@ -7,7 +7,7 @@ import { Spacing } from '@/constants/theme';
 
 /**
  * Write screen's pinned top strip (layout-audit-2026-09-15, LC8/W1/W2): the
- * sitting's position, the session's depletion bar, and its MM:SS — pinned
+ * practice's position, the session's depletion bar, and its MM:SS — pinned
  * below the safe area, outside the scrolling stack, so none of it disappears
  * as endings accumulate. Per LC2, this strip doubles as write's "header" —
  * the screen's single exit affordance lives beside it in `write.tsx`, not
@@ -15,7 +15,7 @@ import { Spacing } from '@/constants/theme';
  *
  * Every prop is optional and independently hidden when omitted, so the same
  * component serves the Start gate (position only), an active session
- * (all three), and a single-stem sitting (no position at all) — including
+ * (all three), and a single-stem practice (no position at all) — including
  * review.tsx's meta-stem session (cycle 4), which never has a position to
  * show.
  */
@@ -25,7 +25,7 @@ export function WriteTimerStrip({
   timeLabel,
   timeColor,
 }: {
-  /** e.g. "Stem 2 of 5". Omit for a single-stem sitting — there's no position to report. */
+  /** e.g. "Stem 2 of 5". Omit for a single-stem practice — there's no position to report. */
   positionLabel?: string;
   /** 0–1 session depletion fraction. Omit while nothing is timed yet (§6.3.1's pre-Start state). */
   progress?: number;

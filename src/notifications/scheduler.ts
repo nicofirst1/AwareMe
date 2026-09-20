@@ -118,7 +118,7 @@ function parseHHMM(value: string): { hour: number; minute: number } {
  * caller is responsible for having asked.
  *
  * The evening notification is scheduled ONLY when `evening_practice_enabled`
- * is true (§7, ADR-0005 — it gates the evening reflection sitting §6.2 and
+ * is true (§7, ADR-0005 — it gates the evening reflection practice §6.2 and
  * the evening notification §6.4 alike): the cancel-all above has already
  * removed a pending one by the time the toggle turns off. The weekly
  * reflection is NOT gated by that toggle — it belongs to the programme

@@ -22,27 +22,27 @@ import { getRepository, type TimeOfDay } from '@/db';
 import { nowEventTime } from '@/db/time';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
-import { currentSittingPeriod } from '@/session/currentSitting';
+import { currentPracticePeriod } from '@/session/currentPractice';
 import { computeStreaks } from '@/session/progressStats';
 import { readHomeProgrammeStatus, type HomeProgrammeStatus } from '@/session/programRead';
 import { isWeeklyReviewDue } from '@/session/reviewPeriod';
 
 /**
  * The render path's own period read (issue 03, owner decision 2026-09-15):
- * the highlighted sitting flips at the midpoint between the user's two
- * configured notification times (`currentSitting.ts`), not at a hardcoded
+ * the highlighted practice flips at the midpoint between the user's two
+ * configured notification times (`currentPractice.ts`), not at a hardcoded
  * 17:00. Unlike `loadHomeStatus` this call is not behind the focus-effect
  * try/catch, so it guards the settings read itself — settings unreadable
  * (e.g. no DB in tests) must not crash the home screen (§13.4: a status
  * nicety never blocks the screen); the fallback is the module's own
- * hardcoded-17:00 rule via `currentSittingPeriod(undefined, undefined)`.
+ * hardcoded-17:00 rule via `currentPracticePeriod(undefined, undefined)`.
  */
 function currentPeriodForRender(): TimeOfDay {
   try {
     const settings = getRepository().getSettings();
-    return currentSittingPeriod(settings.morning_notification_time, settings.evening_notification_time);
+    return currentPracticePeriod(settings.morning_notification_time, settings.evening_notification_time);
   } catch {
-    return currentSittingPeriod(undefined, undefined);
+    return currentPracticePeriod(undefined, undefined);
   }
 }
 
@@ -189,12 +189,12 @@ export default function HomeScreen() {
 
           {/*
             The programme cards (issue 02, ADR-0005): the week card is the
-            day's one dominant action — Week N of 30 with the sitting's size
+            day's one dominant action — Week N of 30 with the practice's size
             and its Start; the evening reflection (when
             `evening_practice_enabled`, §7) and the weekly reflection (on its
             target day, §7 `weekly_meta_day`) each get their own quiet card
-            below. The current sitting period (midpoint of the user's two
-            notification times, `currentSitting.ts`) still decides which
+            below. The current practice period (midpoint of the user's two
+            notification times, `currentPractice.ts`) still decides which
             card's button is primary. Inner rows are plain `View`s (issue 03):
             `ThemedView` painted `theme.background` inside the card's
             `backgroundElement` fill — the owner's "weird white background"
@@ -202,7 +202,7 @@ export default function HomeScreen() {
           */}
           <Card style={styles.sittingCard}>
             <ThemedText type="eyebrow">
-              {status ? `Week ${status.week.currentWeek} of 30` : 'Morning sitting'}
+              {status ? `Week ${status.week.currentWeek} of 30` : 'Morning practice'}
             </ThemedText>
             {status && status.week.override !== null && (
               <ThemedText type="small" themeColor="textSecondary">
@@ -212,7 +212,7 @@ export default function HomeScreen() {
             {status && (
               <ThemedText type="subtitle">
                 {status.morningDone
-                  ? 'Morning sitting complete'
+                  ? 'Morning practice complete'
                   : status.weekStemCount === 1
                     ? '1 stem ready'
                     : `${status.weekStemCount} stems ready`}
@@ -221,7 +221,7 @@ export default function HomeScreen() {
 
             <View style={styles.startRow}>
               <Button
-                label="Start morning sitting"
+                label="Start morning practice"
                 onPress={() => startSitting('morning')}
                 variant={currentPeriod === 'morning' ? 'primary' : 'secondary'}
                 style={styles.primaryButton}
@@ -256,7 +256,7 @@ export default function HomeScreen() {
                   >
                     {/* `textSecondary`, not `accent` (2026-09-15 review finding): `accent`
                         text only clears AA against `background` (theme.ts's own comment),
-                        not against the sitting card's `backgroundElement` fill — 4.35:1 in
+                        not against the practice card's `backgroundElement` fill — 4.35:1 in
                         light theme, under LC9's 4.5:1 floor. The chevron alone (a non-text
                         UI component, 3:1 floor) stays accent-colored for the row's tappable
                         affordance. */}

@@ -103,7 +103,7 @@ CREATE TABLE stems (
   language          TEXT NOT NULL DEFAULT 'en',
   weight            REAL NOT NULL DEFAULT 1.0, -- vestigial since the 2026-09-14 morning/evening pivot; no longer read by selection (6.2)
   active            INTEGER NOT NULL DEFAULT 1,-- 0 = archived, excluded from selection
-  time_of_day       TEXT,                      -- 'morning' | 'evening' | NULL (2026-09-14 addition); pre-amendment sitting tag; programme selection reads week_number instead (6.2)
+  time_of_day       TEXT,                      -- 'morning' | 'evening' | NULL (2026-09-14 addition); pre-amendment practice tag; programme selection reads week_number instead (6.2)
   week_number       INTEGER,                   -- 1..30, official programme block (2026-09-15 addition, ADR-0005); NULL for non-programme stems
   is_weekly_meta    INTEGER NOT NULL DEFAULT 0,-- 1 = the official weekly reflection stem (5.4, 6.5) (2026-09-15 addition)
   created_at        TEXT NOT NULL,
@@ -214,7 +214,7 @@ The v1 original list (26 stems) is **retired**: on fresh installs it is seeded s
 
 ### 5.4 Meta-stems for review
 
-Used in review mode (section 6.5), stored with the same terminator handling. Meta-stems carry `time_of_day = NULL`. **2026-09-15 amendment (ADR-0005):** the first stem below is the official weekly reflection stem — migration 0004 tags it `is_weekly_meta = 1` — and it is the stem used by the *scheduled* weekly reflection (§6.5). The other two power the evening reflection sitting (§6.2) on a deterministic alternating schedule. All three remain available to on-demand review:
+Used in review mode (section 6.5), stored with the same terminator handling. Meta-stems carry `time_of_day = NULL`. **2026-09-15 amendment (ADR-0005):** the first stem below is the official weekly reflection stem — migration 0004 tags it `is_weekly_meta = 1` — and it is the stem used by the *scheduled* weekly reflection (§6.5). The other two power the evening reflection practice (§6.2) on a deterministic alternating schedule. All three remain available to on-demand review:
 
 - If any of what I wrote this week is true, it might be helpful if I
 - Reading these back, the thing I notice myself circling is
@@ -235,13 +235,13 @@ Four screens maximum, skippable, shown once:
 
 ### 6.2 Stem selection
 
-A session is a **sitting**: every active stem for one time-of-day period, written one after another in sequence.
+A session is a **practice**: every active stem for one time-of-day period, written one after another in sequence.
 
-- **Programme mode is the app's only mode (2026-09-15, ADR-0005).** The morning sitting loads every active programme stem of the **current programme week**: `stems` where `active = 1 AND deleted_at IS NULL AND week_number = <current week>`, in seed order. No weighting, no recency penalty, no randomness.
-- The **current programme week is derived at read time** (§13.7 — never stored): `1 +` the number of distinct calendar weeks (Mon–Sun) containing at least one completed weekly reflection session (§6.5), counted from the week of the first official-programme sitting ever written, capped at 30. Advancement is therefore self-paced: missing days never skips weeks, and two reflections inside one calendar week do not skip ahead.
+- **Programme mode is the app's only mode (2026-09-15, ADR-0005).** The morning practice loads every active programme stem of the **current programme week**: `stems` where `active = 1 AND deleted_at IS NULL AND week_number = <current week>`, in seed order. No weighting, no recency penalty, no randomness.
+- The **current programme week is derived at read time** (§13.7 — never stored): `1 +` the number of distinct calendar weeks (Mon–Sun) containing at least one completed weekly reflection session (§6.5), counted from the week of the first official-programme practice ever written, capped at 30. Advancement is therefore self-paced: missing days never skips weeks, and two reflections inside one calendar week do not skip ahead.
 - The user may **select any week** as their current week (§6.6). The selection is stored as the `program_week_override` setting (nullable, §7) — user input, not a derived value. Completing the reflection of the selected week clears the override so the derived week takes over; Home shows a calm nudge ("Week N complete — Week N+1 is ready"). Encouragement only — no guilt copy (§13.4).
-- The **evening sitting** (only when `evening_practice_enabled`, §7) reflects the start of the day instead of repeating it: today's morning endings shown read-only (§6.5's review mechanics), then one reflection meta-stem (§5.4) as a normal timed session. The stem **alternates deterministically** between the two non-weekly review meta-stems, keyed to the count of completed evening reflection sessions. Custom/user-added stems are never in any sitting rotation; they are written on demand from the library (`origin = 'manual'`).
-- The sitting is complete only once every stem in that set has been written (§6.3 covers the per-stem writing mechanics, unchanged).
+- The **evening practice** (only when `evening_practice_enabled`, §7) reflects the start of the day instead of repeating it: today's morning endings shown read-only (§6.5's review mechanics), then one reflection meta-stem (§5.4) as a normal timed session. The stem **alternates deterministically** between the two non-weekly review meta-stems, keyed to the count of completed evening reflection sessions. Custom/user-added stems are never in any practice rotation; they are written on demand from the library (`origin = 'manual'`).
+- The practice is complete only once every stem in that set has been written (§6.3 covers the per-stem writing mechanics, unchanged).
 - `time_of_day` keeps its meaning for pre-amendment rows; programme selection is driven by `week_number`. `stems.weight` is retained in the schema (§4.2) but remains unread (ADR-0004).
 
 ### 6.3 The writing session
@@ -266,7 +266,7 @@ This is the core screen. Get it right.
 - **2026-09-15 amendment (ADR-0005):** a third repeating local notification for the weekly reflection fires at `weekly_meta_time` on `weekly_meta_day` (§7; default Sunday 21:00) via the platform's native weekly-repeat trigger. Same discipline as the daily pair: content-free copy (e.g. "Time for your weekly reflection."), reschedule on foreground / setting change / permission grant, and no consequence for missing it.
 - Use the platform's native daily-repeat trigger so the OS itself handles the daily repetition in local time; there is no fire-time math, rolling horizon, or DST handling to own in the app.
 - Reschedule (cancel all pending, recreate from current settings) on: app foreground, a notification time being changed in settings, permission grant.
-- `notification_schedule` is retained in the schema (§4.2) but is no longer written to by scheduling — there is no per-fire stem draw left to record (§6.2: a sitting loads all of a period's stems, not one chosen at schedule time).
+- `notification_schedule` is retained in the schema (§4.2) but is no longer written to by scheduling — there is no per-fire stem draw left to record (§6.2: a practice loads all of a period's stems, not one chosen at schedule time).
 - Notification copy MUST NOT contain any stem text or user text, since notifications appear on lock screens and this content is private. Use neutral copy, e.g. "Time for your morning practice." / "Time for your evening practice." — distinct copy per period is fine as long as both stay content-free.
 - Missing a notification has no consequence in the app. No streak counter, no guilt copy, no "you have not written in 4 days". If a streak-like display is added at all, it is descriptive and unemphasised.
 
@@ -275,12 +275,12 @@ This is the core screen. Get it right.
 Three forms (ADR-0005):
 
 1. **Scheduled weekly reflection** — offered by the weekly notification (§6.4) and a Home card on the target day. Show every ending written in the current programme week, grouped by session, chronological, read-only; then the weekly stem (`is_weekly_meta = 1`, §5.4) as a normal timed session (`review_timer_seconds`, default 180; `origin = 'review'`); store in `reviews` with the reviewed session ids captured explicitly. Completing it advances the derived programme week (§6.2) — by derivation, never by a write.
-2. **Evening reflection** — §6.2's evening sitting: today's morning endings read-only, then one alternating review meta-stem, same storage path as (1) but scoped to the day's sessions.
+2. **Evening reflection** — §6.2's evening practice: today's morning endings read-only, then one alternating review meta-stem, same storage path as (1) but scoped to the day's sessions.
 3. **On demand** — the same mechanics as (1) at any time, with any of the three meta-stems (§5.4) and a user-selected period.
 
 ### 6.6 Stem library
 
-- List all stems, filterable by category, origin, and active state; searchable by text. Programme stems are grouped **by week** (Week 1–30); a week's page offers a one-off sitting (`origin = 'manual'`, does not move the programme position) and a "make this my week" action (sets `program_week_override`, §6.2).
+- List all stems, filterable by category, origin, and active state; searchable by text. Programme stems are grouped **by week** (Week 1–30); a week's page offers a one-off practice (`origin = 'manual'`, does not move the programme position) and a "make this my week" action (sets `program_week_override`, §6.2).
 - Add: a single text field, plus optional category. Validate: non-empty after trim, under 200 characters, does not already exist verbatim. Warn but permit if it ends with terminal punctuation, since a stem should be an unfinished clause.
 - Edit: permitted. Sessions retain their snapshot (section 4.4).
 - Archive (`active = 0`) rather than delete, as the primary destructive action. Deletion is available but soft, and clearly explains that past sessions remain.
@@ -312,7 +312,7 @@ Three forms (ADR-0005):
 | `stem_timer_seconds`        | int    | 60        | 2026-09-11 addition. Range 20 to 120. Only used when `stem_timer_enabled` is true                                                                   |
 | `morning_notification_time` | string | `"08:00"` | 2026-09-14 addition. Local "HH:MM"                                                                                                                  |
 | `evening_notification_time` | string | `"21:00"` | 2026-09-14 addition. Local "HH:MM"                                                                                                                  |
-| `evening_practice_enabled`  | bool   | `true`    | 2026-09-15 addition (ADR-0005). Asked once at first launch ("Include an evening practice?"); changeable in Settings. Gates the evening reflection sitting (§6.2) and the evening notification (§6.4) |
+| `evening_practice_enabled`  | bool   | `true`    | 2026-09-15 addition (ADR-0005). Asked once at first launch ("Include an evening practice?"); changeable in Settings. Gates the evening reflection practice (§6.2) and the evening notification (§6.4) |
 | `weekly_meta_day`           | string | `"sunday"` | 2026-09-15 addition. Day of the weekly reflection notification (§6.4); any weekday name, lowercase                                                |
 | `weekly_meta_time`          | string | `"21:00"` | 2026-09-15 addition. Local "HH:MM" fire time of the weekly reflection notification                                                                 |
 | `program_week_override`     | int/null | `null`  | 2026-09-15 addition. User-selected current programme week (1–30); null = derive from history (§6.2). Cleared when the selected week's reflection completes |
@@ -381,7 +381,7 @@ Restrained, text-first, and quiet. This app is used at odd hours by someone writ
 
 Unit tests are required for:
 
-- Sitting composition: the derived programme week (§6.2), `program_week_override` handling, and correct behaviour with an empty or exhausted week.
+- practice composition: the derived programme week (§6.2), `program_week_override` handling, and correct behaviour with an empty or exhausted week.
 - Notifications: daily/weekly repeat triggers reschedule idempotently (cancel-and-recreate), copy stays content-free, the evening and weekly notifications gated by their settings.
 - Session lifecycle: timeout saves partial text, backgrounding rules, `end_reason` correctness.
 - Export: round-trip fidelity, CSV quoting for text containing commas, quotes, and newlines, soft-deleted row inclusion.

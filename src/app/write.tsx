@@ -41,7 +41,7 @@ import type { StemForSession } from '@/session/useWritingSession';
 import { useWritingSession } from '@/session/useWritingSession';
 
 /**
- * Parses the one-off week-sitting param (`/write?week=N`, the stem library's
+ * Parses the one-off week-practice param (`/write?week=N`, the stem library's
  * week page). Query params arrive as strings (or arrays); anything that
  * isn't an integer 1–30 is no param at all.
  */
@@ -56,13 +56,13 @@ function parseWeekParam(week?: string | string[]): number | null {
  * ADR-0001 resume, extended for the programme (§6.2): if a session was left
  * open by a previous run, `useWritingSession`'s own mount effect resumes/
  * finalizes that one `sessions` row exactly as before — this only needs to
- * work out which sitting the stem belongs to and where in its queue to pick
- * back up, so the remaining stems still get written rather than the sitting
+ * work out which practice the stem belongs to and where in its queue to pick
+ * back up, so the remaining stems still get written rather than the practice
  * silently ending at one stem.
  *
  * Order of attempts:
- * 1. the effective programme week's morning sitting (§6.2) — the common case;
- * 2. a one-off week sitting from the library (`week` param) — the queue it
+ * 1. the effective programme week's morning practice (§6.2) — the common case;
+ * 2. a one-off week practice from the library (`week` param) — the queue it
  *    was started from, which may differ from the current effective week if
  *    the override changed between kill and resume;
  * 3. a solo one-stem queue. The lookup here includes the meta-stems
@@ -81,7 +81,7 @@ function resumeQueue(repo: ReturnType<typeof getRepository>, openStemId: string,
   if (index >= 0) return { queue: weekQueue, startIndex: index };
 
   if (weekParam !== null) {
-    // One-off week sitting (issue 04): rebuild from the whole block, resting
+    // One-off week practice (issue 04): rebuild from the whole block, resting
     // included — the visit is activation-state-agnostic, so the resumed
     // queue matches the one it started from.
     const oneOff = repo.getProgrammeWeekBlock(weekParam);
@@ -112,15 +112,15 @@ interface ReflectionFlow {
 }
 
 /**
- * The writing screen (spec §6.3), now the host of every sitting shape
+ * The writing screen (spec §6.3), now the host of every practice shape
  * (ADR-0004/ADR-0005): each is a queue of stems written one after another,
  * every stem still its own `sessions` row driven by the same
  * `useWritingSession` machinery — the shapes differ only in what fills the
  * queue and what surrounds it:
  *
- * - **Morning sitting** (`timeOfDay=morning`, and the bare `/write` default):
+ * - **Morning practice** (`timeOfDay=morning`, and the bare `/write` default):
  *   every active programme stem of the effective week (§6.2), seed order.
- * - **One-off week sitting** (`week=N`, from the library's week page): that
+ * - **One-off week practice** (`week=N`, from the library's week page): that
  *   week's stems, `origin='manual'`, never in any rotation (§6.2).
  * - **Solo write** (`stemId`, from the stem library): one stem, `origin='manual'`.
  * - **Evening reflection** (`timeOfDay=evening`, only when
@@ -172,7 +172,7 @@ export default function WriteScreen() {
   const stemOrigin: StemForSession['origin'] = origin === 'notification' ? 'notification' : 'manual';
   const pendingStem = queue?.[queueIndex] ?? null;
   // §6.3.1: nothing is timed until Start is tapped — true for every stem in
-  // the sitting, not just the first. False while resuming into an
+  // the practice, not just the first. False while resuming into an
   // already-active session, and false once `start()` has been called for
   // the current index (whether still active or already 'done').
   const awaitingStart = pendingStem !== null && startedIndex < queueIndex;
@@ -180,7 +180,7 @@ export default function WriteScreen() {
   // Completion celebration (gamification proposal §1.A/§2, cycle 2): a
   // single calm settle on "Saved." — scale 0.92->1 + opacity 0->1, ~400ms,
   // friction-tuned to land without overshoot ("settle, don't bounce").
-  // Shown once, after the whole sitting completes — never between stems.
+  // Shown once, after the whole practice completes — never between stems.
   const settleAnim = useAnimatedValue(0);
   // Badge reveal: fade + 8px upward slide, shared by every stacked badge
   // card (proposal §2) — they appear together, sequenced only against the
@@ -200,7 +200,7 @@ export default function WriteScreen() {
 
   // Loads the screen once on mount. An open session (ADR-0001) is routed by
   // its stem — the reflection flows resume straight into their writing
-  // phase, everything else into its sitting queue; params decide only when
+  // phase, everything else into its practice queue; params decide only when
   // nothing is open.
   useEffect(() => {
     const repo = getRepository();
@@ -240,7 +240,7 @@ export default function WriteScreen() {
         setQueue(null);
         return;
       }
-      // Sitting resume — the safety net includes meta stems (the c05 bug fix).
+      // practice resume — the safety net includes meta stems (the c05 bug fix).
       const resumed = resumeQueue(repo, openStemId, parseWeekParam(week));
       setQueue(resumed.queue);
       setQueueIndex(resumed.startIndex);
@@ -303,7 +303,7 @@ export default function WriteScreen() {
     } else {
       const weekNumber = parseWeekParam(week);
       if (weekNumber !== null) {
-        // One-off sitting on another week's block (§6.2: origin='manual',
+        // One-off practice on another week's block (§6.2: origin='manual',
         // never in any rotation). Whole block, resting included: an explicit
         // visit is activation-state-agnostic (issue 04, hub FLAG-ANSWER
         // 2026-09-16) — week-set activation governs the rotation, not visits.
@@ -316,7 +316,7 @@ export default function WriteScreen() {
         setQueue(solo ? [solo] : []);
         setQueueIndex(0);
       } else {
-        // Bare /write (no params): the morning sitting is the app's one
+        // Bare /write (no params): the morning practice is the app's one
         // dominant action — default to it rather than a blank screen.
         setFlow(null);
         setQueue(readMorningSittingQueue(repo));
@@ -328,7 +328,7 @@ export default function WriteScreen() {
   const isLastInQueue = queue !== null && queueIndex >= queue.length - 1;
 
   // Advances the queue pointer the moment one stem finishes, unless it was
-  // the last — the whole-sitting completion screen (with any badge reveal)
+  // the last — the whole-practice completion screen (with any badge reveal)
   // only renders on that last stem's 'done' phase (§6.3.11, proposal "never
   // between stems"). Advancing just moves the pointer; §6.3.1's Start
   // control (below, gated by `awaitingStart`) still holds the next stem's
@@ -387,7 +387,7 @@ export default function WriteScreen() {
       // Re-applied on every weekly completion — the override just cleared
       // back to the derived week, or the derived week just advanced (no
       // override set). Without it, one override cycle would leave every
-      // later derived week resting and the morning sitting queue empty.
+      // later derived week resting and the morning practice queue empty.
       applyWeekSetActivation(repo);
     } else {
       const { start, end } = utcBoundsOfLocalDay(new Date());
@@ -404,18 +404,18 @@ export default function WriteScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flow?.phase, flow?.kind, session.phase, session.state]);
 
-  // Assembles the badge reveal for the *last* stem in the sitting landing
+  // Assembles the badge reveal for the *last* stem in the practice landing
   // on 'done' — see badgeReveal.ts for why "before" is derived by
   // excluding this session's id rather than reading before the save (the
   // save already happened by the time this phase renders). The assembly is
   // derived at render time instead of stored in state (set-state-in-effect
   // debt pass, issue 17): it is a pure read of what the repository already
   // holds, memoized on exactly the guards that decide it. Those guards:
-  // the session is done and persisted (`sessionId`), the sitting-final
+  // the session is done and persisted (`sessionId`), the practice-final
   // position, the Start gate not pending (W4's guard, generalized — a
   // render can still carry the previous (non-final) stem's 'done' while
   // the pointer is mid-advance; without this guard that stale 'done'
-  // would read as "the sitting finished" one stem early), and no
+  // would read as "the practice finished" one stem early), and no
   // reflection flow (flows reveal no badges — same as the review screen's
   // meta-stem, §6.5.2's "normal timed session", not a gamified one).
   const newlyEarnedBadges = useMemo<BadgeDef[]>(
@@ -427,7 +427,7 @@ export default function WriteScreen() {
   );
 
   // Drives the settle animation and, sequenced ~300ms later, the badge
-  // reveal's fade+slide — only for the sitting's final 'done' (the one that
+  // reveal's fade+slide — only for the practice's final 'done' (the one that
   // actually renders the completion block below). Reduced motion: skip
   // straight to the final state, no animation at all. Same `!awaitingStart`
   // guard as the badge-assembly effect above, and for the same reason.
@@ -555,7 +555,7 @@ export default function WriteScreen() {
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView style={styles.flexOne} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           {/*
-            Pinned top strip (LC8/W1/W2): the sitting's position and the
+            Pinned top strip (LC8/W1/W2): the practice's position and the
             running session timer, below the safe area and outside the
             scrolling stack, so neither ever scrolls out of view. Doubles as
             write's "header" (LC2) — the exit affordance below is only shown
@@ -712,7 +712,7 @@ export default function WriteScreen() {
 
 /**
  * The reflection flows' reread phase and meta-stem session (§6.5): the
- * same pinned primitives as write's sitting path and review's meta-stem
+ * same pinned primitives as write's practice path and review's meta-stem
  * (`WriteTimerStrip` / `WriteActionBar`) — the reflection stem is
  * deliberately "a normal timed session" (§6.5.2), not a bespoke screen.
  * The reread is read-only (§6.5's quiet list: stem + dim endings), and the
@@ -824,7 +824,7 @@ function ReflectionFlowView({
 
   const submittedEndings = session.state?.endings.filter((e) => e.submittedAt !== null) ?? [];
 
-  // Enter submits the ending — same trailing-newline path as the sitting
+  // Enter submits the ending — same trailing-newline path as the practice
   // (§6.3.4's return key).
   const handleChangeText = (nextText: string) => {
     if (nextText.endsWith('\n')) {

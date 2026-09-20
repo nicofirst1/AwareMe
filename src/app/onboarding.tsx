@@ -13,16 +13,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 
+import { EveningPracticeCard } from '@/app/intro';
 import { Button } from '@/components/button';
 import { StepperRow } from '@/components/stepper-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, MinTouchTarget, Radius, Spacing } from '@/constants/theme';
 import { getRepository } from '@/db';
+import { useTheme } from '@/hooks/use-theme';
 import { requestNotificationPermission, rescheduleNotifications } from '@/notifications/scheduler';
 import { isValidHHMM } from '@/session/settingsValidation';
-import { useTheme } from '@/hooks/use-theme';
-import { EveningPracticeCard } from '@/app/intro';
 
 const STEP_COUNT = 5;
 
@@ -169,9 +169,8 @@ export default function OnboardingScreen() {
           <ThemedView style={[styles.page, { width }]}>
             <ThemedText type="title">About the method</ThemedText>
             <ThemedText type="default">
-              This app is built on the Branden method: sentence completion, developed by the psychologist
+              This app is built on the sentence completion method, developed by the psychologist
               Nathaniel Branden. The method is part of a larger approach aimed at increasing self-awareness.
-              Nothing here scores or interprets what you write. It just holds space for it.
             </ThemedText>
             {/* accessibilityRole="link" + explicit label: the link convention
                 BackHeader documents (index.tsx's Link rows); the label keeps
@@ -192,7 +191,7 @@ export default function OnboardingScreen() {
             {/* v14 issue 03: the owner asked for the exclamation mark, the
                 semicolon sentence split, and the quickness paragraph broken
                 into short sentences (meaning kept). */}
-            <ThemedText type="title">Here is how it works!</ThemedText>
+            <ThemedText type="title">Wow it works</ThemedText>
             <ThemedText type="default">
               You’ll get the start of a sentence and finish it, several times, quickly. Write the first
               thing that comes, without judging it. Repetition or nonsense is fine. That’s part of how it
@@ -207,8 +206,7 @@ export default function OnboardingScreen() {
           <ThemedView style={[styles.page, { width }]}>
             <ThemedText type="title">Reminders</ThemedText>
             <ThemedText type="default">
-              This app can nudge you twice a day, at a morning and an evening time you choose: the book’s own
-              suggestion is start and end of day.
+              This app can remind you of your daily practice, click "Allow Reminders" if you want to be notified.
             </ThemedText>
             {/* v14 issue 04: the primary variant makes the ask read as the
                 tab's one button (the default secondary read as body text);
@@ -250,7 +248,7 @@ export default function OnboardingScreen() {
             {/* v14 issue 06: the label names a setting, not a meaning — one
                 dim line does that job (settings.tsx's Hint pattern, LC3). */}
             <ThemedText type="small" themeColor="textSecondary">
-              How many endings you write in one sitting.
+              How many endings you write in one practice.
             </ThemedText>
             <StepperRow
               label="Timer (seconds)"

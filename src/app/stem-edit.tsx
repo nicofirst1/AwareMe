@@ -21,7 +21,7 @@ const CATEGORIES = Object.keys(CategoryColors) as CategoryName[];
 
 // Morning/evening pivot (migration 0003): which fixed daily notification a
 // stem belongs to, plus "none" (null — never surfaced by either period's
-// sitting, same as a pre-pivot row per DECISIONS.md 2026-09-14).
+// practice, same as a pre-pivot row per DECISIONS.md 2026-09-14).
 const TIME_OF_DAY_OPTIONS = ['none', 'morning', 'evening'] as const;
 type TimeOfDayOption = (typeof TIME_OF_DAY_OPTIONS)[number];
 

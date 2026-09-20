@@ -1,7 +1,7 @@
 /**
- * Pure helpers for the Home screen's current-sitting period (expo-feedback
+ * Pure helpers for the Home screen's current-practice period (expo-feedback
  * round 2026-09-15, issue 03, owner decision). The highlighted (primary)
- * period is the one whose sitting is "now": it flips at the midpoint
+ * period is the one whose practice is "now": it flips at the midpoint
  * between the user's two configured notification times (§7
  * `morning_notification_time`/`evening_notification_time` — defaults
  * 08:00/21:00 flip at 14:30), replacing the old hardcoded "evening from
@@ -29,7 +29,7 @@ export function parseHmMinutes(hm: string): number | null {
 }
 
 /**
- * The period whose sitting the Home card highlights. With both settings
+ * The period whose practice the Home card highlights. With both settings
  * parseable, 'evening' from the midpoint between the two configured times
  * onward, 'morning' before it. If either setting fails to parse (missing,
  * malformed, or out of range — user-editable free text), falls back to the
@@ -40,7 +40,7 @@ export function parseHmMinutes(hm: string): number | null {
  * (1320 + 120 → floor(1440 / 2) = 720 → 12:00). Intentionally one rule
  * with documented behaviour over two rules with a seam.
  */
-export function currentSittingPeriod(
+export function currentPracticePeriod(
   morningHm: string | null | undefined,
   eveningHm: string | null | undefined,
   now: Date = new Date(),

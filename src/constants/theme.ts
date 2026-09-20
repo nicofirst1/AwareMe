@@ -276,7 +276,7 @@ export const PressureColors = {
  * `fraction` 0 = calm, 1 = urgent; values outside 0..1 clamp.
  *
  * The endpoints are the per-theme `success`/`error` tokens, deliberately
- * NOT the theme-invariant `PressureColors`: the numerals are text sitting
+ * NOT the theme-invariant `PressureColors`: the numerals are text practice
  * on each theme's `background` (unlike the old button's fixed gradient
  * fill), so both endpoints must clear 4.5:1 against that background —
  * light `success` 4.75:1 → `error` 6.05:1; dark `success` 10.85:1 →

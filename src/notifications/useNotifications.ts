@@ -49,7 +49,7 @@ export function useNotificationScheduler(): void {
 }
 
 /**
- * Tapping a notification deep-links into the sitting it announced (§6.4):
+ * Tapping a notification deep-links into the practice it announced (§6.4):
  * the tap's silent `data` payload (not stem or user text — §6.4's lock-screen
  * privacy rule) says which fired. The two daily notifications carry
  * `timeOfDay` and push `/write?timeOfDay=<period>&origin=notification` —

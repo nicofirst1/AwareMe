@@ -83,9 +83,9 @@ export function calendarWeeksBetween(anchor: Date, d: Date): number {
 /**
  * How many DISTINCT Mon–Sun calendar weeks hold at least one completed
  * weekly reflection, counted from the anchor week onward (§6.2: reflections
- * in weeks before the first official-programme sitting's week never advance
+ * in weeks before the first official-programme practice's week never advance
  * the programme — months of on-demand reviews before starting must not
- * rocket the user to week 25). `anchorMondayKey` null (no programme sitting
+ * rocket the user to week 25). `anchorMondayKey` null (no programme practice
  * yet) counts nothing: a null anchor derives week 1 downstream.
  */
 export function countAnchoredReflectionWeeks(
@@ -105,12 +105,12 @@ function toNonNegativeInt(value: number): number {
 /**
  * The §6.2 derived programme week: `1 +` the number of distinct Mon–Sun
  * calendar weeks containing at least one completed weekly reflection,
- * counted from the week of the first official-programme sitting ever
+ * counted from the week of the first official-programme practice ever
  * written, capped at 30. Advancement is self-paced — missing days never
  * skip weeks, and two reflections inside one calendar week count once.
  *
  * @param firstProgramSittingDate local 'YYYY-MM-DD' of the first
- *   official-programme sitting (the anchor). Null-ish → week 1: the
+ *   official-programme practice (the anchor). Null-ish → week 1: the
  *   derivation only starts once the programme itself has started, however
  *   many reflections predate it.
  * @param reflectionCalendarWeeks the anchored distinct-week count (see

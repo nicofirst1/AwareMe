@@ -1,6 +1,6 @@
 import { Link } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -124,12 +124,6 @@ function Hint({ children }: { children: string }) {
       {children}
     </ThemedText>
   );
-}
-
-/** Hairline between a card's sub-blocks, using the theme's decorative `border` token (not a text pairing). */
-function Divider() {
-  const theme = useTheme();
-  return <View style={[styles.divider, { backgroundColor: theme.border }]} />;
 }
 
 /** "HH:MM" → a Date for the native pickers: today at that wall-clock time. */
@@ -287,7 +281,7 @@ export default function SettingsScreen() {
     });
   };
 
-  /** The evening toggle changes whether the evening notification exists at all (§7 gates it, with the sitting), so it reschedules too. */
+  /** The evening toggle changes whether the evening notification exists at all (§7 gates it, with the practice), so it reschedules too. */
   const setEveningPractice = (enabled: boolean) => {
     set('evening_practice_enabled', enabled);
     rescheduleNotifications().catch((error) => {
@@ -358,7 +352,6 @@ export default function SettingsScreen() {
                 <Hint>Endings you write to the same stem per session.</Hint>
               </ThemedView>
 
-              <Divider />
 
               <ThemedView style={styles.setting}>
                 <StepperRow
@@ -371,7 +364,6 @@ export default function SettingsScreen() {
                 <Hint>How long the session runs before timing out.</Hint>
               </ThemedView>
 
-              <Divider />
 
               <ThemedView style={styles.section}>
                 <ThemedText type="small" themeColor="textSecondary">
@@ -421,7 +413,6 @@ export default function SettingsScreen() {
                 />
               </ThemedView>
 
-              <Divider />
 
               <ThemedView style={styles.setting}>
                 <OptionToggle
@@ -431,12 +422,11 @@ export default function SettingsScreen() {
                   onChange={(v) => setEveningPractice(v === 'on')}
                 />
                 <Hint>
-                  An evening sitting: the morning&apos;s endings once more, then a reflection sentence. Off also removes
+                  An evening practice: the morning&apos;s endings once more, then a reflection sentence. Off also removes
                   the evening reminder above.
                 </Hint>
               </ThemedView>
 
-              <Divider />
 
               <ThemedView style={styles.section}>
                 <ThemedText type="small" themeColor="textSecondary">
@@ -459,7 +449,6 @@ export default function SettingsScreen() {
                 />
               </ThemedView>
 
-              <Divider />
 
               <ThemedView style={styles.setting}>
                 <OptionToggle
@@ -489,7 +478,6 @@ export default function SettingsScreen() {
                 </Hint>
               </ThemedView>
 
-              <Divider />
 
               <ThemedView style={styles.setting}>
                 <OptionToggle
@@ -516,7 +504,6 @@ export default function SettingsScreen() {
                 <Hint>Require your device passcode or biometrics to open the app.</Hint>
               </ThemedView>
 
-              <Divider />
 
               <OptionToggle
                 label="Theme"
@@ -590,10 +577,6 @@ const styles = StyleSheet.create({
   },
   cardGap: {
     gap: Spacing.two,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    alignSelf: 'stretch',
   },
   section: {
     gap: Spacing.one,

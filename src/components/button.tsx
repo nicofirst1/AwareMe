@@ -16,7 +16,7 @@ import { useTheme } from '@/hooks/use-theme';
  * that matters on a screen (Home's "Start writing").
  * `secondary` — `backgroundElement` fill + hairline `border` (the same
  * decorative divider token `Card.bordered` uses), so it stays defined when
- * placed on a backgroundElement surface (e.g. Home's sitting card).
+ * placed on a backgroundElement surface (e.g. Home's practice card).
  * `text` — no fill, no border: Close/Cancel/Skip-style affordances.
  *
  * Press feedback and the dark outline (v14 issue 07, coordinator grant):

@@ -30,7 +30,7 @@ const ALL_WEEKS = Array.from({ length: PROGRAMME_WEEK_CAP }, (_, i) => i + 1);
 /**
  * The programme page (§6.6 as amended, ADR-0005): the official Sentence
  * Completion I programme's 30 week blocks, each expandable to its stems and
- * its two actions — a one-off sitting of the whole block (`origin='manual'`,
+ * its two actions — a one-off practice of the whole block (`origin='manual'`,
  * never moves the programme position, §6.2) and "make this my week" (sets or
  * clears `program_week_override`, §7). The only write on this screen is that
  * override setting, exactly as §6.2 sanctions it — the derived week itself is
@@ -53,7 +53,7 @@ export default function ProgrammeScreen() {
     setWeek(pw);
   }, []);
 
-  // Re-reads on every focus, so returning from a sitting (or having cleared
+  // Re-reads on every focus, so returning from a practice (or having cleared
   // the override on a reflection's completion) shows current state.
   useFocusEffect(
     useCallback(() => {

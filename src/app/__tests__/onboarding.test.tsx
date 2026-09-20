@@ -92,7 +92,7 @@ describe('OnboardingScreen', () => {
     // Every tab's title is mounted (the pager keeps offscreen pages), and
     // the visual order is pinned by the step sequence asserted below.
     expect(screen.getByText('About the method')).toBeTruthy();
-    expect(screen.getByText('Here is how it works!')).toBeTruthy();
+    expect(screen.getByText('Wow it works')).toBeTruthy();
     expect(screen.getByText('Reminders')).toBeTruthy();
     expect(screen.getByText('Include an evening practice?')).toBeTruthy();
     expect(screen.getByText('Choose your settings')).toBeTruthy();
@@ -118,7 +118,7 @@ describe('OnboardingScreen', () => {
   it('keeps the mechanics copy and adds how and why it works on tab 2', () => {
     render(<OnboardingScreen />);
 
-    expect(screen.getByText('Here is how it works!')).toBeTruthy();
+    expect(screen.getByText('Wow it works')).toBeTruthy();
     expect(screen.getByText(/finish it, several times, quickly/)).toBeTruthy();
     // v14 issue 03: the semicolon sentence split into two, and the quickness
     // paragraph broken into short sentences without losing the meaning.
@@ -151,7 +151,7 @@ describe('OnboardingScreen', () => {
 
     // v14 issue 06: the stepper label names a number, not a meaning; the
     // hint carries the meaning (settings.tsx's Hint pattern, LC3 anatomy).
-    expect(screen.getByText('How many endings you write in one sitting.')).toBeTruthy();
+    expect(screen.getByText('How many endings you write in one practice.')).toBeTruthy();
   });
 
   it('ends the Reminders copy at "end of day" and drops the old reassurance paragraphs', () => {

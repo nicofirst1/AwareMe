@@ -15,7 +15,7 @@ export interface Settings {
   morning_notification_time: string;
   /** Local "HH:MM" fire time for the evening notification. */
   evening_notification_time: string;
-  /** 2026-09-15 addition (ADR-0005). Gates the evening reflection sitting (§6.2) and the evening notification (§6.4). */
+  /** 2026-09-15 addition (ADR-0005). Gates the evening reflection practice (§6.2) and the evening notification (§6.4). */
   evening_practice_enabled: boolean;
   /** 2026-09-15 addition. Day of the weekly reflection notification (§6.4); any weekday name, lowercase. */
   weekly_meta_day: string;

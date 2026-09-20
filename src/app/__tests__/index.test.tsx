@@ -82,7 +82,7 @@ describe('HomeScreen', () => {
 
   it('renders the week card with the derived week, stem count, and a review row', () => {
     render(<HomeScreen />);
-    // Fresh install: no first programme sitting → derived week 1.
+    // Fresh install: no first programme Practice → derived week 1.
     expect(screen.getByText('Week 1 of 30')).toBeTruthy();
     expect(screen.getByText('1 stem ready')).toBeTruthy();
     expect(screen.getByText('1 session this week')).toBeTruthy();
@@ -90,7 +90,7 @@ describe('HomeScreen', () => {
     // o11 layout/a11y cycle: the review row is a Link with an explicit role
     // and label (matches BackHeader's documented link convention).
     expect(screen.getByRole('link', { name: 'Review available' })).toBeTruthy();
-    expect(screen.getByText('Start morning sitting')).toBeTruthy();
+    expect(screen.getByText('Start morning practice')).toBeTruthy();
   });
 
   it('renders the evening reflection card (enabled by default) and marks its done state', () => {
@@ -99,7 +99,7 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Begin evening reflection')).toBeTruthy();
 
     // A completed evening reflection today → the quiet done state, and the
-    // card stays (a second sitting is allowed, absence is never punished,
+    // card stays (a second Practice is allowed, absence is never punished,
     // §13.4).
     const nowIso = new Date().toISOString();
     const offsetMin = -new Date().getTimezoneOffset();
@@ -163,13 +163,13 @@ describe('HomeScreen', () => {
 
   it('still renders (default period rule) when settings cannot be read', () => {
     // No `getSettings` on the stub: the render path must catch the throw and
-    // fall back (currentSittingPeriod(undefined, undefined)), not crash the
+    // fall back (currentPracticePeriod(undefined, undefined)), not crash the
     // screen — and the status block is simply absent, not an error message.
     const baseGetSettings = mockRepository.getSettings;
     delete mockRepository.getSettings;
     try {
       render(<HomeScreen />);
-      expect(screen.getByText('Morning sitting')).toBeTruthy();
+      expect(screen.getByText('Morning practice')).toBeTruthy();
       expect(screen.queryByText('1 stem ready')).toBeNull();
     } finally {
       mockRepository.getSettings = baseGetSettings;

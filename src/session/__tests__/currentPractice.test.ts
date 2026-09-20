@@ -1,4 +1,4 @@
-import { currentSittingPeriod, parseHmMinutes } from '@/session/currentSitting';
+import { currentPracticePeriod, parseHmMinutes } from '@/session/currentPractice';
 
 /**
  * Local-wall-clock helper: the rule reads `getHours()`/`getMinutes()`, so
@@ -42,27 +42,27 @@ describe('parseHmMinutes', () => {
   });
 });
 
-describe('currentSittingPeriod', () => {
+describe('currentPracticePeriod', () => {
   describe('midpoint rule with the §7 defaults (08:00/21:00 → flips at 14:30)', () => {
     const morningHm = '08:00';
     const eveningHm = '21:00';
 
     it("is morning before the midpoint", () => {
-      expect(currentSittingPeriod(morningHm, eveningHm, at(0, 0))).toBe('morning');
-      expect(currentSittingPeriod(morningHm, eveningHm, at(8, 0))).toBe('morning');
-      expect(currentSittingPeriod(morningHm, eveningHm, at(14, 29))).toBe('morning');
+      expect(currentPracticePeriod(morningHm, eveningHm, at(0, 0))).toBe('morning');
+      expect(currentPracticePeriod(morningHm, eveningHm, at(8, 0))).toBe('morning');
+      expect(currentPracticePeriod(morningHm, eveningHm, at(14, 29))).toBe('morning');
     });
 
     it("is evening at and after the midpoint", () => {
-      expect(currentSittingPeriod(morningHm, eveningHm, at(14, 30))).toBe('evening');
-      expect(currentSittingPeriod(morningHm, eveningHm, at(21, 0))).toBe('evening');
-      expect(currentSittingPeriod(morningHm, eveningHm, at(23, 59))).toBe('evening');
+      expect(currentPracticePeriod(morningHm, eveningHm, at(14, 30))).toBe('evening');
+      expect(currentPracticePeriod(morningHm, eveningHm, at(21, 0))).toBe('evening');
+      expect(currentPracticePeriod(morningHm, eveningHm, at(23, 59))).toBe('evening');
     });
   });
 
   it('honors the injected now: same config, different nows, different periods', () => {
-    expect(currentSittingPeriod('06:00', '10:00', at(7, 0))).toBe('morning');
-    expect(currentSittingPeriod('06:00', '10:00', at(9, 0))).toBe('evening');
+    expect(currentPracticePeriod('06:00', '10:00', at(7, 0))).toBe('morning');
+    expect(currentPracticePeriod('06:00', '10:00', at(9, 0))).toBe('evening');
   });
 
   describe('fallback to the old 17:00 rule on unparseable settings', () => {
@@ -73,15 +73,15 @@ describe('currentSittingPeriod', () => {
       ['08:00', '25:00'],
       ['08:60', '21:00'],
     ])('falls back for malformed input %p/%p', (morning, evening) => {
-      expect(currentSittingPeriod(morning, evening, at(16, 59))).toBe('morning');
-      expect(currentSittingPeriod(morning, evening, at(17, 0))).toBe('evening');
+      expect(currentPracticePeriod(morning, evening, at(16, 59))).toBe('morning');
+      expect(currentPracticePeriod(morning, evening, at(17, 0))).toBe('evening');
     });
 
     it('falls back when a setting is missing (null/undefined)', () => {
-      expect(currentSittingPeriod(undefined, '21:00', at(17, 0))).toBe('evening');
-      expect(currentSittingPeriod('08:00', null, at(16, 59))).toBe('morning');
-      expect(currentSittingPeriod(undefined, undefined, at(17, 0))).toBe('evening');
-      expect(currentSittingPeriod(undefined, undefined, at(16, 59))).toBe('morning');
+      expect(currentPracticePeriod(undefined, '21:00', at(17, 0))).toBe('evening');
+      expect(currentPracticePeriod('08:00', null, at(16, 59))).toBe('morning');
+      expect(currentPracticePeriod(undefined, undefined, at(17, 0))).toBe('evening');
+      expect(currentPracticePeriod(undefined, undefined, at(16, 59))).toBe('morning');
     });
   });
 
@@ -89,8 +89,8 @@ describe('currentSittingPeriod', () => {
     // 22:00/02:00 → floor((1320 + 120) / 2) = 720 → flips at 12:00: the
     // plain midpoint arithmetic, deliberately with no midnight special case.
     it('flips at midday', () => {
-      expect(currentSittingPeriod('22:00', '02:00', at(11, 59))).toBe('morning');
-      expect(currentSittingPeriod('22:00', '02:00', at(12, 0))).toBe('evening');
+      expect(currentPracticePeriod('22:00', '02:00', at(11, 59))).toBe('morning');
+      expect(currentPracticePeriod('22:00', '02:00', at(12, 0))).toBe('evening');
     });
   });
 
@@ -99,7 +99,7 @@ describe('currentSittingPeriod', () => {
       jest.useFakeTimers();
       jest.setSystemTime(new Date(2026, 8, 15, 14, 30)); // at the default midpoint
       try {
-        expect(currentSittingPeriod('08:00', '21:00')).toBe('evening');
+        expect(currentPracticePeriod('08:00', '21:00')).toBe('evening');
       } finally {
         jest.useRealTimers();
       }
