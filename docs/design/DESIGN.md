@@ -291,7 +291,11 @@ the pre-existing de-facto default, numerically identical to the old
 
 Touch targets: every `Pressable` whose visible content would be smaller
 observes `MinTouchTarget` 44 (Apple HIG and Material both call for 44pt/48dp),
-applied via `minHeight`/`minWidth`.
+applied via `minHeight`/`minWidth`. Android binds the effective floor at
+Material's 48dp (packet-3 t8): the shared touch-target components — Button,
+FilterChip, StepperRow — carry 48 effective height/width, grown by
+`minHeight`/`minWidth` so the visual anatomy stays put; adoption on other
+screens rides each screen's own cycle.
 
 ## Components
 
@@ -317,7 +321,8 @@ applied via `minHeight`/`minWidth`.
 - **Timer numerals** — colored by `pressureColorAt` on the `timerNormal` →
   `timerAmber` → `timerExpiring` ramp as the timer depletes (ambient cue
   only, never red).
-- **Pressable** — minimum touch target 44 (`MinTouchTarget`).
+- **Pressable** — minimum touch target 44 (`MinTouchTarget`); 48 effective on
+  Android (packet-3 t8).
 
 ## Do's and Don'ts
 
@@ -327,7 +332,8 @@ applied via `minHeight`/`minWidth`.
   edge).
 - Don't hardcode a hex outside `theme.ts` — every color derives from the five
   owner hexes there.
-- Do keep touch targets at least 44 (`MinTouchTarget`).
+- Do keep touch targets at least 44 (`MinTouchTarget`); the shared
+  touch-target components carry Android's 48dp effective floor (packet-3 t8).
 - Don't set raw rose, amber, or jade as light-theme text — they clear AA only
   on the dark theme; raw indigo is the only raw hue that clears AA as
   light-theme text on cream.

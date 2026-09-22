@@ -401,6 +401,10 @@ function TimeField({
   );
 }
 
+// Android's minimum touch-target size (Material, 48dp effective) for the
+// footer's bare text pressables (packet-3 t8) — see styles.textButton.
+const AndroidMinTouchTarget = 48;
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
@@ -445,8 +449,14 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     alignItems: 'flex-start',
   },
+  // Footer Next/Skip (packet-3 t8, packet-2 C4): the bare text pressables
+  // measured 34x44 — below Android's 48dp minimum on both axes. Target-size
+  // geometry only: the min sizes grow the pressable and the label re-centers
+  // inside it; `MinTouchTarget` (44) stays for the non-footer styles below.
   textButton: {
-    minHeight: MinTouchTarget,
+    minHeight: AndroidMinTouchTarget,
+    minWidth: AndroidMinTouchTarget,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   navLink: {

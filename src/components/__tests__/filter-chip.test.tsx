@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 import { FilterChip } from '@/components/filter-chip';
 
@@ -30,5 +31,15 @@ describe('FilterChip', () => {
     rerender(<FilterChip label="Morning" selected={false} onPress={onPress} hue="amber" />);
     expect(screen.queryByTestId('filter-chip-checkmark')).toBeNull();
     expect(screen.getByLabelText('Morning').props.accessibilityState).toMatchObject({ selected: false });
+  });
+
+  // packet-3 t8 (C4): Android's minimum touch target is 48dp effective.
+  // Measured review chips were 44 high, and short numeric labels ("7") land
+  // below 48 wide — so both axes bind on the shared chip.
+  it('touch target clears the Android 48dp minimum on both axes', () => {
+    render(<FilterChip label="7" selected={false} onPress={() => {}} />);
+    const style = StyleSheet.flatten(screen.getByLabelText('7').props.style);
+    expect(style.minHeight).toBeGreaterThanOrEqual(48);
+    expect(style.minWidth).toBeGreaterThanOrEqual(48);
   });
 });

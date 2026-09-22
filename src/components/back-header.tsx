@@ -3,8 +3,14 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { MinTouchTarget, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+
+// Android's minimum touch-target size (Material, 48dp effective; packet-3
+// t8, packet-2 C4) — local because theme.ts's `MinTouchTarget` (44, t4-owned)
+// stays the shared 44 layout floor. The Back pressable measured 58x44; the
+// pre-existing hitSlop 8 keeps widening the effective target beyond this.
+const AndroidMinTouchTarget = 48;
 
 /**
  * Visible back affordance (visual-test finding, cycle 3: only iOS
@@ -42,7 +48,7 @@ const styles = StyleSheet.create({
   pressable: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: MinTouchTarget,
+    minHeight: AndroidMinTouchTarget,
     gap: Spacing.half,
     alignSelf: 'flex-start',
   },

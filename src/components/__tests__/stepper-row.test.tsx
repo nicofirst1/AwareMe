@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 import { StepperRow } from '@/components/stepper-row';
 
@@ -33,5 +34,16 @@ describe('StepperRow', () => {
     render(<StepperRow label="Low" value={6} rangeKey="endings_per_session" onChange={onChange} />);
     fireEvent.press(screen.getByLabelText('Decrease Low'));
     expect(onChange).toHaveBeenLastCalledWith(6);
+  });
+
+  // packet-3 t8 (C4): the −/+ buttons measured 44x44; Android's minimum
+  // touch target is 48dp effective on both axes.
+  it('stepper buttons clear the Android 48dp minimum on both axes', () => {
+    render(<StepperRow label="Timer (seconds)" value={90} rangeKey="timer_seconds" onChange={() => {}} />);
+    for (const label of ['Decrease Timer (seconds)', 'Increase Timer (seconds)']) {
+      const style = StyleSheet.flatten(screen.getByLabelText(label).props.style);
+      expect(style.width).toBeGreaterThanOrEqual(48);
+      expect(style.height).toBeGreaterThanOrEqual(48);
+    }
   });
 });

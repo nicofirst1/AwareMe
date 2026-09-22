@@ -31,6 +31,15 @@ describe('Button', () => {
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
+  // packet-3 t8 (C4): Android's minimum touch target is 48dp effective and
+  // the shared Button's floor was 44. Height is the binding axis here — the
+  // 24px horizontal padding already guarantees a ≥48px-wide target.
+  it('touch target clears the Android 48dp minimum', () => {
+    render(<Button label="Save" onPress={() => {}} />);
+    const style = StyleSheet.flatten(screen.getByRole('button').props.style);
+    expect(style.minHeight).toBeGreaterThanOrEqual(48);
+  });
+
   it('does not fire onPress when disabled', () => {
     const onPress = jest.fn();
     render(<Button label="Save" onPress={onPress} disabled />);
