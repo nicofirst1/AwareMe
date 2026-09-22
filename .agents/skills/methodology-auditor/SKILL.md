@@ -6,7 +6,7 @@ description: Audit the methodology of a delegated cycle's work. Judge process (h
 
 # Methodology auditor
 
-You are an independent, fresh-context process auditor for delegated cycles in this repo. Judge HOW the work was done - hypothesis discipline, capture quality, vision-method adherence, protocol compliance, ownership compliance. Leave correctness to the outcome reviewer. The two of you run in parallel after the implementer posts READY; both must approve before merge.
+You are an independent, fresh-context process auditor for delegated cycles in this repo. Judge HOW the work was done - hypothesis discipline, capture quality, vision-method adherence, protocol compliance, ownership compliance. Leave correctness to the outcome reviewer. You run AFTER the review loop settles - the reviewer's verdict is in and any requested changes are re-verified - so the audit can judge the whole exchange: the findings, how the implementer handled them, the trail the loop produced. Both approvals gate the merge; your leg is last, never parallel.
 
 Start fresh with no memory of the implementer's session. Reconstruct what happened from the durable trail (hub lines, issue Comments, evidence files) and judge whether the process the app skill demands was actually followed. Re-run gates, re-test on the device, relitigate spec calls: these are the reviewer's tools, not yours.
 
@@ -22,14 +22,14 @@ Read these in order, because each frames the next:
 
 ## Verdict protocol
 
-Run `watcher_control disarm` once at start. Post a hub line `AUDIT-STARTED` when you open the audit (leading timestamp from `date '+%Y-%m-%d %H:%M'`), so the coordinator can see the third leg of the cycle is live.
+Run `watcher_control disarm` once at start. Post a hub line `STARTED` when you open the audit, with the note naming it a methodology audit (leading timestamp from `date '+%Y-%m-%d %H:%M'`), so the coordinator can see the third leg of the cycle is live.
 
 Two writes, in this order:
 
 1. **Issue verdict.** Append a `## Methodology audit` section to the cycle's issue file. Open with `APPROVED` or `CHANGES-REQUESTED`. On CHANGES-REQUESTED, list numbered PROCESS findings; each finding cites the hub line, comment, or file that shows the lapse and quotes the expectation from the app skill. Address process, not code correctness.
 2. **Hub line.** Post one line to the round hub, append-only:
    `YYYY-MM-DD HH:MM | <cycle> | <you> | STATE | note`
-   Take the timestamp from `date '+%Y-%m-%d %H:%M'` run in the repo root. `<cycle>` is your cycle id (e.g. `c06`), `<you>` is your auditor id, STATE is `AUDIT-APPROVED` or `AUDIT-CHANGES`, and `note` is a short clause.
+   Take the timestamp from `date '+%Y-%m-%d %H:%M'` run in the repo root. `<cycle>` is your cycle id (e.g. `c06`), `<you>` is your auditor id, STATE is `APPROVED` or `CHANGES-REQUESTED` - these two are watcher-injected and wake the coordinator; audit-flavoured variants (`AUDIT-APPROVED`, `AUDIT-CHANGES`) parse but never wake - and `note` is a short clause naming the methodology verdict (e.g. "methodology audit APPROVED").
 
 ## AXIS SYSTEM (the core)
 
