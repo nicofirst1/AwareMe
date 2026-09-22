@@ -20,6 +20,7 @@ This file is an index, not the record: each entry points at the authoritative do
 4. **Review period** — default 7 days, selectable at review time from presets; `reviews` stores explicit `period_start`/`period_end`.
 
 ## Standing decisions
+- **2026-09-22, zero-ending sessions never count as complete (owner decision, packet 3 t10):** a session finished with zero non-empty endings is still saved (nothing discarded, §6.3.8; early-Done stays legal, §6.3.9) but never counts as complete: excluded at read time (single shared predicate in `src/db/repository.ts`) from completed-session reads, "sessions this week", and the §6.2 week derivation; the reflection-completion effect in `write.tsx` keys `program_week_override` clearing on the same content rule. Read-time filter only — no schema change, §13.7 invariant holds; rows remain in DB + export. Full record: `.coordination/issues/packet3-codefix.md` row t10 + reviewer verdict; merged 69d9756.
 - **2026-09-18, audit sequencing (amendment 11):** the methodology auditor runs AFTER the review loop settles (reviewer verdict in + requested changes verified), analyzing the complete trail including the review exchange; it never runs in parallel with the reviewer. Owner directive; codified in the app skill Round protocol (r11, v1.3.0).
 
 - **Dependencies beyond spec §3** are non-discretionary or sanctioned, never casual: `expo-linking` (hard peer of expo-router), `expo-crypto` (UUIDv7 randomness), `@expo/vector-icons` (2026-09-11 redesign, sanctioned).
