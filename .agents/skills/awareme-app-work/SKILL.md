@@ -1,7 +1,7 @@
 ---
 name: awareme-app-work
 description: Implementing, reviewing, or auditing AwareMe (six endings) app changes here — UI verification with pi-droid and vision models, emulator protocol, evidence standards, and round protocol for delegated cycles.
-version: 1.7.0
+version: 1.8.0
 ---
 
 # Working on AwareMe
@@ -57,6 +57,8 @@ Cycle shape: impl agent → READY → reviewer (outcome: spec fit + gates) → r
 After merges: reviewer-checked doc duties land on main with the merge; captures backed up before worktree teardown; branches deleted; issues flipped to done.
 
 **PLAN.md lifecycle.** PLAN.md is an index, not a record. Open packets: one line each, what it is plus the gate. Closed or dropped packets: one line each, status plus a pointer (merge commit, report path, or issue file); trim closure prose at close time, never append it. The story lives in the hub, the issue files, or DECISIONS.md. At round close the whole file archives to `.coordination/legacy/plan-<date>.md` and the next round starts with a fresh PLAN.
+
+- **Vision audit swarm** (r18, owner-approved pattern): for full-app visual audits, partition ASPECTS and spawn one native vision agent per aspect, each in its own tab of the audit workspace: `herdr agent start t<N>-<aspect> --kind pi --pane <P> -- --model iais-genai/Qwen3.5-122B-A10B`. Aspect partition for a mobile app (trim per scope): (1) layout & responsiveness - clipping, overflow, 320/360px, touch targets; (2) visual hierarchy & typography - contrast, alignment, spacing, component consistency; (3) navigation & IA - reachability, back behavior, nav coherence; (4) color, contrast & a11y - states, iconography, dimmed/locked rendering; (5) on-screen copy & microcopy (UI text only, never programme text); (6) empty/error/loading states. Input per agent = the capture banks + targeted fresh captures; any live app walk takes an emulator LOCK-CLAIM first. Per-aspect report lands in `.coordination/reports/audit-<aspect>.md`, then the standard gate: independent review -> per-ticket methodology audit -> rollup synthesized by the coordinator. One aspect per agent; agents do not share aspects; UI copy quoted only, stems never.
 
 ## Lessons
 
