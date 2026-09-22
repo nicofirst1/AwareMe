@@ -307,7 +307,7 @@ describe('WriteScreen — evening reflection (§6.2/§6.5.2)', () => {
     const input = await screen.findByLabelText('Your reflection');
     fireEvent.changeText(input, 'tired in a settled way\n');
 
-    await screen.findByText('Saved.');
+    await screen.findByText('Session saved.');
     expect(mockRepoState.createdReviews).toHaveLength(1);
     const review = mockRepoState.createdReviews[0].input;
     expect(review.sessionIds).toEqual(['morning-1']);
@@ -367,7 +367,7 @@ describe('WriteScreen — weekly reflection (/write?origin=weekly, §6.5.1)', ()
     const input = await screen.findByLabelText('Your reflection');
     fireEvent.changeText(input, 'the week kept asking the same question\n');
 
-    await screen.findByText('Saved.');
+    await screen.findByText('Session saved.');
     expect(mockRepoState.createdReviews).toHaveLength(1);
     const review = mockRepoState.createdReviews[0].input;
     expect(review.sessionIds).toEqual(['week1-1']);
@@ -384,7 +384,7 @@ describe('WriteScreen — weekly reflection (/write?origin=weekly, §6.5.1)', ()
     fireEvent.press(screen.getByText('Continue'));
     const input = await screen.findByLabelText('Your reflection');
     fireEvent.changeText(input, 'a reflection\n');
-    await screen.findByText('Saved.');
+    await screen.findByText('Session saved.');
     expect(mockRepoState.createdReviews).toHaveLength(1);
     expect(mockRepoState.settingWrites).toEqual([]);
   });
@@ -402,7 +402,7 @@ describe('WriteScreen — weekly reflection (/write?origin=weekly, §6.5.1)', ()
     // Done with nothing typed: the meta-stem session ends zero-content (§6.3.9).
     fireEvent.press(screen.getByLabelText('Finish session'));
 
-    await screen.findByText('Saved.');
+    await screen.findByText('Session saved.');
     // Nothing discarded: the review row is still recorded, reflection_text null.
     expect(mockRepoState.createdReviews).toHaveLength(1);
     expect(mockRepoState.createdReviews[0].input.reflectionText).toBeNull();
@@ -427,7 +427,7 @@ describe('WriteScreen — open review sessions resume into their flow (c05-queue
     const input = await screen.findByLabelText('Your reflection');
     fireEvent.changeText(input, 'picked the reflection back up\n');
     // Finishing the resumed reflection still records the weekly review…
-    await screen.findByText('Saved.');
+    await screen.findByText('Session saved.');
     expect(mockRepoState.createdReviews).toHaveLength(1);
     expect(mockRepoState.createdReviews[0].input.metaStemText).toBe(mockWeeklyMeta.text);
   });
@@ -515,7 +515,7 @@ describe('WriteScreen — badge reveal on the completion screen (issue 17)', () 
     const input = await screen.findByLabelText('Your ending');
     fireEvent.changeText(input, 'one honest sentence about right now\n');
 
-    await screen.findByText('Saved.');
+    await screen.findByText('Session saved.');
     expect(screen.getByText('First Words')).toBeTruthy();
     expect(screen.getByText('Six Endings')).toBeTruthy();
   });
@@ -535,7 +535,7 @@ describe('WriteScreen — badge reveal on the completion screen (issue 17)', () 
     const input = await screen.findByLabelText('Your ending');
     fireEvent.changeText(input, 'one honest sentence about right now\n');
 
-    await screen.findByText('Saved.');
+    await screen.findByText('Session saved.');
     expect(screen.queryByText('First Words')).toBeNull();
     expect(screen.queryByText('Six Endings')).toBeNull();
   });
@@ -557,7 +557,7 @@ describe('WriteScreen — badge reveal on the completion screen (issue 17)', () 
     await screen.findByText(/Stem 2 of 3/);
     expect(screen.getByText('Start')).toBeTruthy();
     expect(screen.queryByText('First Words')).toBeNull();
-    expect(screen.queryByText('Saved.')).toBeNull();
+    expect(screen.queryByText('Session saved.')).toBeNull();
   });
 });
 

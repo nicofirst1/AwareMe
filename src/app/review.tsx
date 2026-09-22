@@ -133,7 +133,7 @@ export default function ReviewScreen() {
           <ScreenHeader title="Review" />
           <ScrollView contentContainerStyle={styles.scrollContent}>
             <ThemedText type="default" themeColor="textSecondary">
-              Saved.
+              Session saved.
             </ThemedText>
             <Button label="Close" onPress={() => router.back()} />
           </ScrollView>

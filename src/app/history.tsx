@@ -118,7 +118,7 @@ export default function HistoryScreen() {
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Search what you've written"
+            placeholder="Search what you’ve written"
             placeholderTextColor={theme.textSecondary}
             style={[styles.search, { color: theme.text, backgroundColor: theme.backgroundElement }]}
             accessibilityLabel="Search endings"
