@@ -312,13 +312,15 @@ export default function HomeScreen() {
                     accessibilityRole="link"
                     accessibilityLabel="Review available"
                   >
-                    {/* `textSecondary`, not `accent` (2026-09-15 review finding): `accent`
-                        text only clears AA against `background` (theme.ts's own comment),
-                        not against the practice card's `backgroundElement` fill — 4.35:1 in
-                        light theme, under LC9's 4.5:1 floor. The chevron alone (a non-text
-                        UI component, 3:1 floor) stays accent-colored for the row's tappable
-                        affordance. */}
-                    <ThemedText type="small" themeColor="textSecondary">
+                    {/* Packet-3 t6 (cluster 11, p2f-27): the link is an ACTION,
+                        so its text reads full ink — distinct from the inert
+                        metadata lines beside it, which keep `textSecondary`.
+                        Accent stays off the text itself: it clears AA only on
+                        `background`, not on the card's `backgroundElement`
+                        fill (4.35:1, the 2026-09-15 review finding). The
+                        chevron alone (a non-text UI component, 3:1 floor)
+                        keeps the accent tappable affordance. */}
+                    <ThemedText type="small">
                       Review available
                     </ThemedText>
                     <Ionicons name="chevron-forward-outline" size={16} color={theme.accent} />
@@ -397,7 +399,10 @@ export default function HomeScreen() {
                 accessibilityRole="link"
                 accessibilityLabel="Browse the library"
               >
-                <ThemedText type="small" themeColor="textSecondary">
+                {/* Same action-link anatomy as Review available (packet-3 t6):
+                    full ink for the tappable row, secondary ink stays
+                    reserved for the inert lines. */}
+                <ThemedText type="small">
                   Browse the library
                 </ThemedText>
                 <Ionicons name="chevron-forward-outline" size={16} color={theme.accent} />
@@ -551,6 +556,11 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   startRow: {
+    // Packet-3 t6 (cluster 11, p2f-27): the state line must not read as the
+    // CTA's caption. The card's base gap (Spacing.two) + this margin give
+    // 16dp between the state headline and the action row — the action is
+    // its own group, not part of the state block (the test pins the margin).
+    marginTop: Spacing.two,
     gap: Spacing.two,
     width: '100%',
   },
@@ -559,6 +569,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   statusFooter: {
+    // Same group logic on the other side of the CTA (packet-3 t6, p2f-27):
+    // 16dp below the button vs the 4dp the footer's own lines share, so the
+    // quiet metadata reads as a third group — not as the button's caption.
+    marginTop: Spacing.two,
     gap: Spacing.one,
     alignItems: 'flex-start',
   },
