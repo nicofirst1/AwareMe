@@ -106,7 +106,7 @@ describe('ProgrammeScreen (week library)', () => {
     render(<ProgrammeScreen />);
     fireEvent.press(screen.getByLabelText('Week 1, 4 stems. Current week. Collapsed.'));
     expect(screen.getByText('Week 1 stem 0')).toBeTruthy();
-    expect(screen.getByText('Write this week’s sitting')).toBeTruthy();
+    expect(screen.getByText('Write this week’s practice')).toBeTruthy();
     expect(screen.getByText('Make this my week')).toBeTruthy();
   });
 
@@ -122,7 +122,7 @@ describe('ProgrammeScreen (week library)', () => {
   it('one-off sitting routes to /write?week=N with manual origin semantics (never rotates)', () => {
     render(<ProgrammeScreen />);
     fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Locked. Collapsed.'));
-    fireEvent.press(screen.getByText('Write this week’s sitting'));
+    fireEvent.press(screen.getByText('Write this week’s practice'));
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/write', params: { week: '2' } });
     expect(mockRepoState.settingWrites).toEqual([]); // a one-off sit never writes anything
   });
@@ -154,8 +154,8 @@ describe('ProgrammeScreen (week library)', () => {
   it('does not offer sitting actions on an empty week', () => {
     render(<ProgrammeScreen />);
     fireEvent.press(screen.getByLabelText('Week 30, 0 stems. Locked. Collapsed.'));
-    expect(screen.getByText('The sitting actions appear once this week has active stems.')).toBeTruthy();
-    expect(screen.queryByText('Write this week’s sitting')).toBeNull();
+    expect(screen.getByText('The practice actions appear once this week has active stems.')).toBeTruthy();
+    expect(screen.queryByText('Write this week’s practice')).toBeNull();
   });
 
   it('never writes anything but the override (§13.7)', () => {
