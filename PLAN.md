@@ -19,6 +19,7 @@ Index rule: open packets one line each (what, gate); closed or dropped packets o
 - **Packet 9 — vision re-pass + vision swarm audit (DONE 2026-09-22).** p2-eyes re-read all 63 OCR'd frames on iais-genai/Qwen3.5-122B-A10B (63/63 agree); six-aspect swarm audit (native vision agents, 76 findings → 17 clusters), independent review + methodology audit APPROVED; rollup `.coordination/reports/packet2-vision-audit-rollup.md`. Standing capability persisted: awareme-app-work r16-r18 (iais-only vision rule, native vision agent recipe, swarm pattern); herdr-delegation F32 (completion-on-suppressed-channel) + dispatch-verification lessons.
 - **Packet 7 — name clearance (DROPPED 2026-09-22).** AwareMe stands without register searches; decision in `DECISIONS.md`, trademark-clearance bullet.
 - **Packet 4b — content-module restore (DONE 2026-09-22).** Rebuilt from the canonical snapshot; record in the hub trail, 2026-09-22 10:10 to 10:17.
+- **Round d1 — DESIGN.md migration (DONE 2026-09-22).** `docs/design/DESIGN.md` (published view of `theme.ts`, 75 tokens) + ADR-0006 + DECISIONS bullet, merged `c4a20dc`; reviewer round-2 APPROVED, methodology audit APPROVED (`.coordination/d1.md`, issue `d1-designmd.md`); consumed by the next design-touching packet; `designmd diff` gates token parity from here.
 
 - **workflow-automation** — owner moved general Pi hardening out of the app repo to `~/.pi/harness-hardening` (2026-09-20); no candidate was installed; nothing pending in-repo.
 - **r13 skill install** — installed and preserved in 23c09cf; audited by Packet 1.
