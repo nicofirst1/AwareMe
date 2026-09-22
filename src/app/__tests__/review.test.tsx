@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
+import { StyleSheet, Text, type TextStyle } from 'react-native';
 
 import ReviewScreen from '@/app/review';
+import { ThemedText, type ThemedTextProps } from '@/components/themed-text';
 import type { EndingRow, SessionRow, StemRow } from '@/db';
 import type { SessionState } from '@/session/sessionMachine';
 import type { WritingSessionView } from '@/session/useWritingSession';
@@ -122,9 +124,11 @@ function expectedCardDate(iso: string): string {
 describe('ReviewScreen', () => {
   // R2 (layout-audit-2026-09-15, LC5): session cards used to open with a
   // bare dim date line and endings that differed from the stem by opacity
-  // only. Now each card carries an eyebrow header (date + ending count —
-  // descriptive only, §13.4/§13.6) and dim, hairline-separated endings.
-  it('gives session cards an eyebrow header with date and ending count', () => {
+  // only. Now each card carries a metadata header (date + ending count —
+  // descriptive only, §13.4/§13.6) and dim, hairline-separated endings. The
+  // header took the 12px eyebrow role until packet-3 t7 raised it to small
+  // (14, readable per p2n-17); the inventory test pins the role set.
+  it('gives session cards a metadata header with date and ending count', () => {
     render(<ReviewScreen />);
 
     expect(screen.getByText(`${expectedCardDate('2026-09-10T08:00:00.000Z')} · 2 endings`)).toBeTruthy();
@@ -134,6 +138,36 @@ describe('ReviewScreen', () => {
     expect(screen.getByText('First ending of the week.')).toBeTruthy();
     expect(screen.getByText('Second ending of the week.')).toBeTruthy();
     expect(screen.getByText('(nothing written)')).toBeTruthy();
+  });
+
+  // t7 (packet-3 rollup 12 / p2n-17): the screen carried five type scales at
+  // once (32/22/16/14/12) with the card metadata in 12px spaced caps, too
+  // small next to the content it describes. The consolidation pins every
+  // text node to four DESIGN.md roles: title (screen anchor), stem (the
+  // user's writing, the reserved serif face), small (metadata + helper
+  // lines at a readable 14), default (control labels and status copy). The
+  // eyebrow role (12px) leaves this screen.
+  it('renders the screen in exactly four DESIGN.md type roles, none at 12px', () => {
+    const view = render(<ReviewScreen />);
+
+    const roles = view.root
+      .findAllByType(ThemedText)
+      .map((node: { props: ThemedTextProps }) => node.props.type ?? 'default');
+    expect(new Set(roles)).toEqual(new Set(['title', 'stem', 'small', 'default']));
+
+    // Size inventory over the real host tree. Icon glyphs (Ionicons: the
+    // back chevron, the selected-chip checkmark) are icon sizes, not type
+    // scales, and are excluded by their icon fontFamily.
+    const fontSizes = view.root
+      .findAll((node: { type: unknown }) => node.type === Text)
+      .map((node: { props: { style?: TextStyle } }): Pick<TextStyle, 'fontSize' | 'fontFamily'> =>
+        (StyleSheet.flatten([node.props.style]) as Pick<TextStyle, 'fontSize' | 'fontFamily'>) ?? {},
+      )
+      .filter((flat: Pick<TextStyle, 'fontSize' | 'fontFamily'>) => typeof flat.fontFamily !== 'string' || !/icons$/i.test(flat.fontFamily))
+      .map((flat: Pick<TextStyle, 'fontSize' | 'fontFamily'>) => flat.fontSize)
+      .filter((size: number | undefined): size is number => typeof size === 'number');
+    expect(fontSizes).not.toContain(12);
+    expect(new Set(fontSizes).size).toBeLessThanOrEqual(4);
   });
 
   // R1 (layout-audit-2026-09-15): "Continue" used to render after the whole
