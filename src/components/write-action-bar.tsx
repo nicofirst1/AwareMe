@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { ProgressBar } from '@/components/progress-bar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Fonts, MinTouchTarget, Spacing } from '@/constants/theme';
+import { Fonts, MinTouchTarget, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 /**
@@ -61,9 +61,26 @@ export function WriteActionBar({
 
   return (
     <ThemedView style={styles.bar}>
+      {/*
+        Packet-3 t5 (p2f-04/p2n-13/p2f-05): the field used to render as bare
+        text with only a cursor — no container marked where writing happens.
+        Filled card fill (`backgroundElement`) plus a 1px control outline in
+        `borderStrong` (DESIGN.md's 3:1 non-text boundary token) at
+        `Radius.small` — the radius scale's own "buttons, inputs" entry.
+        Minimal aesthetic kept: no elevation, no focus ring, no label row.
+      */}
       <TextInput
         ref={inputRef}
-        style={[styles.input, { color: theme.text }]}
+        style={[
+          styles.input,
+          {
+            color: theme.text,
+            backgroundColor: theme.backgroundElement,
+            borderWidth: 1,
+            borderColor: theme.borderStrong,
+            borderRadius: Radius.small,
+          },
+        ]}
         value={value}
         onChangeText={onChangeText}
         onSubmitEditing={onSubmitEditing}
@@ -114,6 +131,9 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 34,
     minHeight: 80,
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.two,
   },
   footerRow: {
     flexDirection: 'row',
