@@ -716,8 +716,18 @@ const styles = StyleSheet.create({
   // regression, commit 375f6b3). Height is FilterChip's own `minHeight:
   // MinTouchTarget` (44) — this row has no vertical content taller than
   // its chips, so that's the exact bound, not a guess.
+  // `marginHorizontal: Spacing.four` (t11, cluster 7 remainder): the strip
+  // is a full-width ScrollView, so its chips painted flush to the screen
+  // border (packet-2 p2n-25 + t6 FLAG 18:04: non-bg pixels in the last-6-px
+  // edge column of the chip band at 320dp) instead of respecting the screen
+  // margin every other block on this screen uses. Insetting the strip clips
+  // scrolling chips at the padded content column; the scroll content itself
+  // carries no horizontal padding, so the first chip stays aligned with the
+  // Search input above it (24 from the screen edge) and chips at rest are
+  // unmoved.
   categoryScrollContainer: {
     height: MinTouchTarget,
+    marginHorizontal: Spacing.four,
     marginTop: Spacing.two,
     flexGrow: 0,
     flexShrink: 0,
@@ -725,7 +735,6 @@ const styles = StyleSheet.create({
   categoryScroll: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.four,
     gap: Spacing.one,
   },
   weekPickerTrigger: {
