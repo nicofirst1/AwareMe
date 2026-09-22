@@ -7,6 +7,24 @@ import { EndReason, SessionOrigin } from '@/session/sessionMachine';
 import { BadgeSession } from '@/session/badges';
 import { PROGRAMME_WEEK_CAP } from '@/session/program';
 
+/**
+ * t10 (packet 3, owner decision 2026-09-22): a session with zero non-empty
+ * endings is still saved (§6.3.8 "nothing is discarded, ever"; §6.3.9 early
+ * Done unchanged) but NEVER counts as complete. Every read whose semantics
+ * are "completed session(s)" carries this predicate: at least one non-deleted
+ * ending with at least one non-space character (SQLite TRIM strips spaces, so
+ * a whitespace-only field reads as empty — the shape a first keypress plus a
+ * timer expiry leaves behind, ADR-0003). Read-time only: no column, no
+ * migration, nothing stored (§13.7). The anchor read
+ * (`getFirstProgrammeSitting`) deliberately does NOT carry it — the programme
+ * starts when the user first sits down, whether or not that sitting produced
+ * text.
+ */
+const HAS_NON_EMPTY_ENDING = `EXISTS (
+  SELECT 1 FROM endings e
+  WHERE e.session_id = s.id AND e.deleted_at IS NULL AND TRIM(e.text) <> ''
+)`;
+
 /** Every user-facing table, in the order the debug dump shows them. */
 export const ALL_TABLES = [
   'stems',
@@ -454,8 +472,10 @@ export class Repository {
 
   /**
    * Every completed weekly reflection (§6.5.1): a finished (`ended_at` set)
-   * `origin='review'` session on the weekly meta-stem. The caller buckets
-   * these into Mon–Sun week keys (`eventWeekMondayKey`) to derive the
+   * `origin='review'` session on the weekly meta-stem with at least one
+   * non-empty ending (t10 owner decision 2026-09-22 — a zero-content
+   * reflection is saved but must not advance the programme week). The caller
+   * buckets these into Mon–Sun week keys (`eventWeekMondayKey`) to derive the
    * programme week — an in-progress session is not yet a completed
    * reflection and must not advance anything.
    */
@@ -465,6 +485,7 @@ export class Repository {
        FROM sessions s JOIN stems st ON st.id = s.stem_id
        WHERE s.deleted_at IS NULL AND s.ended_at IS NOT NULL
          AND s.origin = 'review' AND st.is_weekly_meta = 1
+         AND ${HAS_NON_EMPTY_ENDING}
        ORDER BY s.started_at ASC`,
       [],
     );
@@ -472,12 +493,13 @@ export class Repository {
 
   /**
    * Every completed evening reflection (§6.2/§6.5.2): a finished
-   * `origin='review'` session on either evening meta-stem. Drives the
-   * deterministic stem alternation (count parity, `eveningReflectionStemIndex`)
-   * and the evening card's done state. On-demand reviews (§6.5.3) that used
-   * an evening meta-stem land in the same set — they are indistinguishable
-   * by design (same storage path, §6.5.2) and merely shift which stem is
-   * next, never the programme week.
+   * `origin='review'` session on either evening meta-stem with at least one
+   * non-empty ending (t10 owner decision 2026-09-22 — saved, never complete).
+   * Drives the deterministic stem alternation (count parity,
+   * `eveningReflectionStemIndex`) and the evening card's done state.
+   * On-demand reviews (§6.5.3) that used an evening meta-stem land in the
+   * same set — they are indistinguishable by design (same storage path,
+   * §6.5.2) and merely shift which stem is next, never the programme week.
    */
   listCompletedEveningReflections(): { startedAt: string; offsetMin: number }[] {
     return this.db.getAllSync<{ startedAt: string; offsetMin: number }>(
@@ -485,6 +507,7 @@ export class Repository {
        FROM sessions s JOIN stems st ON st.id = s.stem_id
        WHERE s.deleted_at IS NULL AND s.ended_at IS NOT NULL
          AND s.origin = 'review' AND st.origin = 'meta' AND st.is_weekly_meta = 0
+         AND ${HAS_NON_EMPTY_ENDING}
        ORDER BY s.started_at ASC`,
       [],
     );
@@ -682,11 +705,15 @@ export class Repository {
    */
   countProgrammeStemsCompletedInRange(week: number, dayStart: string, dayEnd: string): number {
     if (!Number.isInteger(week) || week < 1 || week > PROGRAMME_WEEK_CAP) return 0;
+    // t10 (owner decision 2026-09-22): a stem is "completed today" only by a
+    // session with at least one non-empty ending — a timer-expired empty
+    // session on the last stem no longer reads as "Morning practice complete".
     const row = this.db.getFirstSync<{ count: number }>(
       `SELECT COUNT(DISTINCT s.stem_id) as count
        FROM sessions s JOIN stems st ON st.id = s.stem_id
        WHERE s.deleted_at IS NULL AND s.ended_at IS NOT NULL AND st.week_number = ?
-         AND s.started_at >= ? AND s.started_at < ?`,
+         AND s.started_at >= ? AND s.started_at < ?
+         AND ${HAS_NON_EMPTY_ENDING}`,
       [week, dayStart, dayEnd],
     );
     return row?.count ?? 0;
@@ -935,9 +962,19 @@ export class Repository {
    * category, and/or a date range on `started_at`. Soft-deleted sessions are
    * never returned — deletion hides from the UI, it does not remove the row
    * (§4.1.5); export and the DB itself still see them.
+   *
+   * t10 (owner decision 2026-09-22): zero-ending sessions never count as
+   * complete, so they are excluded here too — this one query feeds the home
+   * "N sessions this week" counter and its `Review available` gate (the C10
+   * silent-counted-save and C11 counted-abandoned defects), and the history
+   * listing carries the same rule so every consumer inherits it. The rows
+   * themselves are untouched: still saved, still in `dumpAllTables`/export,
+   * still visible in a session's own detail. Open sessions with content keep
+   * counting (unchanged behavior — this ticket rules on endings, not on
+   * `ended_at`).
    */
   listSessionsForHistory(filters: HistoryFilters = {}): HistorySessionRow[] {
-    const clauses = ['s.deleted_at IS NULL'];
+    const clauses = ['s.deleted_at IS NULL', HAS_NON_EMPTY_ENDING];
     const params: SqlBindValue[] = [];
 
     if (filters.stemId) {
@@ -1167,11 +1204,13 @@ export class Repository {
    * Every completed, non-deleted session with its category, uncensored/
    * target/tz fields, and its non-deleted endings — the one shape both
    * `badges.ts` and `progressStats.ts` derive from (gamification proposal
-   * §4/§5 cycle 1). "Completed" means `ended_at IS NOT NULL`: an open
-   * session in progress never counts toward a badge or a streak. Endings
-   * are unfiltered by `submitted_at` — `finalizeSession` always closes any
-   * open ending before setting `ended_at` (nothing discarded, §6.3.8), so
-   * every endings row on a completed session is already final.
+   * §4/§5 cycle 1). "Completed" means `ended_at IS NOT NULL` AND at least one
+   * non-empty ending (t10 owner decision 2026-09-22 — a zero-content session
+   * earns no badge, no streak day, no progress total): an open session in
+   * progress never counts toward a badge or a streak either. Endings are
+   * unfiltered by `submitted_at` — `finalizeSession` always closes any open
+   * ending before setting `ended_at` (nothing discarded, §6.3.8), so every
+   * endings row on a completed session is already final.
    */
   listSessionsForStats(): BadgeSession[] {
     const sessions = this.db.getAllSync<{
@@ -1192,6 +1231,7 @@ export class Repository {
        FROM sessions s
        JOIN stems st ON st.id = s.stem_id
        WHERE s.deleted_at IS NULL AND s.ended_at IS NOT NULL
+         AND ${HAS_NON_EMPTY_ENDING}
        ORDER BY s.started_at`,
       [],
     );

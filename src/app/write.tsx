@@ -366,6 +366,13 @@ export default function WriteScreen() {
 
     const repo = getRepository();
     const reflectionText = session.state.endings[0]?.text ?? null;
+    // t10 (owner decision 2026-09-22): the reflection COMPLETES only when the
+    // meta-stem session produced at least one non-empty ending — the same
+    // predicate the repository's completed-session reads apply (whitespace
+    // reads as empty). The review row below is still recorded with whatever
+    // was written (nothing discarded, §6.3.8); only the completion-keyed
+    // override-clear is gated on content.
+    const reflectionHasContent = session.state.endings.some((e) => e.text.trim().length > 0);
     const { at } = nowEventTime();
     if (flow.kind === 'weekly') {
       // The re-read span: the reviewed sessions' own span (§4.2's
@@ -380,7 +387,7 @@ export default function WriteScreen() {
         reflectionText: reflectionText && reflectionText.length > 0 ? reflectionText : null,
         createdAt: at,
       });
-      if (flow.clearOverride) {
+      if (flow.clearOverride && reflectionHasContent) {
         repo.setSetting('program_week_override', null);
       }
       // Week-set activation (issue 04, coordinator-approved hub FLAG

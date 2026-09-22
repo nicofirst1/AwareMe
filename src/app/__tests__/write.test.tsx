@@ -388,6 +388,30 @@ describe('WriteScreen — weekly reflection (/write?origin=weekly, §6.5.1)', ()
     expect(mockRepoState.createdReviews).toHaveLength(1);
     expect(mockRepoState.settingWrites).toEqual([]);
   });
+
+  it('a zero-content reflection does not complete the week: override stays, review row still recorded (t10)', async () => {
+    mockParams.value = { origin: 'weekly' };
+    mockRepoState.firstSitting = { startedAt: '2026-09-01T06:00:00.000Z', offsetMin: 120 };
+    mockRepoState.reviewedWeek = reviewedWeek() as never;
+    mockRepoState.settings = { program_week_override: 1 };
+    render(<WriteScreen />);
+
+    await screen.findByText(/Week 1 review/);
+    fireEvent.press(screen.getByText('Continue'));
+    await screen.findByText(/If this mock weekly reflection stem renders its review/);
+    // Done with nothing typed: the meta-stem session ends zero-content (§6.3.9).
+    fireEvent.press(screen.getByLabelText('Finish session'));
+
+    await screen.findByText('Saved.');
+    // Nothing discarded: the review row is still recorded, reflection_text null.
+    expect(mockRepoState.createdReviews).toHaveLength(1);
+    expect(mockRepoState.createdReviews[0].input.reflectionText).toBeNull();
+    // t10 (owner decision 2026-09-22): a zero-content reflection never counts
+    // as complete — §6.2's override-clear must not fire. The repository's own
+    // reads already exclude the session from the derivation; this guard keeps
+    // the write path from clearing the user's selection on top of it.
+    expect(mockRepoState.settingWrites).toEqual([]);
+  });
 });
 
 describe('WriteScreen — open review sessions resume into their flow (c05-queued bug)', () => {

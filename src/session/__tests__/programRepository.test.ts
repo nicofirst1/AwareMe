@@ -270,13 +270,18 @@ describe('§6.2 derivation over real rows (readProgrammeWeek)', () => {
     const now = new Date('2026-09-16T10:00:00.000Z');
     expect(readProgrammeWeek(repo, now).currentWeek).toBe(1); // no reflections yet
 
-    // One reflection in the anchor week (Sun 2026-09-06) → week 2.
-    insertSession(raw, { stemId: weekly, origin: 'review', startedAt: '2026-09-06T12:00:00.000Z', endedAt: '2026-09-06T12:03:00.000Z' });
+    // One reflection in the anchor week (Sun 2026-09-06) → week 2. (t10:
+    // reflections carry a non-empty ending — a zero-content reflection no
+    // longer completes; owner decision 2026-09-22.)
+    const firstReflection = insertSession(raw, { stemId: weekly, origin: 'review', startedAt: '2026-09-06T12:00:00.000Z', endedAt: '2026-09-06T12:03:00.000Z' });
+    insertEnding(raw, firstReflection, 1, '2026-09-06T12:01:00.000Z');
     expect(readProgrammeWeek(repo, now).currentWeek).toBe(2);
 
     // Two more reflections inside the SAME calendar week (Sep 14–20) count once → week 3, not 4.
-    insertSession(raw, { stemId: weekly, origin: 'review', startedAt: '2026-09-14T12:00:00.000Z', endedAt: '2026-09-14T12:03:00.000Z' });
-    insertSession(raw, { stemId: weekly, origin: 'review', startedAt: '2026-09-16T12:00:00.000Z', endedAt: '2026-09-16T12:03:00.000Z' });
+    const secondReflection = insertSession(raw, { stemId: weekly, origin: 'review', startedAt: '2026-09-14T12:00:00.000Z', endedAt: '2026-09-14T12:03:00.000Z' });
+    insertEnding(raw, secondReflection, 1, '2026-09-14T12:01:00.000Z');
+    const thirdReflection = insertSession(raw, { stemId: weekly, origin: 'review', startedAt: '2026-09-16T12:00:00.000Z', endedAt: '2026-09-16T12:03:00.000Z' });
+    insertEnding(raw, thirdReflection, 1, '2026-09-16T12:01:00.000Z');
     expect(readProgrammeWeek(repo, now).currentWeek).toBe(3);
   });
 
@@ -290,8 +295,11 @@ describe('§6.2 derivation over real rows (readProgrammeWeek)', () => {
     const now = new Date('2026-01-20T10:00:00.000Z');
 
     // Reflections on Sun 2026-01-04 (wall) and Mon 2026-01-05 (wall) — two DISTINCT Mon–Sun weeks.
-    insertSession(raw, { stemId: weekly, origin: 'review', startedAt: '2026-01-04T12:00:00.000Z', endedAt: '2026-01-04T12:03:00.000Z' });
-    insertSession(raw, { stemId: weekly, origin: 'review', startedAt: '2026-01-05T12:00:00.000Z', endedAt: '2026-01-05T12:03:00.000Z' });
+    // (t10: non-empty endings — a zero-content reflection no longer completes.)
+    const firstReflection = insertSession(raw, { stemId: weekly, origin: 'review', startedAt: '2026-01-04T12:00:00.000Z', endedAt: '2026-01-04T12:03:00.000Z' });
+    insertEnding(raw, firstReflection, 1, '2026-01-04T12:01:00.000Z');
+    const secondReflection = insertSession(raw, { stemId: weekly, origin: 'review', startedAt: '2026-01-05T12:00:00.000Z', endedAt: '2026-01-05T12:03:00.000Z' });
+    insertEnding(raw, secondReflection, 1, '2026-01-05T12:01:00.000Z');
     expect(readProgrammeWeek(repo, now).currentWeek).toBe(3);
   });
 
