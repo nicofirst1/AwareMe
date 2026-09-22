@@ -110,7 +110,8 @@ describe('OnboardingScreen', () => {
   it('states the Branden method and the larger self-awareness approach on tab 1', () => {
     render(<OnboardingScreen />);
 
-    expect(screen.getByText(/built on the Branden method/)).toBeTruthy();
+    expect(screen.getByText(/built on the sentence completion method/)).toBeTruthy();
+    expect(screen.getByText(/developed by the psychologist Nathaniel Branden/)).toBeTruthy();
     expect(screen.getByText(/larger approach aimed at increasing self-awareness/)).toBeTruthy();
     expect(screen.getByLabelText('Read more about the method')).toBeTruthy();
   });
@@ -154,12 +155,14 @@ describe('OnboardingScreen', () => {
     expect(screen.getByText('How many endings you write in one practice.')).toBeTruthy();
   });
 
-  it('ends the Reminders copy at "end of day" and drops the old reassurance paragraphs', () => {
+  it('pins the committed Reminders ask and drops the old reassurance paragraphs', () => {
     render(<OnboardingScreen />);
 
+    // 36d1c1f copy pass: the ask is one plain sentence naming the button
+    // (the on-screen quotes render from &quot; escapes in onboarding.tsx).
     expect(
       screen.getByText(
-        'This app can nudge you twice a day, at a morning and an evening time you choose: the book’s own suggestion is start and end of day.',
+        'This app can remind you of your daily practice, click "Allow Reminders" if you want to be notified.',
       ),
     ).toBeTruthy();
     // Owner feedback 2026-09-17: the notification-privacy sentence and the
