@@ -1,9 +1,19 @@
 import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { MinTouchTarget, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
+
+/**
+ * Android's minimum touch-target size (Material, 48dp effective) — the
+ * packet-3 t8 audit measured 44dp floors on-device (packet-2 C4). Local on
+ * purpose: `MinTouchTarget` (44, theme.ts) stays the shared layout floor
+ * owned by theme.ts; this component enforces the Android floor itself.
+ * Width needs no floor here — the 24px horizontal padding already
+ * guarantees a ≥48px-wide target for any label.
+ */
+const AndroidMinTouchTarget = 48;
 
 /**
  * Shared button (2026-09-11 design-system foundation, ui-audit-2026-09-11.md
@@ -94,7 +104,7 @@ function primaryLabelColor(scheme: ReturnType<typeof useColorScheme>): string {
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: MinTouchTarget,
+    minHeight: AndroidMinTouchTarget,
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.four,
     alignItems: 'center',

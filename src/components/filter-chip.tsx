@@ -2,9 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { CategoryColors, MinTouchTarget, Radius, Spacing, Palette, type CategoryName, type PaletteName } from '@/constants/theme';
+import { CategoryColors, Radius, Spacing, Palette, type CategoryName, type PaletteName } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
+
+// Android's minimum touch-target size (Material, 48dp effective; packet-3
+// t8, packet-2 C4) — local because theme.ts's `MinTouchTarget` (44, t4-owned)
+// stays the shared 44 layout floor. Both axes bind here: measured review
+// chips were 44 high and short numeric labels ("7") under 48 wide; the
+// pill's padding absorbs the growth, so the anatomy is unchanged.
+const AndroidMinTouchTarget = 48;
 
 /**
  * A small selectable chip (filter/category/preset toggle) — used across
@@ -89,7 +96,8 @@ export function FilterChip({
 
 const styles = StyleSheet.create({
   chip: {
-    minHeight: MinTouchTarget,
+    minHeight: AndroidMinTouchTarget,
+    minWidth: AndroidMinTouchTarget,
     justifyContent: 'center',
     flexDirection: 'row',
     alignItems: 'center',

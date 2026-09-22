@@ -278,6 +278,17 @@ describe('OnboardingScreen', () => {
     expect(mockSetSetting).toHaveBeenCalledWith('evening_notification_time', '21:00');
   });
 
+  // packet-3 t8 (C4): the footer Next/Skip pressables measured 34x44 — below
+  // Android's 48dp minimum on both axes. Both bind on the shared footer style.
+  it('footer Next/Skip targets clear the Android 48dp minimum on both axes', () => {
+    render(<OnboardingScreen />);
+    for (const name of ['Next', 'Skip']) {
+      const style = StyleSheet.flatten(screen.getByRole('button', { name }).props.style);
+      expect(style.minHeight).toBeGreaterThanOrEqual(48);
+      expect(style.minWidth).toBeGreaterThanOrEqual(48);
+    }
+  });
+
   it('skip completes onboarding and marks the evening question asked without writing any settings', () => {
     render(<OnboardingScreen />);
 

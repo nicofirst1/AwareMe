@@ -1,9 +1,14 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { MinTouchTarget, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { clampSetting, SETTINGS_RANGES } from '@/session/settingsValidation';
+
+// Android's minimum touch-target size (Material, 48dp effective; packet-3
+// t8, packet-2 C4) — local because theme.ts's `MinTouchTarget` (44, t4-owned)
+// stays the shared 44 layout floor. The −/+ buttons measured 44x44.
+const AndroidMinTouchTarget = 48;
 
 /**
  * Shared one-line numeric stepper row (layout audit 2026-09-15, findings
@@ -80,7 +85,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    minHeight: MinTouchTarget,
+    minHeight: AndroidMinTouchTarget,
   },
   label: {
     flexShrink: 1,
@@ -91,8 +96,8 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   stepperButton: {
-    width: MinTouchTarget,
-    height: MinTouchTarget,
+    width: AndroidMinTouchTarget,
+    height: AndroidMinTouchTarget,
     borderRadius: Radius.chip,
     alignItems: 'center',
     justifyContent: 'center',
