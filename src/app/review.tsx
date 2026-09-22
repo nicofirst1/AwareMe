@@ -45,10 +45,20 @@ type ReviewPhase = 'reread' | 'meta-stem' | 'done';
  * Layout (layout-audit-2026-09-15, R1/R2): the period chips stay the
  * screen's top anchor and "Continue" moves to a pinned bottom action
  * position — it used to sit after the whole stream (~2,200pt down with a
- * five-session period), effectively unreachable. Session cards carry an
- * eyebrow header (date + ending count, descriptive only) and their endings
+ * five-session period), effectively unreachable. Session cards carry a
+ * metadata header (date + ending count, descriptive only) and their endings
  * render dim below the serif stem with hairline dividers (LC5, write's W3
  * pattern) instead of differing from the stem by opacity alone.
+ *
+ * Type roles (packet-3 t7, rollup 12 / p2n-17): the screen once mixed five
+ * scales (32/22/16/14/12) with the card metadata in 12px spaced caps — too
+ * small to read. Every text node now sits in one of four DESIGN.md roles:
+ * title (screen anchor), stem (the user's writing, the reserved serif),
+ * small (metadata + the weekly-due helper line, 14 — the audit's own raise
+ * from 10-12px), default (control labels and status copy). The card header
+ * used the eyebrow role (12px caps) until this consolidation; DESIGN.md's
+ * label-vs-helper rule governs label+helper pairs within a section, which
+ * this screen has none of — the metadata line is standalone.
  */
 export default function ReviewScreen() {
   const router = useRouter();
@@ -155,7 +165,7 @@ export default function ReviewScreen() {
           ) : (
             reviewedSessions.map(({ session: s, endings }) => (
               <Card key={s.id} style={styles.sessionBlock}>
-                <ThemedText type="eyebrow">
+                <ThemedText type="small" themeColor="textSecondary">
                   {formatDate(s.started_at)} · {endings.length === 1 ? '1 ending' : `${endings.length} endings`}
                 </ThemedText>
                 <ThemedText type="stem">{s.stem_text_snapshot}</ThemedText>
