@@ -124,7 +124,22 @@ export const Colors = {
     // (28%): text 16.12:1, textSecondary 4.56:1 — the secondary figure
     // matches the old #E0E1E6's 4.55:1 margin almost exactly.
     backgroundSelected: mixHex(PALETTE_HEX.cream, PALETTE_HEX.amber, 0.28),
-    textSecondary: '#60646C',
+    // Secondary ink (packet-3 t4, cluster 6): the old cool-gray #60646C was
+    // a pre-palette leftover and sat borderline on the deeper fills — 4.56:1
+    // on `backgroundSelected`, 4.69:1 on `accentMuted` (the gray-on-cream
+    // contrast finding behind the Close buttons and empty states). Derived
+    // now from the surface hue like every other token: cream blended 66%
+    // toward black — 7.08:1 on `background`, 5.87:1 on `backgroundSelected`,
+    // the worst shipped pairing. (Dark keeps its cool `#B0B4BA`: already
+    // 8.08:1 on its darkest fill, and the audit finding was cream-scoped.)
+    textSecondary: mixHex(PALETTE_HEX.cream, BLACK, 0.66),
+    // Silhouette ink (packet-3 t4, cluster 10): unearned/locked-badge
+    // content dimmed to opacity 0.5 measured 3.83:1 (title) and 2.02:1
+    // (caption) on its card fill — below AA. This is the SOLID replacement:
+    // cream blended 58% toward black, 4.81:1 on `backgroundElement` and
+    // 5.20:1 on `background`, yet lighter than `textSecondary` so the
+    // de-emphasis survives. Consumers drop `opacity: 0.5` for this token.
+    textMuted: mixHex(PALETTE_HEX.cream, BLACK, 0.58),
     // 6.05:1 against the cream `background` (WCAG AA requires 4.5:1).
     error: '#B3261E',
     // The palette's anchor hue, verbatim (it needs no derivation to clear
@@ -172,6 +187,10 @@ export const Colors = {
     // The pressed/selected step, blended 10% back toward cream.
     // `text` 12.63:1, `textSecondary` 6.07:1.
     backgroundSelected: mixHex(mixHex(BLACK, PALETTE_HEX.cream, 0.12), PALETTE_HEX.cream, 0.1),
+    // Silhouette ink (packet-3 t4, cluster 10; see the light theme's
+    // comment): black blended 55% toward white, 6.25:1 on `background`,
+    // 5.01:1 on `backgroundElement`, lighter than `textSecondary`.
+    textMuted: mixHex(BLACK, WHITE, 0.55),
     textSecondary: '#B0B4BA',
     // 7.3:1 against `background` — the light theme's red fails AA (3.2:1) on black.
     error: '#FF6659',
@@ -275,18 +294,42 @@ export const PressureColors = {
  * copy (§13.4) — now colors the numerals as the active timer depletes.
  * `fraction` 0 = calm, 1 = urgent; values outside 0..1 clamp.
  *
- * The endpoints are the per-theme `success`/`error` tokens, deliberately
- * NOT the theme-invariant `PressureColors`: the numerals are text practice
- * on each theme's `background` (unlike the old button's fixed gradient
- * fill), so both endpoints must clear 4.5:1 against that background —
- * light `success` 4.75:1 → `error` 6.05:1; dark `success` 10.85:1 →
- * `error` 7.3:1 (figures from the token comments above). Measured across
- * the full interpolation: the gradient's minimum contrast is 4.75:1 (light)
- * and 7.21:1 (dark), so every point on the path clears AA.
+ * Packet-3 t4 (2026-09-22): the ramp is redefined as THREE published stops
+ * in `TimerColors` below — normal → amber → expiring, piecewise-linear, so
+ * every countdown surface reads the same semantics at the same depletion.
+ * Deliberately NOT the old success→error path: the timer rule forbids red
+ * (spec §6.3.7 / §10 item 7: "No red"), and the old light endpoint WAS the
+ * theme's `error` red. All stops and the whole path clear 4.5:1 against
+ * the theme `background`: sweep minimum 4.74:1 (light) / 9.71:1 (dark),
+ * asserted in src/theme/__tests__/timer-ramp.test.ts.
  */
+export const TimerColors = {
+  light: {
+    // Plenty of time: the theme's `success` green verbatim — 4.75:1 on the
+    // cream `background`.
+    normal: Colors.light.success,
+    // Halfway-depleted warning: the palette amber family's AA-safe light
+    // text (`Palette.amber.light.text`) — 5.63:1 on cream.
+    amber: Palette.amber.light.text,
+    // Near expiry: amber deepened 62% toward black — 9.10:1 on cream. A
+    // brown-amber, deliberately NOT the `error` red (spec §10 item 7).
+    expiring: mixHex(PALETTE_HEX.amber, BLACK, 0.62),
+  },
+  dark: {
+    // The dark `success` green verbatim — 10.85:1 on black.
+    normal: Colors.dark.success,
+    // Raw amber (the dark theme's AA-safe amber text) — 9.92:1 on black.
+    amber: Palette.amber.dark.text,
+    // Near expiry: amber lifted 30% toward white (on black, "more urgent"
+    // brightens) — 12.46:1. Same warm family, never the `error` red.
+    expiring: mixHex(PALETTE_HEX.amber, WHITE, 0.3),
+  },
+} as const;
+
 export function pressureColorAt(fraction: number, scheme: 'light' | 'dark'): string {
   const t = Math.max(0, Math.min(1, fraction));
-  return mixHex(Colors[scheme].success, Colors[scheme].error, t);
+  const { normal, amber, expiring } = TimerColors[scheme];
+  return t <= 0.5 ? mixHex(normal, amber, t * 2) : mixHex(amber, expiring, (t - 0.5) * 2);
 }
 
 /**
@@ -315,6 +358,13 @@ export const CelebrationColors = {
 /**
  * `serif` is for stems and endings (the user's writing and the prompt).
  * `sans` is for everything else: buttons, labels, chrome.
+ */
+/**
+ * Type-role rule (packet-3 t4, cluster 17): within a section, a label and
+ * its helper text never share weight or size — labels take the `eyebrow`
+ * role (12/16, weight 600, spaced caps), helper text the `small` role
+ * (14/22, weight 400), both in `textSecondary`. The roles live in
+ * themed-text.tsx; the published rule is DESIGN.md §Typography.
  */
 export const Fonts = Platform.select({
   ios: {

@@ -11,8 +11,10 @@ colors:
   backgroundElement-dark: "#1e1d1c"
   backgroundSelected: "#faddba"
   backgroundSelected-dark: "#343330"
-  textSecondary: "#60646C"
+  textSecondary: "#56534f"
   textSecondary-dark: "#B0B4BA"
+  textMuted: "#6b6761"
+  textMuted-dark: "#8c8c8c"
   error: "#B3261E"
   error-dark: "#FF6659"
   accent: "#5f5f9f"
@@ -27,6 +29,12 @@ colors:
   success-dark: "#6FCF73"
   pressureCalm: "#2E7D32"
   pressureUrgent: "#B3261E"
+  timerNormal: "#2E7D32"
+  timerAmber: "#855926"
+  timerExpiring: "#5c3d1a"
+  timerNormal-dark: "#6FCF73"
+  timerAmber-dark: "#f1a145"
+  timerExpiring-dark: "#f5bd7d"
   glow: "#E8B34A"
   glowSoft: "rgba(232,179,74,0.16)"
   indigo: "#5f5f9f"
@@ -184,7 +192,17 @@ per-channel `mixHex(a, b, t)` from `theme.ts` (t = 0 gives `a`, 1 gives `b`):
 - `backgroundSelected` (pressed step) — cream blended 28% toward amber
   (light: `#faddba`) / the dark element blend blended 10% back toward cream
   (dark: `#343330`).
-- `textSecondary` — `#60646C` (light) / `#B0B4BA` (dark).
+- `textSecondary` — cream blended 66% toward black (light: `#56534f`) /
+  `#B0B4BA` (dark, unchanged). Replaces the pre-palette cool-gray `#60646C`,
+  which sat borderline on the deeper fills (4.56:1 on `backgroundSelected`);
+  the palette-derived value measures 7.08:1 on `background` and 5.87:1 on
+  `backgroundSelected` (its worst shipped pairing).
+- `textMuted` (silhouette ink, packet-3 t4) — cream blended 58% toward black
+  (light: `#6b6761`, 4.81:1 on `backgroundElement`, 5.20:1 on `background`) /
+  black blended 55% toward white (dark: `#8c8c8c`, 6.25:1 on `background`,
+  5.01:1 on `backgroundElement`). The solid replacement for opacity-dimmed
+  content (unearned/locked badges dimmed to 0.5 measured 3.83:1 title /
+  2.02:1 caption); always the weaker pairing next to `textSecondary`.
 - `error` — `#B3261E` (light) / `#FF6659` (dark; the light red fails AA on
   black at 3.2:1).
 - `accent` — raw indigo `#5f5f9f` (light) / indigo lightened 24% toward the
@@ -221,11 +239,18 @@ non-text, not held to the text bar).
 
 ### Pressure and celebration
 
-- `pressureCalm` `#2E7D32` / `pressureUrgent` `#B3261E` — theme-invariant
-  endpoints of the Save/Next urgency gradient, an interpolated cue (never a
-  countdown numeral or shame copy); the white label stays ≥ 5.13:1 across the
-  full gradient. Countdown numerals instead use `pressureColorAt`, which
-  interpolates each theme's `success` → `error` tokens.
+- `pressureCalm` `#2E7D32` / `pressureUrgent` `#B3261E` — vestigial:
+  theme-invariant endpoints of the removed Save/Next urgency gradient (the
+  on-fill consumer was removed 2026-09-15; export kept). No live consumer.
+- Timer ramp — `timerNormal` / `timerAmber` / `timerExpiring` (packet-3 t4),
+  one depleting-color cue for every countdown surface, interpolated by
+  `pressureColorAt` piecewise-linear through the three stops (normal at 0,
+  amber at 0.5 depletion, expiring at 1). Light: `#2E7D32` (4.75:1 on
+  cream) → `#855926` (5.63:1) → `#5c3d1a` (9.10:1). Dark: `#6FCF73`
+  (10.85:1) → `#f1a145` (9.92:1) → `#f5bd7d` (12.46:1). Sweep minimum over
+  the full path: 4.74:1 (light) / 9.71:1 (dark) — every point clears AA.
+  The cue deepens within the warm amber family and NEVER reaches `error`:
+  no red (spec §6.3.7 / §10 item 7), ambient pressure only, no shaming copy.
 - `glow` `#E8B34A` — decorative only (icon tint, thin card edge), never text:
   it measures 1.77:1 on the cream background and 10.98:1 on black, so it does
   not clear 4.5:1 universally and must not be used as a text color.
@@ -249,6 +274,11 @@ platform default. Sizes and line heights are RN dp (published as `px` above).
   label-above-a-group style (section and category labels).
 
 Roles without a listed weight render at RN's default weight (400).
+
+Label vs helper (packet-3 t4, cluster 17): within a section, a label and its
+helper text never share weight or size — labels take `eyebrow` (12/16,
+weight 600, spaced caps), helper text takes `small` (14/22, weight 400),
+both in `textSecondary`.
 
 ## Layout
 
@@ -275,11 +305,18 @@ applied via `minHeight`/`minWidth`.
 - **Card** — `backgroundElement` fill on `background`; optional accent stripe
   in a category `Bg` (3px left edge, decorative).
 - **Earned badge** — `glowSoft` fill; `glow` for the icon tint and card edge.
+  Unearned (locked) tiles render their content in `textMuted` — a solid,
+  AA-safe silhouette ink — instead of an opacity dim.
+- **Destructive controls** — labelled in `error` (6.05:1 light / 7.3:1 dark
+  on `background`), never in the neutral `textSecondary`/`textMuted` inks:
+  destructive actions must read as distinct from neutral ones (packet-3 t4,
+  cluster 6).
 - **Save/Next pressure** — vestigial: the on-fill consumer (the write
   screen's countdown Save button) was removed 2026-09-15 and the token
   export kept; the live depleting-color cue is the timer numerals below.
-- **Timer numerals** — colored by `pressureColorAt`, interpolating each
-  theme's `success` → `error` as the timer depletes (ambient cue only).
+- **Timer numerals** — colored by `pressureColorAt` on the `timerNormal` →
+  `timerAmber` → `timerExpiring` ramp as the timer depletes (ambient cue
+  only, never red).
 - **Pressable** — minimum touch target 44 (`MinTouchTarget`).
 
 ## Do's and Don'ts
@@ -294,5 +331,11 @@ applied via `minHeight`/`minWidth`.
 - Don't set raw rose, amber, or jade as light-theme text — they clear AA only
   on the dark theme; raw indigo is the only raw hue that clears AA as
   light-theme text on cream.
+- Don't use red in the timer cue — the ramp ends in the warm amber family
+  (`timerExpiring`), never `error`.
+- Don't render a label and its helper text at the same weight or size
+  (labels `eyebrow` 600, helpers `small` 400).
+- Don't render destructive actions in the neutral secondary inks — use
+  `error`.
 - Do treat `theme.ts` as normative — change it first, then re-publish this
   view.
