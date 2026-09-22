@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, Link } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Image, Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, Linking, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
@@ -142,6 +142,53 @@ export default function HomeScreen() {
 
   const currentPeriod = currentPeriodForRender();
 
+  // Density-independent home header (packet-3 t2b, packet-2 C5 half): the
+  // brand block used to be fixed-dp (76dp icon, 32/44 title) and demanded
+  // more width than the viewport has below the 320dp floor — at the 440dpi
+  // probe's ~116dp viewport the 68dp content column broke "AwareMe" mid-word
+  // and clipped it to "Awa" (p2n-28a). The block now scales against the
+  // measured window, capped at its designed sizes: at and above the 320dp
+  // floor the scale is 1 and the rendering is unchanged; only narrower
+  // probe-style viewports shrink it. ("AwareMe" measured 135dp wide at
+  // fontSize 32 — p2n-08's heading bounds — hence the 135/32 fit check in
+  // the test.) The same scale drives the dock tiles below: a fixed-dp dock
+  // (three ~66dp rows ≈ 223dp) overflows a 186dp-tall probe viewport
+  // entirely and pushes the header off-screen, so below the floor the
+  // dock's fixed-dp chrome yields by the same factor. Card interiors are
+  // NOT scaled — they are scroll content, not fixed chrome (t6's scope).
+  const { width: windowWidth } = useWindowDimensions();
+  const contentColumnWidth = Math.max(0, windowWidth - Spacing.four * 2);
+  // Floor 0.40: at the 440dpi probe (~116dp viewport, ~74dp scroll area after
+  // the dock) the scaled header block (padding + icon + title) fits the
+  // initial viewport with the heading whole; 0.45 left the heading's bottom
+  // ~12px at the fold. Only sub-146dp viewports ever go below scale 1.
+  const headerScale = Math.min(1, Math.max(0.4, contentColumnWidth / (320 - Spacing.four * 2)));
+  const appIconSize = Math.round(76 * headerScale);
+  const titleFontSize = Math.round(32 * headerScale * 10) / 10;
+  const titleLineHeight = Math.round(44 * headerScale * 10) / 10;
+  const taglineFontSize = Math.round(16 * headerScale * 10) / 10;
+  const taglineLineHeight = Math.round(24 * headerScale * 10) / 10;
+  const dockIconSize = Math.round(20 * headerScale);
+  const dockTileStyle = {
+    minHeight: Math.round(MinTouchTarget * headerScale),
+    paddingVertical: Spacing.two * headerScale,
+  };
+  const dockTileContentStyle = { gap: Spacing.half * headerScale };
+  const dockTileIconStyle = {
+    width: Math.round(24 * headerScale),
+    height: Math.round(24 * headerScale),
+  };
+  const dockLabelStyle = {
+    fontSize: taglineFontSize,
+    lineHeight: taglineLineHeight,
+  };
+  // Three 30%-wide tiles plus two gaps must fit the column: gap ≤ 5% of the
+  // grid width. At the 320dp floor that bound (13.6dp) sits above the
+  // designed 8dp gap, so the rendering is exactly as before; below the floor
+  // (the probe's ~68dp column) the gap yields instead of forcing the tiles
+  // to wrap into two-per-row rows that overflow the viewport again.
+  const dockGap = Math.min(Spacing.two, contentColumnWidth * 0.05);
+
   const startSitting = (timeOfDay: TimeOfDay) => {
     router.push({ pathname: '/write', params: { timeOfDay } });
   };
@@ -159,6 +206,15 @@ export default function HomeScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
+          {/* Centering lives on this inner wrapper, not on the scroll's
+              content container (packet-3 t2b): a `justifyContent: 'center'`
+              directly on the overflowing content container distributes the
+              overflow around the viewport center, pushing the header above
+              the reachable scroll region (observed at the 440dpi probe: the
+              heading rendered below the scroll fold, dump bounds inverted).
+              The wrapper grows to its content, so an overflowing column lays
+              out from the top (scrollable) while short content still centers. */}
+          <View style={styles.contentInner}>
           <View style={styles.header}>
             {/* The app icon above the title (v13 issue 05): the launcher
                 asset, so launcher → home read as one identity. (The native
@@ -174,15 +230,17 @@ export default function HomeScreen() {
               // shadows `@/assets/*` there. Relative requires resolve in
               // metro AND jest; app.json's own asset lines are relative too.
               source={require('../../assets/images/icon.png')}
-              style={styles.appIcon}
+              style={[styles.appIcon, { width: appIconSize, height: appIconSize }]}
               testID="home-app-icon"
             />
-            <ThemedText type="title">AwareMe</ThemedText>
+            <ThemedText type="title" style={{ fontSize: titleFontSize, lineHeight: titleLineHeight }}>
+              AwareMe
+            </ThemedText>
             {/* Owner feedback 2026-09-16 (v12 issue 02): the old tagline read
                 as "finish sentences" with no stated purpose. This names the
                 practice's aim without hype (§10, §13.4); two alternatives are
                 in the issue Comments for the owner to swap freely. */}
-            <ThemedText type="default" themeColor="textSecondary">
+            <ThemedText type="default" themeColor="textSecondary" style={{ fontSize: taglineFontSize, lineHeight: taglineLineHeight }}>
               A daily practice for self-esteem, one sentence at a time.
             </ThemedText>
           </View>
@@ -347,49 +405,6 @@ export default function HomeScreen() {
             </View>
           )}
 
-          <View style={styles.grid}>
-            {SECONDARY_LINKS.map(({ href, label, icon, color, colorDark }) => (
-              <Link
-                key={href}
-                href={href}
-                // One shared fill for all eight tiles (v13 issue 05): the
-                // 2026-09-11 audit's lone accentMuted Progress tile read as a
-                // bug, not a hierarchy — no tile is singled out anymore.
-                style={[styles.tile, { backgroundColor: theme.backgroundElement }]}
-                accessibilityRole="link"
-                accessibilityLabel={label}
-              >
-                <View style={styles.tileContent}>
-                  {/* Icon rendered as a View with fixed size to avoid
-                      accessibility text contributions. The glyph is
-                      decorative; the tile's accessible name comes from
-                      Link's accessibilityLabel above (§13.5). */}
-                  <View style={styles.tileIcon}>
-                    <Ionicons
-                      name={icon}
-                      size={20}
-                      color={resolveTileColor(resolvedScheme === 'dark' ? colorDark : color, theme.accent)}
-                    />
-                  </View>
-                  {/* numberOfLines={1} (v14 issue 12: a lone "s" of "Progress"
-                      wrapped to a second line at narrow widths) — no tile label
-                      may ever wrap. The freed-up horizontal padding (Spacing.one,
-                      below) is what makes "Progress" actually fit on one line
-                      at the 320pt floor, so this is a guarantee of last resort,
-                      not the sizing fix itself. */}
-                  <ThemedText
-                    type="default"
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                    style={styles.tileLabel}
-                  >
-                    {label}
-                  </ThemedText>
-                </View>
-              </Link>
-            ))}
-          </View>
-
           {__DEV__ && (
             <Link
               href="/debug"
@@ -412,7 +427,69 @@ export default function HomeScreen() {
           >
             Created by Nicolo’ Brandizzi
           </ThemedText>
+          </View>
         </ScrollView>
+
+        {/*
+          The nav dock (packet-3 t2a, packet-2 C1 REPRODUCED): pinned BELOW
+          the scrolling content, not the last block inside it. The grid used
+          to scroll with the home content — on a 320x640 viewport it landed
+          below the fold at initial scroll (first row ~83% clipped, a11y
+          bounds inverted, 16/16 tap probes dead: p2n-08/09) while reading as
+          a fixed tab bar; as a pinned bar it is reachable and tappable at
+          any scroll position on any screen size, and it no longer floats
+          mid-content when the page scrolls (packet-2's p2n-24 note). The
+          tiles themselves are unchanged (3-column wrap, 30% width, one-line
+          labels, 44+ targets).
+
+          Moving it ABOVE the cards was rejected: it would push the day's
+          primary action (the week card's Start CTA, §6.2) below the 320px
+          fold — trading a secondary-nav defect for a primary-action one.
+        */}
+        <View style={[styles.dock, { borderColor: theme.border }]}>
+          <View style={[styles.grid, { gap: dockGap }]}>
+            {SECONDARY_LINKS.map(({ href, label, icon, color, colorDark }) => (
+              <Link
+                key={href}
+                href={href}
+                // One shared fill for all eight tiles (v13 issue 05): the
+                // 2026-09-11 audit's lone accentMuted Progress tile read as a
+                // bug, not a hierarchy — no tile is singled out anymore.
+                style={[styles.tile, { backgroundColor: theme.backgroundElement }, dockTileStyle]}
+                accessibilityRole="link"
+                accessibilityLabel={label}
+              >
+                <View style={[styles.tileContent, dockTileContentStyle]}>
+                  {/* Icon rendered as a View with fixed size to avoid
+                      accessibility text contributions. The glyph is
+                      decorative; the tile's accessible name comes from
+                      Link's accessibilityLabel above (§13.5). */}
+                  <View style={[styles.tileIcon, dockTileIconStyle]}>
+                    <Ionicons
+                      name={icon}
+                      size={dockIconSize}
+                      color={resolveTileColor(resolvedScheme === 'dark' ? colorDark : color, theme.accent)}
+                    />
+                  </View>
+                  {/* numberOfLines={1} (v14 issue 12: a lone "s" of "Progress"
+                      wrapped to a second line at narrow widths) — no tile label
+                      may ever wrap. The freed-up horizontal padding (Spacing.one,
+                      below) is what makes "Progress" actually fit on one line
+                      at the 320pt floor, so this is a guarantee of last resort,
+                      not the sizing fix itself. */}
+                  <ThemedText
+                    type="default"
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    style={[styles.tileLabel, dockLabelStyle]}
+                  >
+                    {label}
+                  </ThemedText>
+                </View>
+              </Link>
+            ))}
+          </View>
+        </View>
       </SafeAreaView>
 
       {/* The animated entrance sequence (v14 issue 01): logo → AwareMe →
@@ -435,15 +512,31 @@ const styles = StyleSheet.create({
   scroll: {
     flex: 1,
   },
+  dock: {
+    // Hairline separation from the scrolling content above (theme token —
+    // borderColor is applied inline where the theme is in scope).
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.one,
+    paddingHorizontal: Spacing.four,
+    alignSelf: 'center',
+    maxWidth: MaxContentWidth,
+    width: '100%',
+  },
   content: {
     flexGrow: 1,
-    justifyContent: 'center',
-    gap: Spacing.four,
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.five,
     alignSelf: 'center',
     maxWidth: MaxContentWidth,
     width: '100%',
+  },
+  contentInner: {
+    // The centering wrapper — see the render-site comment: centering on the
+    // scroll's own content container makes overflow unreachable at the top.
+    flexGrow: 1,
+    justifyContent: 'center',
+    gap: Spacing.four,
   },
   header: {
     gap: Spacing.one,
@@ -493,9 +586,12 @@ const styles = StyleSheet.create({
     // last row — the previous `minWidth: '30%'` + `flexGrow: 1` let a short
     // last row stretch wider than the rows above it (measured 3-3-2 ragged
     // grid, H3). 30% leaves room for the two 8pt row gaps within a 3-column
-    // row at any supported screen width.
+    // row at any supported screen width. Vertical padding is Spacing.two
+    // (packet-3 t2a): as a pinned dock the three rows live inside the
+    // viewport alongside the content, so the rows stay compact (~62dp);
+    // the 44dp touch floor still holds via minHeight.
     width: '30%',
-    paddingVertical: Spacing.three,
+    paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.one,
     borderRadius: Radius.medium,
     alignItems: 'center',
