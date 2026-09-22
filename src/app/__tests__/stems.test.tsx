@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 
 import StemsScreen from '@/app/stems';
 import { LibraryStemRow } from '@/db';
-import { Palette } from '@/constants/theme';
+import { Palette, Spacing } from '@/constants/theme';
 
 // `useFocusEffect` no-ops without a real navigation tree (see
 // node_modules/expo-router/build/useFocusEffect.js); run the effect once on
@@ -254,6 +254,32 @@ describe('StemsScreen', () => {
     // The raw enum never leaks as copy.
     expect(screen.queryByText('morning')).toBeNull();
     expect(screen.queryByText(/seed/)).toBeNull();
+  });
+
+  // t11 (packet-3, cluster 7 remainder routed from t6's FLAG 18:04): the
+  // category chip strip is a full-width horizontal ScrollView, so its chips
+  // painted flush to the screen border at 320dp (banked probe: non-bg pixels
+  // in the last-6-px edge column of the chip band) instead of respecting the
+  // Spacing.four screen margin every other block on this screen uses
+  // (controlsRow, programmeRow, actionBar). The strip must be inset by that
+  // same margin, and its scroll content must not add a second horizontal
+  // padding on top of the inset — that would double-indent the first chip
+  // away from the Search input above it.
+  it('insets the category chip strip by the screen margin with no second scroll padding', () => {
+    render(<StemsScreen />);
+
+    // Walk up from the category row's 'All' chip to the horizontal ScrollView
+    // (the only rendered node carrying contentContainerStyle; the week
+    // picker's ScrollView lives inside a closed Modal).
+    let node = screen.getByText('All');
+    while (node && node.props.contentContainerStyle === undefined) node = node.parent;
+    expect(node).toBeTruthy();
+
+    const outer = StyleSheet.flatten(node.props.style);
+    expect(outer.marginHorizontal).toBe(Spacing.four);
+
+    const content = StyleSheet.flatten(node.props.contentContainerStyle);
+    expect(content.paddingHorizontal).toBeUndefined();
   });
 
   // Issue 15: custom authoring is discoverable from the library itself — a
