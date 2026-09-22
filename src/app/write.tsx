@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -466,6 +467,16 @@ export default function WriteScreen() {
     }
   }, [session.phase, session.state?.activeOrdinal]);
 
+  // Packet-3 t5 (d10-04): when the session machine ends a session on its
+  // own — the timer's timeout auto-advance, or Done — the focused field's
+  // IME used to stay up over whatever came next (the next stem's prep
+  // gate, or the completion block). Dismiss once per 'done' transition;
+  // a no-op when no keyboard is showing. Covers the practice path and the
+  // reflection flows alike — they share this hook.
+  useEffect(() => {
+    if (session.phase === 'done') Keyboard.dismiss();
+  }, [session.phase]);
+
   if (eveningOff) {
     return (
       <ThemedView style={styles.container}>
@@ -572,7 +583,7 @@ export default function WriteScreen() {
                   hitSlop={12}
                   style={styles.exitButton}
                   accessibilityRole="button"
-                  accessibilityLabel="Exit session"
+                  accessibilityLabel="Close"
                 >
                   <ThemedText type="small" themeColor="textSecondary">
                     Close
@@ -762,7 +773,7 @@ function ReflectionFlowView({
                 hitSlop={12}
                 style={styles.exitButton}
                 accessibilityRole="button"
-                accessibilityLabel="Exit reflection"
+                accessibilityLabel="Close"
               >
                 <ThemedText type="small" themeColor="textSecondary">
                   Close

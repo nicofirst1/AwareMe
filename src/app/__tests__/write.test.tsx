@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Keyboard } from 'react-native';
 
 import WriteScreen from '@/app/write';
 import { type Settings, type StemRow } from '@/db';
@@ -426,6 +427,49 @@ describe('WriteScreen — open review sessions resume into their flow (c05-queue
     expect(mockRepoState.createdSessions).toEqual([]);
   });
 });
+
+// Packet-3 t5: the writing input's field treatment (render-level pins live
+// in write-action-bar.test.tsx), the IME surviving the timer-expiry
+// auto-advance (d10-04), and the exit control's label/desc mismatch
+// (p2n-10).
+describe('WriteScreen — input field, keyboard, and exit-label alignment', () => {
+  it('dismisses the keyboard when the session timer expires and auto-advances (d10-04)', async () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    mockParams.value = { timeOfDay: 'morning' };
+    mockRepoState.settings = { timer_seconds: 1 };
+    render(<WriteScreen />);
+
+    await screen.findByText(/Stem 1 of 3/);
+    fireEvent.press(screen.getByText('Start'));
+    await screen.findByLabelText('Your ending');
+
+    // The session hook's own 1s interval drains the 1s timer and finalizes
+    // with end_reason 'timeout'; the screen auto-advances to the next
+    // stem's Start gate. The IME must not ride along (d10-04).
+    await screen.findByText(/Stem 2 of 3/, {}, { timeout: 4000 });
+    expect(dismiss).toHaveBeenCalled();
+    dismiss.mockRestore();
+  });
+
+  it('the prep gate exit control reads the same to eyes and screen readers (p2n-10)', async () => {
+    mockParams.value = { timeOfDay: 'morning' };
+    render(<WriteScreen />);
+    await screen.findByText(/Stem 1 of 3/);
+
+    expect(screen.getByLabelText('Close')).toBeTruthy();
+    expect(screen.queryByLabelText('Exit session')).toBeNull();
+  });
+
+  it('the reflection reread exit control reads the same to eyes and screen readers', async () => {
+    mockParams.value = { timeOfDay: 'evening' };
+    render(<WriteScreen />);
+    await screen.findByText(/Evening reflection/);
+
+    expect(screen.getByLabelText('Close')).toBeTruthy();
+    expect(screen.queryByLabelText('Exit reflection')).toBeNull();
+  });
+});
+
 
 describe('WriteScreen — badge reveal on the completion screen (issue 17)', () => {
   // Gamification proposal §1.A/§1.B: the completion block reveals the
