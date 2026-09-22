@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments }
 import { useEffect } from 'react';
 
 import { LockScreen } from '@/components/lock-screen';
+import { AppStatusBar } from '@/components/app-status-bar';
 import { getRepository } from '@/db';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useNotificationScheduler, useNotificationTapRouting } from '@/notifications/useNotifications';
@@ -54,6 +55,9 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={theme}>
+      {/* One root-owned status bar: dark content on the light theme's cream
+          surfaces, light content on dark (ticket t1, packet-3). */}
+      <AppStatusBar />
       {lock.checking ? null : lock.locked ? <LockScreen onUnlock={lock.authenticate} /> : <Stack screenOptions={{ headerShown: false }} />}
     </ThemeProvider>
   );
