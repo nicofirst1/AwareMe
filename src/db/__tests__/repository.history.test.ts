@@ -23,6 +23,19 @@ function stemWithCategory(repo: Repository, category: string): { id: string; tex
   return { id, text };
 }
 
+/**
+ * Gives a fixture session one non-empty ending (t10, owner decision
+ * 2026-09-22: a session with zero non-empty endings never counts as
+ * complete, so a history-list fixture needs content to be listed at all —
+ * the zero-ending exclusion itself is pinned in
+ * `repository.zeroContent.test.ts`).
+ */
+function withEnding(repo: Repository, sessionId: string, at: string): void {
+  repo.recordFirstKeypress(sessionId, 1, at);
+  repo.autosaveEndingText(sessionId, 1, 'something true', 0, at);
+  repo.submitEnding(sessionId, 1, at);
+}
+
 describe('Repository.listSessionsForHistory', () => {
   it('lists non-deleted sessions reverse-chronologically with stem text/category', () => {
     const { repo } = freshRepository();
@@ -48,6 +61,8 @@ describe('Repository.listSessionsForHistory', () => {
       startedAt: '2026-09-05T08:00:00.000Z',
       deviceLocale: 'en-US',
     });
+    withEnding(repo, idOld, '2026-09-01T08:01:00.000Z');
+    withEnding(repo, idNew, '2026-09-05T08:01:00.000Z');
 
     const rows = repo.listSessionsForHistory();
     expect(rows.map((r) => r.id)).toEqual([idNew, idOld]);
@@ -68,6 +83,7 @@ describe('Repository.listSessionsForHistory', () => {
       startedAt: '2026-09-05T08:00:00.000Z',
       deviceLocale: 'en-US',
     });
+    withEnding(repo, id, '2026-09-05T08:01:00.000Z');
     db.prepare('UPDATE sessions SET deleted_at = ? WHERE id = ?').run('2026-09-06T00:00:00.000Z', id);
 
     expect(repo.listSessionsForHistory()).toHaveLength(0);
@@ -78,7 +94,7 @@ describe('Repository.listSessionsForHistory', () => {
     const awareness = stemWithCategory(repo, 'awareness');
     const purpose = stemWithCategory(repo, 'purpose');
 
-    repo.createSession({
+    const awarenessId = repo.createSession({
       stemId: awareness.id,
       stemTextSnapshot: awareness.text,
       origin: 'manual',
@@ -88,6 +104,7 @@ describe('Repository.listSessionsForHistory', () => {
       startedAt: '2026-09-01T08:00:00.000Z',
       deviceLocale: 'en-US',
     });
+    withEnding(repo, awarenessId, '2026-09-01T08:01:00.000Z');
     const purposeId = repo.createSession({
       stemId: purpose.id,
       stemTextSnapshot: purpose.text,
@@ -98,6 +115,7 @@ describe('Repository.listSessionsForHistory', () => {
       startedAt: '2026-09-10T08:00:00.000Z',
       deviceLocale: 'en-US',
     });
+    withEnding(repo, purposeId, '2026-09-10T08:01:00.000Z');
 
     expect(repo.listSessionsForHistory({ stemId: purpose.id })).toHaveLength(1);
     expect(repo.listSessionsForHistory({ category: 'purpose' }).map((r) => r.id)).toEqual([purposeId]);
@@ -166,6 +184,7 @@ describe('Repository.softDeleteSession', () => {
       deviceLocale: 'en-US',
     });
     repo.recordFirstKeypress(sessionId, 1, '2026-09-10T08:00:05.000Z');
+    repo.autosaveEndingText(sessionId, 1, 'something true', 0, '2026-09-10T08:00:06.000Z');
 
     repo.softDeleteSession(sessionId, '2026-09-11T00:00:00.000Z');
 
