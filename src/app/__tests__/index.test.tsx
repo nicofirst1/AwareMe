@@ -363,6 +363,83 @@ describe('HomeScreen', () => {
     expect(dockLabel.fontSize).toBe(16);
   });
 
+  it('keeps the review action link out of the metadata ink', () => {
+    // Packet-3 t6 (packet-2 cluster 11, p2f-27): "Review available" is a
+    // tappable action while "N sessions this week" is inert metadata — the
+    // pre-fix tree rendered both `small`/400 in `textSecondary` (audit:
+    // "same weight for different information types"). The link text now
+    // reads full ink. Accent stays off the TEXT (accent clears AA only on
+    // `background`, 4.35:1 on the card's `backgroundElement` fill — the
+    // 2026-09-15 review finding); the chevron keeps the accent affordance.
+    render(<HomeScreen />);
+    const review = StyleSheet.flatten(screen.getByText('Review available').props.style) as {
+      color?: string;
+    };
+    expect(review.color).toBe(Colors.light.text);
+    // The inert counters keep the secondary ink — the distinction is the point.
+    const metadata = StyleSheet.flatten(screen.getByText('1 session this week').props.style) as {
+      color?: string;
+    };
+    expect(metadata.color).toBe(Colors.light.textSecondary);
+  });
+
+  it('separates the practice card into state, action, and metadata groups', () => {
+    // Packet-3 t6 (packet-2 cluster 11, p2f-27): the state line, the CTA,
+    // and the metadata footer sat in one uniformly-spaced block (the card's
+    // base 8dp gap everywhere), so the completion message read as the
+    // button's caption ("overlay pattern creates hierarchy confusion",
+    // audit-hierarchy-typography.md p2f-27). The action row and the
+    // metadata footer carry their own top margin on top of the base gap:
+    // 16dp of separation around the CTA vs 8dp inside the state group and
+    // 4dp inside the metadata group — three proximity groups, three type
+    // treatments (subtitle 600 state / filled CTA / small 400 metadata).
+    render(<HomeScreen />);
+    const json = screen.toJSON() as { type?: string; children?: unknown[] };
+    type JsonNode = { type?: string; props?: { style?: unknown }; children?: unknown[] };
+    // Node chain whose LAST node directly contains the marker string.
+    const chainToText = (node: JsonNode, text: string, chain: JsonNode[]): JsonNode[] | null => {
+      const next = [...chain, node];
+      for (const child of (node.children ?? []) as unknown[]) {
+        if (typeof child === 'string') {
+          if (child === text) return next;
+          continue;
+        }
+        const found = chainToText(child as JsonNode, text, next);
+        if (found) return found;
+      }
+      return null;
+    };
+    // Button label chain: [..., startRow View, Pressable host, Text] — the
+    // action row is two hosts above the label text.
+    const startChain = chainToText(json, 'Start morning practice', []);
+    expect(startChain).not.toBeNull();
+    const startRow = startChain![startChain!.length - 3] as JsonNode;
+    expect(StyleSheet.flatten(startRow.props?.style)).toMatchObject({ marginTop: Spacing.two });
+    // Metadata chain: [..., statusFooter View, Text].
+    const metaChain = chainToText(json, '1 session this week', []);
+    expect(metaChain).not.toBeNull();
+    const footer = metaChain![metaChain!.length - 2] as JsonNode;
+    expect(StyleSheet.flatten(footer.props?.style)).toMatchObject({ marginTop: Spacing.two });
+  });
+
+  it('renders the practice state as the card headline (subtitle role)', () => {
+    // Regression guard (green pre-fix): the state line is the card's one
+    // 600-weight headline — the practice-state text must not drift toward a
+    // metadata treatment while the groups are being separated. The default
+    // stub tree renders "1 stem ready" as the state line; same node either way.
+    render(<HomeScreen />);
+    const stateText =
+      screen.queryByText('Morning practice complete') ?? screen.getByText('1 stem ready');
+    const flattened = StyleSheet.flatten(stateText.props.style) as {
+      fontWeight?: string;
+      fontSize?: number;
+      lineHeight?: number;
+    };
+    expect(flattened.fontWeight).toBe('600');
+    expect(flattened.fontSize).toBe(20);
+    expect(flattened.lineHeight).toBe(30);
+  });
+
   it('has a tappable creator footer', () => {
     render(<HomeScreen />);
     expect(screen.getByText("Created by Nicolo’ Brandizzi")).toBeTruthy();

@@ -60,6 +60,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     minHeight: MinTouchTarget,
+    // Packet-3 t6 (packet-2 cluster 7, p2n-25): when the trailing action is
+    // too wide to share the line, the row used to shrink the title below
+    // its word width and Android broke it mid-word ("Stems" → "Stem"/"s";
+    // the title's 83dp box was 13dp short of the word's ~96dp at fontSize
+    // 32). With `wrap`, the trailing action yields its own line instead and
+    // the title keeps its full one-line width — a single-word title can
+    // never word-wrap, so it never breaks mid-word. Rendering is unchanged
+    // wherever title + actions already fit (the wrap only engages on
+    // overflow); device proof: Stems screen at 320dp before/after (t6
+    // captures) with history.tsx as the no-trailing-action control.
+    flexWrap: 'wrap',
   },
   title: {
     flexShrink: 1,
