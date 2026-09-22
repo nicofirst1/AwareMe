@@ -1,9 +1,18 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Linking, StyleSheet } from 'react-native';
+import { Dimensions, Linking, StyleSheet } from 'react-native';
 
 import HomeScreen from '@/app/index';
-import { Colors } from '@/constants/theme';
+import { Colors, Spacing } from '@/constants/theme';
 import { DEFAULT_SETTINGS, type Settings } from '@/db';
+
+// The home header (packet-3 t2b) scales itself against the measured viewport,
+// so the narrow-viewport tests set the window through the real Dimensions
+// API (useWindowDimensions reads it); each test restores the default. The
+// default here is a normal-phone geometry.
+const DEFAULT_TEST_WINDOW = { width: 411, height: 891, scale: 2, fontScale: 1 };
+const setTestWindow = (width: number, height: number, scale = 1): void => {
+  Dimensions.set({ window: { width, height, scale, fontScale: 1 } });
+};
 
 // The splash entrance sequence (v14 issue 01) runs its own timers and
 // reads AccessibilityInfo on mount — both belong to its own test file
@@ -78,6 +87,7 @@ const todayName = (): string => WEEKDAY_NAMES[new Date().getDay()];
 describe('HomeScreen', () => {
   afterEach(() => {
     mockRepository.getSettings = () => DEFAULT_SETTINGS;
+    setTestWindow(DEFAULT_TEST_WINDOW.width, DEFAULT_TEST_WINDOW.height, DEFAULT_TEST_WINDOW.scale);
   });
 
   it('renders the week card with the derived week, stem count, and a review row', () => {
@@ -249,6 +259,108 @@ describe('HomeScreen', () => {
     // v14 issue 01: the home screen mounts the (self-dismissing) entrance
     // overlay; the mock above stands in for its timers.
     expect(screen.getByTestId('splash-sequence')).toBeTruthy();
+  });
+
+  it('pins the nav dock outside the scrolling content, below it', () => {
+    // Packet-3 t2a (packet-2 C1): the grid used to be the last block INSIDE
+    // the home ScrollView — on a 320x640 viewport it landed below the fold
+    // (first row ~83% clipped at initial scroll, a11y bounds inverted,
+    // 16/16 tap probes dead: p2n-08/09). Pinned outside the scroll area it
+    // is reachable and tappable at any scroll position. What jest can reach
+    // is the mechanism (the tiles must not be scroll-content); the on-device
+    // tap-probe captures carry the visual half.
+    render(<HomeScreen />);
+    const tileLabels = ['Stems', 'History', 'Review', 'Progress', 'Settings', 'Export', 'Import', 'About'];
+    const json = screen.toJSON() as { type?: string; children?: unknown[] };
+    type Node = { type?: string; children?: unknown[] };
+    const findScrollAncestry = (node: Node, inScroll: boolean, visit: (tile: Node, inside: boolean) => void): void => {
+      const nowInScroll = inScroll || /Scroll/i.test(node.type ?? '');
+      if (typeof node === 'string') return;
+      (node.children ?? []).forEach((child) => {
+        if (typeof child === 'string') {
+          if (tileLabels.includes(child)) visit(node, nowInScroll);
+          return;
+        }
+        findScrollAncestry(child as Node, nowInScroll, visit);
+      });
+    };
+    let insideCount = 0;
+    let seen = 0;
+    findScrollAncestry(json, false, (_tile, inside) => {
+      seen += 1;
+      if (inside) insideCount += 1;
+    });
+    expect(seen).toBe(tileLabels.length);
+    expect(insideCount).toBe(0);
+    // The scroll's content container must not carry the vertical centering
+    // itself: `justifyContent: 'center'` on an overflowing content container
+    // pushes the header above the reachable scroll region (observed at the
+    // 440dpi probe — heading below the fold, inverted dump bounds). The
+    // centering lives on the inner wrapper instead.
+    const findScrollView = (node: Node): Node | null => {
+      if (/Scroll/i.test(node.type ?? '')) return node;
+      for (const child of (node.children ?? []) as Node[]) {
+        if (typeof child === 'string') continue;
+        const found = findScrollView(child);
+        if (found) return found;
+      }
+      return null;
+    };
+    const scrollView = findScrollView(json);
+    expect(scrollView).not.toBeNull();
+    const contentContainer = StyleSheet.flatten(
+      (scrollView as { props?: { contentContainerStyle?: unknown } }).props?.contentContainerStyle,
+    ) as { justifyContent?: string };
+    expect(contentContainer.justifyContent).toBeUndefined();
+  });
+
+  it('shrinks the header brand block below the 320dp floor so the title fits its line', () => {
+    // Packet-3 t2b (packet-2 C5 half): at the 440dpi probe geometry
+    // (~116x186dp viewport) the 32dp title could not fit the ~68dp content
+    // column and Android broke "AwareMe" mid-word, clipping it to "Awa"
+    // (p2n-28a). "AwareMe" measured 135dp wide at fontSize 32 (p2n-08 dump,
+    // heading bounds [92,136][227,180]), so the fitted size must keep
+    // fontSize x 135/32 within the measured content width.
+    setTestWindow(116, 186, 2.75);
+    render(<HomeScreen />);
+    const title = screen.getByText('AwareMe');
+    const flattened = StyleSheet.flatten(title.props.style) as { fontSize?: number };
+    const contentWidth = 116 - Spacing.four * 2;
+    expect((flattened.fontSize ?? 32) * (135 / 32)).toBeLessThanOrEqual(contentWidth + 0.5);
+    // The icon shrinks with the same block — it may not claim the narrow
+    // viewport at its fixed 76dp either.
+    const icon = screen.getByTestId('home-app-icon');
+    const iconStyle = StyleSheet.flatten(icon.props.style) as { width?: number };
+    expect(iconStyle.width ?? 76).toBeLessThan(76);
+    // The dock yields by the same factor below the floor: a fixed-dp dock
+    // (three ~66dp rows) alone overflows the ~186dp probe viewport and
+    // pushes the header off-screen (verified on-device, first 440 after-pass).
+    const dockLabel = StyleSheet.flatten(screen.getByText('Stems').props.style) as {
+      fontSize?: number;
+    };
+    expect(dockLabel.fontSize ?? 16).toBeLessThan(16);
+  });
+
+  it('keeps the header at its designed sizes at and above the 320dp floor', () => {
+    // Density independence is a floor-shrink, not a rescale: at the 320dp
+    // floor and every larger viewport the header renders exactly as before.
+    setTestWindow(320, 640);
+    render(<HomeScreen />);
+    const flattened = StyleSheet.flatten(screen.getByText('AwareMe').props.style) as {
+      fontSize?: number;
+      lineHeight?: number;
+    };
+    expect(flattened.fontSize).toBe(32);
+    expect(flattened.lineHeight).toBe(44);
+    const iconStyle = StyleSheet.flatten(screen.getByTestId('home-app-icon').props.style) as {
+      width?: number;
+    };
+    expect(iconStyle.width).toBe(76);
+    // Dock tiles ride the same scale: at the floor they are untouched.
+    const dockLabel = StyleSheet.flatten(screen.getByText('Stems').props.style) as {
+      fontSize?: number;
+    };
+    expect(dockLabel.fontSize).toBe(16);
   });
 
   it('has a tappable creator footer', () => {
