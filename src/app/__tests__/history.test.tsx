@@ -90,6 +90,14 @@ describe('HistoryScreen', () => {
     expect(screen.getAllByLabelText(/^Open session:/).length).toBeGreaterThanOrEqual(3);
   });
 
+  // Packet-3 t9 capitalization/copy pass: user-visible copy carries curly
+  // apostrophes (repo copy rule); this placeholder had a straight one.
+  it('renders the search placeholder per the curly-apostrophe copy rule', () => {
+    render(<HistoryScreen />);
+
+    expect(screen.getByPlaceholderText('Search what you’ve written')).toBeTruthy();
+  });
+
   it('reveals the three filter rows when the toggle is expanded and applies a chip press', () => {
     render(<HistoryScreen />);
 

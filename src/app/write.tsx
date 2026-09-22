@@ -680,8 +680,13 @@ export default function WriteScreen() {
                     transform: [{ scale: settleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }],
                   }}
                 >
+                  {/* Packet-3 t9 (routed from the t5 verdict via the t10 row,
+                      packet-2 C8): the acknowledgment names its object — the
+                      bare "Saved." said nothing. Quiet, no evaluation
+                      (§13.4); settings' own saved notice keeps "Saved."
+                      (different object, not this item). */}
                   <ThemedText type="default" themeColor="textSecondary">
-                    Saved.
+                    Session saved.
                   </ThemedText>
                   {session.state?.endedAt && (
                     // Computed at read time from the session's own timestamps
@@ -760,7 +765,7 @@ function ReflectionFlowView({
         <SafeAreaView style={styles.safeArea}>
           <ThemedView style={styles.scrollContent}>
             <ThemedText type="default" themeColor="textSecondary">
-              Saved.
+              Session saved.
             </ThemedText>
             <Button label="Close" onPress={() => router.back()} />
           </ThemedView>
@@ -899,7 +904,7 @@ function ReflectionFlowView({
             {session.phase === 'done' && (
               <ThemedView style={styles.doneBlock}>
                 <ThemedText type="default" themeColor="textSecondary">
-                  Saved.
+                  Session saved.
                 </ThemedText>
                 {/* The completion effect records the review row and flips the
                     flow to 'done' — this frame only shows while that is in

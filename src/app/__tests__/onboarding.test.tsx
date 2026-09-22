@@ -158,11 +158,11 @@ describe('OnboardingScreen', () => {
   it('pins the committed Reminders ask and drops the old reassurance paragraphs', () => {
     render(<OnboardingScreen />);
 
-    // 36d1c1f copy pass: the ask is one plain sentence naming the button
-    // (the on-screen quotes render from &quot; escapes in onboarding.tsx).
+    // 36d1c1f copy pass; packet-3 t9: touch wording (tap, not click) and
+    // the quoted label matches the actual button (sentence case).
     expect(
       screen.getByText(
-        'This app can remind you of your daily practice, click "Allow Reminders" if you want to be notified.',
+        'This app can remind you of your daily practice, tap "Allow reminders" if you want to be notified.',
       ),
     ).toBeTruthy();
     // Owner feedback 2026-09-17: the notification-privacy sentence and the

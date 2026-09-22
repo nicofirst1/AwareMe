@@ -230,6 +230,6 @@ describe('ReviewScreen', () => {
         reflectionText: 'My reflection text.',
       }),
     );
-    expect(screen.getByText('Saved.')).toBeTruthy();
+    expect(screen.getByText('Session saved.')).toBeTruthy();
   });
 });

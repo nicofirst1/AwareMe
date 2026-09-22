@@ -206,7 +206,8 @@ export default function OnboardingScreen() {
           <ThemedView style={[styles.page, { width }]}>
             <ThemedText type="title">Reminders</ThemedText>
             <ThemedText type="default">
-              This app can remind you of your daily practice, click &quot;Allow Reminders&quot; if you want to be notified.
+              This app can remind you of your daily practice, tap &quot;Allow reminders&quot; if you want to be
+              notified.
             </ThemedText>
             {/* v14 issue 04: the primary variant makes the ask read as the
                 tab's one button (the default secondary read as body text);
