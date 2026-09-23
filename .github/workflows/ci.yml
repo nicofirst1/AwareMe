@@ -1,6 +1,7 @@
 # Continuous integration for AwareMe.
 #
-# Mirrors the local gate trio (typecheck / jest / expo lint) on a fresh clone
+# Mirrors the local gates (typecheck / jest / expo lint / design-token lint) on
+# a fresh clone
 # of the repo. The workflow assumes nothing about the machine it runs on: no
 # private content, no local paths, no secrets. Files that are gitignored
 # locally never exist here, and the suite is expected to be green without them.
@@ -22,7 +23,7 @@ permissions:
 
 jobs:
   gates:
-    name: typecheck, jest, lint
+    name: typecheck, jest, lint, design-lint
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -62,6 +63,13 @@ jobs:
         run: npx jest
 
       - name: Lint
-        # Baseline is 0 errors and 16 warnings. Warnings do not fail the run;
+        # Baseline is 0 errors and 13 warnings. Warnings do not fail the run;
         # any error does (default eslint exit behaviour).
         run: npx expo lint
+
+      - name: Design tokens lint
+        # Validates docs/design/DESIGN.md (Google design.md format, ADR-0006)
+        # against the spec: structure, section order, broken token refs, WCAG
+        # contrast pairs. Baseline is 0 errors / 83 warnings; warnings do not
+        # fail the run, any error does (exit code 1).
+        run: npm run design:lint

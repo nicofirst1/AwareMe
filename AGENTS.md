@@ -17,10 +17,11 @@ This file is a map. The targets are the sources of truth; when a pointer and its
 - **Seed content** — the content-overlay seam (`src/db/seed/stems.ts` header; ADR-0005). The official programme text lives ONLY in gitignored `stems.content.ts`; the committed `stems.content.example.ts` keeps fresh clones and CI green with labeled skips. Example content is original text — never retype programme or Branden text from memory, books, or the web (spec §5.1).
 - **License & publish surface** — GPLv3; `NOTICE` carries the programme-text carve-out (not included, not sublicensed). Never commit the licensed programme text, the verbatim snapshot, `stems.content.ts`, or store/clearance materials; `.scratch/`, `.coordination/`, `store/`, `.worktrees/` are untracked by design (see `.gitignore`).
 - **Product identity** — brand is AwareMe; "six endings" is method copy (CONCEPT). Scheme `sixendings`, bundle ids, DB filename, notification ids are frozen pending owner decisions (issue 14) — don't touch without an owner call.
+- **Design tokens** — `docs/design/DESIGN.md` publishes the theme as a Google design.md file (ADR-0006): tokens in YAML front matter, rationale in prose. It is a published view — `src/constants/theme.ts` stays normative; change it first, then re-publish. Lint with `npm run design:lint`.
 - **Gamification** — `docs/design/gamification-proposal-2026-09-11.md` is its only sanctioned scope.
 - **Export** — spec §8: lossless formats; the export→wipe→import→export round-trip test must stay green.
 - **Extra deps** — `expo-linking`, `expo-crypto` are non-discretionary; rationale in `DECISIONS.md`.
-- **Commands** — `package.json`. Gates: `npm run typecheck`, `npx jest` (exclude `/.worktrees/` on main), `npm run lint`. Emulator: `./scripts/emulator.sh` (bounded boot wait). Release APK: `./scripts/rebuild-android.sh` (a debug APK has no JS bundle and runs only tethered to Metro).
+- **Commands** — `package.json`. Gates: `npm run typecheck`, `npx jest` (exclude `/.worktrees/` on main), `npm run lint`, `npm run design:lint`. Emulator: `./scripts/emulator.sh` (bounded boot wait). Release APK: `./scripts/rebuild-android.sh` (a debug APK has no JS bundle and runs only tethered to Metro).
 - **Jest failing with `Cannot find module 'expo-asset'`** — known recurring `node_modules` gap; remedy in `DECISIONS.md`.
 
 ## Agent skills

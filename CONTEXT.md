@@ -17,3 +17,7 @@ A local, offline sentence-completion journaling app. The user repeatedly complet
 **Review**: A periodic, re-reading-first activity (default weekly, also on demand): re-read every ending from a selectable recent period (default 7 days) read-only, then complete one meta-stem as a timed session. Not itself a stem-writing session. _Avoid_: recap, reflection, summary
 
 **Meta-stem**: A stem completed _about the user's own recent endings_ rather than about their life directly. Used only in review. _Avoid_: review prompt, reflection prompt
+
+## Design
+
+The visual identity is published as a Google design.md file: `docs/design/DESIGN.md` — tokens in YAML front matter, rationale in prose. It is a **published view**: `src/constants/theme.ts` (colors, spacing, radius) and `src/components/themed-text.tsx` (typography) are normative; change them first, then re-publish. Every color derives from five owner hues (indigo, rose, cream, amber, jade); dark-theme variants carry a `-dark` suffix. Lint with `npm run design:lint`. See `docs/adr/0006-design-md-format.md`.

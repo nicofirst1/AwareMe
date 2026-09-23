@@ -56,7 +56,7 @@ This file is an index, not the record: each entry points at the authoritative do
 - **Official programme (2026-09-15/16)** — ADR-0005 is the decision record; round records under `.scratch/official-program/` (verbatim list snapshot included).
 - **Lint baseline (2026-09-17)** — `react-hooks/set-state-in-effect` at `warn` in the committed `eslint.config.js`; 4 known sites remain, dispositioned: 2 are ADR-0001's cold-start mount sites by design, 2 documented in issue 17. Baseline: 0 errors / 13 warnings.
 - **v1.2 feedback round** — completed 2026-09-17; all 23 issues in `.scratch/v12-feedback/` done or dispositioned (untracked).
-- **DESIGN.md adoption (2026-09-22)** — `docs/design/DESIGN.md` (Google design.md format) is a published view extracted from `src/constants/theme.ts` + `src/components/themed-text.tsx`; `theme.ts` stays normative, dark variants are `-dark`-suffixed tokens, lint via `npx @google/design.md lint docs/design/DESIGN.md`. ADR-0006.
+- **DESIGN.md adoption (2026-09-22)** — `docs/design/DESIGN.md` (Google design.md format) is a published view extracted from `src/constants/theme.ts` + `src/components/themed-text.tsx`; `theme.ts` stays normative, dark variants are `-dark`-suffixed tokens, lint via `npm run design:lint` (npx-pinned CLI + CI gate, wired 2026-09-23 per owner; bare `npx @google/design.md lint docs/design/DESIGN.md` still works). ADR-0006.
 
 ## Superseded
 

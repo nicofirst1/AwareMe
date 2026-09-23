@@ -1,11 +1,21 @@
 ---
 name: mobile-app-ui-design
 description: Mobile app UI/UX design. Trigger when the user asks to design screens, create app mockups, build mobile UI components, improve existing designs, create onboarding flows, design mobile navigation, build React Native/Flutter/SwiftUI interfaces, or mentions app design, mobile UI/UX, wireframes, or screen design.
+version: 1.1.0
 ---
 
 # Mobile App UI/UX Design Skill
 
 Design mobile interfaces that are intentional, smooth, and alive — every pixel, spacing value, and color choice serves the user.
+
+## Project Overlay: AwareMe (this repo)
+
+*(1.1.0 adds this overlay; 1.0.0 is the upstream baseline.)* When designing for AwareMe (the "six endings" app), the repo's published design system wins over this skill's generic guidance wherever they differ:
+
+- Read `docs/design/DESIGN.md` first — the exact tokens (colors, typography, spacing, radius, components) as a Google design.md file. It is a published view: `src/constants/theme.ts` stays normative, so change it first, then re-publish (ADR-0006).
+- Take values from its tokens. Never hardcode a hex outside `theme.ts`, and never build text hierarchy with opacity — the app uses solid AA-safe inks (`textSecondary`, `textMuted`) instead.
+- The generic rules below that conflict with the published tokens (opacity-based text hierarchy, 5%-opacity accent fills, shadow recipes) do not apply to this repo.
+- Before handing design work back, run `npm run design:lint` and keep it at 0 errors.
 
 ## Core Philosophy
 

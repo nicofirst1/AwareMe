@@ -40,3 +40,17 @@ in one `src/constants/theme.ts` with derived (`mixHex`) values.
   remains the measured backstop for the values themselves.
 - The `-dark` naming is the whole migration for now; a theme-pair structure
   or dark-file split can be revisited if the format grows one.
+
+## Amendment 2026-09-23 (owner-approved)
+
+Gate wiring — the planned phase 2 — landed: `npm run design:lint` is a local
+gate beside typecheck / jest / lint (CI runs it in the `gates` job). The script
+pins the CLI version via `npx @google/design.md@0.4.0` instead of adding a
+devDependency: a trial devDependency forced a ~1500-line lockfile
+re-resolution (metro/hermes entries moved) against the known-fragile lock
+(DECISIONS.md, environment quirks), so the zero-dependency form was chosen.
+The "no `package.json` script, no CI wiring" clause of decision 4 is
+superseded; the bare-npx form remains valid for one-off checks. Consumption
+(phase 3) still follows in a design-polish packet. The repo-specific
+discovery pointers (AGENTS.md, CONTRIBUTING.md, CONTEXT.md,
+mobile-app-ui-design skill 1.1.0) ship in the same change.
