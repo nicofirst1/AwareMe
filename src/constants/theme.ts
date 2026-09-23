@@ -1,5 +1,5 @@
 /**
- * Design direction (spec.md §10): restrained, text-first, quiet. One serif
+ * Design direction (docs/spec.md §10): restrained, text-first, quiet. One serif
  * face for stems/endings, one neutral sans for interface chrome. Generous
  * line height. Dark mode follows the system, not an afterthought.
  *

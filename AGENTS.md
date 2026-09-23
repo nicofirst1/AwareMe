@@ -4,7 +4,7 @@ This file is a map. The targets are the sources of truth; when a pointer and its
 
 ## Read first
 
-- `spec.md` — the contract; read before any work. RFC-2119 language: `MUST` binds, a `SHOULD` deviation needs a `docs/DECISIONS.md` entry. §2 lists out-of-scope features (stay out — no stubs or toggles); §13 lists the hard constraints (airplane mode, no stored derived values, permission-scoped seed text).
+- `docs/spec.md` — the contract; read before any work. RFC-2119 language: `MUST` binds, a `SHOULD` deviation needs a `docs/DECISIONS.md` entry. §2 lists out-of-scope features (stay out — no stubs or toggles); §13 lists the hard constraints (airplane mode, no stored derived values, permission-scoped seed text).
 - `docs/DECISIONS.md` — the decision index: §14 resolutions, standing decisions, environment quirks, parked arbitrations. Append new deviations there, one bullet with a pointer to the full record; architecture rationale lives in `docs/adr/`.
 - `.scratch/` — the issue tracker, one folder per feature; see `docs/agents/issue-tracker.md`. Untracked (local-only) — never `git add` it. During delegation rounds, live status is the `.coordination/` round hub.
 

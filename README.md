@@ -13,7 +13,7 @@ AwareMe is a private, on-device journaling app for the sentence completion exerc
 
 ## Privacy
 
-Everything you write stays in a single SQLite database on your device. The app performs no network communication of any kind and behaves identically in airplane mode. There is no account, no sync, no analytics, and no advertising. The full policy is in [privacy.md](privacy.md).
+Everything you write stays in a single SQLite database on your device. The app performs no network communication of any kind and behaves identically in airplane mode. There is no account, no sync, no analytics, and no advertising. The full policy is in [docs/privacy.md](docs/privacy.md).
 
 ## Quickstart
 
@@ -36,9 +36,9 @@ The app is built with Expo. `npm start` serves the day-to-day development loop; 
 
 ## Documentation
 
-- [spec.md](spec.md) is the contract: the complete implementation specification, written with RFC 2119 language.
+- [spec.md](docs/spec.md) is the contract: the complete implementation specification, written with RFC 2119 language.
 - [docs/adr/](docs/adr/) records the architecture decisions.
-- [privacy.md](privacy.md) is the privacy policy, also shown in the app.
+- [docs/privacy.md](docs/privacy.md) is the privacy policy (published with the app's store listing; the release runbook in `docs/release-android.md` wires the URL).
 
 ## Seed content
 

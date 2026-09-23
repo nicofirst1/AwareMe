@@ -1,5 +1,5 @@
 /**
- * Seed content (spec.md §5, as amended 2026-09-15; ADR-0005) and the
+ * Seed content (docs/spec.md §5, as amended 2026-09-15; ADR-0005) and the
  * content-overlay seam (issue 10, 2026-09-16 owner decision: the official
  * programme text is not published with this repository).
  *

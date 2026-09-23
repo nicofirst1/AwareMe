@@ -1,4 +1,4 @@
-/** The shape of every settings row, decoded. Keys match spec.md §7, as amended by the morning/evening pivot (migration 0003, docs/DECISIONS.md): two fixed daily notification times replace the random-window/fixed-mode settings; and by the official-programme amendment (migration 0004, ADR-0005, 2026-09-15): evening-practice toggle, weekly reflection schedule, and the programme-week override. */
+/** The shape of every settings row, decoded. Keys match docs/spec.md §7, as amended by the morning/evening pivot (migration 0003, docs/DECISIONS.md): two fixed daily notification times replace the random-window/fixed-mode settings; and by the official-programme amendment (migration 0004, ADR-0005, 2026-09-15): evening-practice toggle, weekly reflection schedule, and the programme-week override. */
 export interface Settings {
   endings_per_session: number;
   timer_seconds: number;
@@ -25,7 +25,7 @@ export interface Settings {
   program_week_override: number | null;
 }
 
-/** Default settings, per spec.md §7 as amended by the morning/evening pivot and the official-programme amendment (ADR-0005). Values are JSON-encoded in the settings table. */
+/** Default settings, per docs/spec.md §7 as amended by the morning/evening pivot and the official-programme amendment (ADR-0005). Values are JSON-encoded in the settings table. */
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
   // 7 per owner feedback 2026-09-17 (v13 issue 03): onboarding's default
   // tab and this seed must read the same number (both changed together).

@@ -1,5 +1,7 @@
 # Sentence Completion App: Implementation Specification
 
+> Moved from the repo root to `docs/` on 2026-09-23 (owner call, same-day commit); live pointers updated the same commit, older archives keep citing the root path.
+
 **Version:** 1.0 **Audience:** an autonomous coding agent implementing the app end to end **Status:** ready to implement
 
 ---

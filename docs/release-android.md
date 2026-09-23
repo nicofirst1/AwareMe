@@ -13,7 +13,7 @@ Sources of truth this runbook depends on — never retype from memory:
 - Listing text: `store/listing-copy.md`.
 - Screenshots & graphic assets: `store/assets/` (produced per
   `store/screenshots-spec.md`).
-- Public privacy policy: `privacy.md` at the repo root, served by GitHub Pages.
+- Public privacy policy: `docs/privacy.md` at the repo root, served by GitHub Pages.
 
 ---
 
@@ -137,7 +137,7 @@ data.
 3. Re-run the no-collection verification in `store/privacy-declarations.md`
    ("Re-verify before every release") — the grep over `src/` and the
    dependency diff against `store/dependency-audit.md`.
-4. Confirm `privacy.md` still matches the app's actual behaviour.
+4. Confirm `docs/privacy.md` still matches the app's actual behaviour.
 5. Confirm `store/assets/` screenshots show the version being submitted.
 
 ## 5. Play Console — human-only steps **[owner]**
@@ -149,7 +149,7 @@ All application questions below have their worked-out answers in
 
 1. Create app → name **AwareMe** (exact `store/listing-copy.md` spelling),
    default language English (United States), **App** (not game), **Free**.
-2. **Privacy policy URL**: serve `privacy.md` via GitHub Pages (repo Settings
+2. **Privacy policy URL**: serve `docs/privacy.md` via GitHub Pages (repo Settings
    → Pages → deploy from branch `main`, root). The page will live at
    `https://<account>.github.io/<repo>/privacy` — paste that URL into both
    Play's App content → Privacy policy and the listing.

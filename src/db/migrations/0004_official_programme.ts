@@ -1,6 +1,6 @@
 /**
  * Migration 0004: adopt the official Sentence Completion programme
- * (spec.md §5.1/§5.3/§5.4 as amended 2026-09-15; ADR-0005).
+ * (docs/spec.md §5.1/§5.3/§5.4 as amended 2026-09-15; ADR-0005).
  *
  * - `stems.week_number` — nullable INTEGER, the official programme block
  *   (1..30). NULL for non-programme stems. The 1..30 range is enforced at

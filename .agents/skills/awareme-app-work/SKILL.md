@@ -6,7 +6,7 @@ version: 2.1.0
 
 # Working on AwareMe
 
-Orientation first: `AGENTS.md` (map), `spec.md` (the contract; §5.1 content rules, §13 hard constraints), `docs/DECISIONS.md` (standing decisions). This skill covers HOW to work and verify here; those files cover WHAT is true.
+Orientation first: `AGENTS.md` (map), `docs/spec.md` (the contract; §5.1 content rules, §13 hard constraints), `docs/DECISIONS.md` (standing decisions). This skill covers HOW to work and verify here; those files cover WHAT is true.
 
 ## Setup
 

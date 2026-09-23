@@ -2,7 +2,7 @@
 
 Thank you for wanting to help. Two files explain how this repository works, and both apply to human and agent contributors alike:
 
-- **[spec.md](spec.md)** is the contract. MUST is a hard constraint; a SHOULD deviation needs a recorded justification.
+- **[spec.md](docs/spec.md)** is the contract. MUST is a hard constraint; a SHOULD deviation needs a recorded justification.
 - **[AGENTS.md](AGENTS.md)** maps the repository: where things live, the house rules, and the known environment quirks.
 
 Invariants that are easy to trip over:

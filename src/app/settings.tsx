@@ -29,7 +29,7 @@ type TimeKey = 'morning_notification_time' | 'evening_notification_time' | 'week
  * Monday-first, the week's working rhythm, rather than the scheduler's
  * `WEEKDAY_NAMES` whose index mirrors `Date.getDay()`. Presentation only —
  * the stored `weekly_meta_day` value is the same lowercase weekday name the
- * scheduler consumes (spec.md:316), so no storage format changes here.
+ * scheduler consumes (docs/spec.md:316), so no storage format changes here.
  */
 const WEEKDAY_CHOICE_ORDER: readonly WeekdayName[] = [
   'monday',
@@ -229,7 +229,7 @@ function TimeField({
  * feedback, issue 14: the native picker opens a calendar, and the reporter
  * wants weekday names to pick from, capitalized) — one more row of the
  * screen's `OptionToggle` pills. Its stored value stays the lowercase
- * weekday name the scheduler consumes (spec.md:316); the list only changes
+ * weekday name the scheduler consumes (docs/spec.md:316); the list only changes
  * which name is picked. An out-of-range stored name renders no selected
  * pill (the scheduler's own sunday fallback is untouched); the reschedule
  * on change contract is untouched.
