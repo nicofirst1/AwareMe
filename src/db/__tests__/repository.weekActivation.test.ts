@@ -32,6 +32,13 @@ const weekA = CORPUS_WEEKS[0];
 const weekB = CORPUS_WEEKS[Math.min(2, CORPUS_WEEKS.length - 1)];
 const weekC = CORPUS_WEEKS[CORPUS_WEEKS.length - 1];
 const weekD = CORPUS_WEEKS[Math.min(4, CORPUS_WEEKS.length - 1)];
+// The next DISTINCT corpus week below the top — the floor once the top
+// week's rows leave automation's scope (a user touch). Corpus-independence
+// promise (header above): derive expectations from CORPUS_WEEKS structure
+// itself, never from another derived week or index-magic that assumes the
+// example shape (the owner's dense 30-week corpus put `weekD` at 5 while
+// the true floor stayed 29).
+const weekBelowC = CORPUS_WEEKS[CORPUS_WEEKS.length - 2];
 const countOf = (week: number): number => PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === week).length;
 const allActive = (week: number): number[] => new Array(countOf(week)).fill(1);
 
@@ -316,11 +323,13 @@ describe('getHighestUnlockedWeek (the stored floor, D2-scoped)', () => {
     expect(repo.getHighestUnlockedWeek()).toBe(weekC);
 
     // The user deactivates every stem of the top week: those rows leave
-    // automation's scope (provenance 'user'), so the floor drops with them.
+    // automation's scope (provenance 'user'), so the floor drops with them —
+    // to the next distinct corpus week below the top, whatever the corpus
+    // shape is (NOT `weekD`, which only coincides on the example corpus).
     for (const stem of repo.getProgrammeWeekBlock(weekC)) {
       repo.setStemActive(stem.id, false);
     }
-    expect(repo.getHighestUnlockedWeek()).toBe(weekD < weekC ? weekD : weekC - 1);
+    expect(repo.getHighestUnlockedWeek()).toBe(weekBelowC);
   });
 
   it('a user-activated programme stem never raises the automation floor (provenance left the programme)', () => {
