@@ -33,6 +33,7 @@ function makeStemRow(overrides: Partial<Record<string, unknown>> = {}) {
     time_of_day: null,
     week_number: null,
     is_weekly_meta: 0,
+    activation_provenance: 'user', // migration 0008: NOT NULL — import inserts name every column, so the row must carry it
     ...overrides,
   };
 }

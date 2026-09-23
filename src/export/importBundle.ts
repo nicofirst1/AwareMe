@@ -15,11 +15,11 @@ export const IMPORT_TABLES: readonly (keyof ExportBundle & TableName)[] = ['stem
 
 /** Column order per table — must match `csvBundle.ts` / the DDL exactly; insert fails loudly (unknown column) if a bundle is missing one rather than silently dropping data. */
 export const COLUMNS: Record<(typeof IMPORT_TABLES)[number], readonly string[]> = {
-  stems: ['id', 'text', 'origin', 'category', 'language', 'weight', 'active', 'created_at', 'created_tz', 'created_offset_min', 'deleted_at', 'time_of_day', 'week_number', 'is_weekly_meta'],
+  stems: ['id', 'text', 'origin', 'category', 'language', 'weight', 'active', 'created_at', 'created_tz', 'created_offset_min', 'deleted_at', 'time_of_day', 'week_number', 'is_weekly_meta', 'activation_provenance'],
   sessions: [
     'id', 'stem_id', 'stem_text_snapshot', 'origin', 'target_endings', 'timer_seconds', 'uncensored_mode',
     'started_at', 'first_keypress_at', 'ended_at', 'end_reason', 'notification_id', 'notified_at', 'opened_at',
-    'last_activity_at', 'tz', 'offset_min', 'device_locale', 'deleted_at',
+    'last_activity_at', 'tz', 'offset_min', 'device_locale', 'deleted_at', 'programme_on',
   ],
   endings: ['id', 'session_id', 'ordinal', 'text', 'started_at', 'submitted_at', 'backspace_count', 'was_revised', 'deleted_at'],
   reviews: ['id', 'period_start', 'period_end', 'session_ids', 'reflection_text', 'meta_stem_text', 'created_at', 'tz', 'offset_min', 'deleted_at'],

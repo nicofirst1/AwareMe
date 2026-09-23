@@ -9,13 +9,13 @@ import type { TableDump } from './jsonBundle';
 
 export const CSV_TABLES = ['stems', 'sessions', 'endings', 'reviews'] as const;
 
-/** Column order per table, matching the DDL (migrations/0001_initial.ts) exactly — every column, nothing derived or dropped. */
+/** Column order per table, matching the DDL (migrations/0001_initial.ts + later ALTERs) exactly — every column, nothing derived or dropped. */
 export const COLUMNS: Record<(typeof CSV_TABLES)[number], readonly string[]> = {
-  stems: ['id', 'text', 'origin', 'category', 'language', 'weight', 'active', 'created_at', 'created_tz', 'created_offset_min', 'deleted_at', 'time_of_day', 'week_number', 'is_weekly_meta'],
+  stems: ['id', 'text', 'origin', 'category', 'language', 'weight', 'active', 'created_at', 'created_tz', 'created_offset_min', 'deleted_at', 'time_of_day', 'week_number', 'is_weekly_meta', 'activation_provenance'],
   sessions: [
     'id', 'stem_id', 'stem_text_snapshot', 'origin', 'target_endings', 'timer_seconds', 'uncensored_mode',
     'started_at', 'first_keypress_at', 'ended_at', 'end_reason', 'notification_id', 'notified_at', 'opened_at',
-    'last_activity_at', 'tz', 'offset_min', 'device_locale', 'deleted_at',
+    'last_activity_at', 'tz', 'offset_min', 'device_locale', 'deleted_at', 'programme_on',
   ],
   endings: ['id', 'session_id', 'ordinal', 'text', 'started_at', 'submitted_at', 'backspace_count', 'was_revised', 'deleted_at'],
   reviews: ['id', 'period_start', 'period_end', 'session_ids', 'reflection_text', 'meta_stem_text', 'created_at', 'tz', 'offset_min', 'deleted_at'],
@@ -66,6 +66,12 @@ One row per stem, seed or user-authored.
 - \`is_weekly_meta\` (integer, 0/1): 1 for the official weekly reflection
   stem (§5.4 #1), the one the scheduled weekly reflection uses. 0 for
   everything else.
+- \`activation_provenance\` (text): the activation authority of record
+  (2026-09-23, packet-7 D2). \`programme\` = the stem's active state was
+  placed by the programme's week-set activation and the user has never
+  touched it; \`user\` = placed or last touched by the user (also every
+  row outside the programme: meta, starter and retired seed rows). The
+  write path updates it whenever the user activates or deactivates.
 
 ## sessions.csv
 One row per writing session (a stem shown once, with one or more endings).
@@ -102,6 +108,10 @@ One row per writing session (a stem shown once, with one or more endings).
 - \`device_locale\` (text): device locale at the time, e.g. \`en-US\`.
 - \`deleted_at\` (text, UTC ISO-8601 ms, nullable): set if the session was
   soft-deleted from history; the row and its endings remain here regardless.
+- \`programme_on\` (integer, 0/1): whether the Programme setting was on
+  when this session started (2026-09-23, packet-7 D3) — write-time user
+  context, the same convention as \`uncensored_mode\`. 1 for every session
+  written before the off state existed.
 
 ## endings.csv
 One row per individual ending written within a session.

@@ -182,7 +182,7 @@ describe('programme repository reads', () => {
 
     const reflections = repo.listCompletedWeeklyReflections();
     expect(reflections).toHaveLength(1);
-    expect(reflections[0]).toEqual({ startedAt: '2026-09-06T15:00:00.000Z', offsetMin: 120 });
+    expect(reflections[0]).toEqual({ startedAt: '2026-09-06T15:00:00.000Z', offsetMin: 120, programmeOn: 1 });
   });
 
   it('listCompletedEveningReflections sees ended review sessions on the two evening meta-stems only', () => {
