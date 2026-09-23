@@ -821,11 +821,6 @@ export class Repository {
     this.db.runSync('UPDATE stems SET deleted_at = ? WHERE id = ?', [at, id]);
   }
 
-  /** Three-way weight control (§6.6) — callers pass one of WEIGHT_BY_SETTING's values, never a raw float. */
-  setStemWeight(id: string, weight: number): void {
-    this.db.runSync('UPDATE stems SET weight = ? WHERE id = ?', [weight, id]);
-  }
-
   /**
    * Inserts the `sessions` row at Start (spec §6.3.1 — nothing is timed
    * before this). `started_at` is provided by the caller so the pure
