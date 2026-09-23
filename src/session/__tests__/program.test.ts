@@ -101,7 +101,7 @@ describe('program — deriveProgramWeek (§6.2)', () => {
   const anchorDate = '2026-08-31'; // a Monday
   const farNow = localDate(2027, 6, 1); // comfortably past any cap test
 
-  it('derives week 1 without a first programme sitting, regardless of reflections', () => {
+  it('derives week 1 without a first programme practice, regardless of reflections', () => {
     expect(deriveProgramWeek(null, 12, farNow)).toBe(1);
     expect(deriveProgramWeek(undefined, 12, farNow)).toBe(1);
     expect(deriveProgramWeek('', 12, farNow)).toBe(1);

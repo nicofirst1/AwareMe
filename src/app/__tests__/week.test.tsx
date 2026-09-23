@@ -42,13 +42,13 @@ const mockRepoState: {
   settings: Partial<Settings>;
   settingWrites: [string, unknown][];
   activationCalls: number[];
-  firstSitting: { startedAt: string; offsetMin: number } | null;
+  firstPractice: { startedAt: string; offsetMin: number } | null;
   highestUnlocked: number;
 } = {
   settings: {},
   settingWrites: [],
   activationCalls: [],
-  firstSitting: null,
+  firstPractice: null,
   highestUnlocked: 0,
 };
 
@@ -59,7 +59,7 @@ jest.mock('@/db', () => {
     getRepository: () => ({
       listProgrammeStems: () => mockProgrammeStems,
       getSettings: () => ({ ...actual.DEFAULT_SETTINGS, ...mockRepoState.settings }),
-      getFirstProgrammeSitting: () => mockRepoState.firstSitting,
+      getFirstProgrammePractice: () => mockRepoState.firstPractice,
       listCompletedWeeklyReflections: () => [],
       setSetting: (key: string, value: unknown) => {
         mockRepoState.settingWrites.push([key, value]);
@@ -81,7 +81,7 @@ describe('ProgrammeScreen (week library)', () => {
     mockRepoState.settings = {};
     mockRepoState.settingWrites = [];
     mockRepoState.activationCalls = [];
-    mockRepoState.firstSitting = null;
+    mockRepoState.firstPractice = null;
     mockRepoState.highestUnlocked = 0;
   });
 
@@ -95,14 +95,14 @@ describe('ProgrammeScreen (week library)', () => {
   });
 
   it('marks the effective programme week (derived, §6.2)', () => {
-    // First programme sitting in the week of Mon 2026-08-31 → derived week 1.
-    mockRepoState.firstSitting = { startedAt: '2026-09-01T06:00:00.000Z', offsetMin: 120 };
+    // First programme practice in the week of Mon 2026-08-31 → derived week 1.
+    mockRepoState.firstPractice = { startedAt: '2026-09-01T06:00:00.000Z', offsetMin: 120 };
     render(<ProgrammeScreen />);
     expect(screen.getByText('Week 1 · Current week')).toBeTruthy();
     expect(screen.queryByText('Week 2 · Current week')).toBeNull();
   });
 
-  it('expands a week into its stems and the two sitting actions', () => {
+  it('expands a week into its stems and the two practice actions', () => {
     render(<ProgrammeScreen />);
     fireEvent.press(screen.getByLabelText('Week 1, 4 stems. Current week. Collapsed.'));
     expect(screen.getByText('Week 1 stem 0')).toBeTruthy();
@@ -119,7 +119,7 @@ describe('ProgrammeScreen (week library)', () => {
     expect(screen.getByText('integrity')).toBeTruthy();
   });
 
-  it('one-off sitting routes to /write?week=N with manual origin semantics (never rotates)', () => {
+  it('one-off practice routes to /write?week=N with manual origin semantics (never rotates)', () => {
     render(<ProgrammeScreen />);
     fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Locked. Collapsed.'));
     fireEvent.press(screen.getByText('Write this week’s practice'));
@@ -151,7 +151,7 @@ describe('ProgrammeScreen (week library)', () => {
     expect(mockRepoState.activationCalls).toEqual([1]);
   });
 
-  it('does not offer sitting actions on an empty week', () => {
+  it('does not offer practice actions on an empty week', () => {
     render(<ProgrammeScreen />);
     fireEvent.press(screen.getByLabelText('Week 30, 0 stems. Locked. Collapsed.'));
     expect(screen.getByText('The practice actions appear once this week has active stems.')).toBeTruthy();

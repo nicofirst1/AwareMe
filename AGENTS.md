@@ -12,7 +12,7 @@ This file is a map. The targets are the sources of truth; when a pointer and its
 
 - **Data model** — spec §4. Invariants designed for a future R/pandas reader; internalise before writing any storage code.
 - **Schema changes** — spec §13.8 + `src/db/fixtures/README.md`. Every change ships a migration, a `schema_meta` version bump, and a fixture DB; the migration tests assert upgrades.
-- **Behaviour rules** — spec §6: sittings, uncensored writing mode, notifications, settings.
+- **Behaviour rules** — spec §6: the writing session (morning/evening practice), uncensored writing mode, notifications, settings.
 - **Data access** — `src/db/repository.ts` is the full data surface; new methods go there. Import from `@/db` outside `src/db/`.
 - **Seed content** — the content-overlay seam (`src/db/seed/stems.ts` header; ADR-0005). The official programme text lives ONLY in gitignored `stems.content.ts`; the committed `stems.content.example.ts` keeps fresh clones and CI green with labeled skips. Example content is original text — never retype programme or Branden text from memory, books, or the web (spec §5.1).
 - **License & publish surface** — GPLv3; `NOTICE` carries the programme-text carve-out (not included, not sublicensed). Never commit the licensed programme text, the verbatim snapshot, `stems.content.ts`, or store/clearance materials; `.scratch/`, `.coordination/`, `store/`, `.worktrees/` are untracked by design (see `.gitignore`).

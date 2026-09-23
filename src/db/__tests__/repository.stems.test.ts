@@ -76,7 +76,7 @@ describe('Repository.listMetaStems', () => {
     expect(repo.listActiveStems().some((s) => metaIds.has(s.id))).toBe(false);
 
     // Issue 06 (owner feedback "there are no evening stems"): the library
-    // lists the 2 evening meta-stems — still active=0, so no sitting draw
+    // lists the 2 evening meta-stems — still active=0, so no practice draw
     // ever picks them, and tagged time_of_day='evening' so the Evening
     // filter matches. The weekly meta-stem stays excluded.
     const inLibrary = repo.listAllStems().filter((s) => metaIds.has(s.id));

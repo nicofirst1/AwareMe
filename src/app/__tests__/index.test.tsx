@@ -53,7 +53,7 @@ const mockRepository: {
   listSessionsForHistory: () => { id: string }[];
   getLastReviewAt: () => string | null;
   listSessionsForStats: () => { id: string }[];
-  getFirstProgrammeSitting: () => { startedAt: string; offsetMin: number } | null;
+  getFirstProgrammePractice: () => { startedAt: string; offsetMin: number } | null;
   listCompletedWeeklyReflections: () => { startedAt: string; offsetMin: number }[];
   listCompletedEveningReflections: () => { startedAt: string; offsetMin: number }[];
   getProgrammeStemsForWeek: (week: number) => { id: string }[];
@@ -64,7 +64,7 @@ const mockRepository: {
   listSessionsForHistory: () => [{ id: 'session-1' }],
   getLastReviewAt: () => '2000-01-01T00:00:00.000Z',
   listSessionsForStats: () => [],
-  getFirstProgrammeSitting: () => null,
+  getFirstProgrammePractice: () => null,
   listCompletedWeeklyReflections: () => [],
   listCompletedEveningReflections: () => [],
   getProgrammeStemsForWeek: () => [{ id: 'stem-1' }],
@@ -145,7 +145,7 @@ describe('HomeScreen', () => {
     const now = new Date();
     const offsetMin = -now.getTimezoneOffset();
     const anchor = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000);
-    mockRepository.getFirstProgrammeSitting = () => ({ startedAt: anchor.toISOString(), offsetMin });
+    mockRepository.getFirstProgrammePractice = () => ({ startedAt: anchor.toISOString(), offsetMin });
     mockRepository.listCompletedWeeklyReflections = () => [{ startedAt: now.toISOString(), offsetMin }];
     render(<HomeScreen />);
     expect(screen.getByText('Week 1 complete. Week 2 is ready.')).toBeTruthy();

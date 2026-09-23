@@ -1,6 +1,6 @@
 /**
  * Notification tap routing (§6.4): the daily pair routes into that period's
- * sitting (/write?timeOfDay=<period>&origin=notification); the weekly
+ * practice (/write?timeOfDay=<period>&origin=notification); the weekly
  * reflection notification routes into c02's weekly route contract,
  * /write?origin=weekly, exactly. The listener is pulled out of the hook by
  * capturing what `addNotificationResponseReceivedListener` registers.
@@ -42,7 +42,7 @@ beforeEach(() => {
 });
 
 describe('useNotificationTapRouting', () => {
-  it('routes a daily notification tap into that period sitting with origin=notification', () => {
+  it('routes a daily notification tap into that period practice with origin=notification', () => {
     renderHook(() => useNotificationTapRouting());
 
     tap('os-1', { kind: NOTIFICATION_DATA_KIND, timeOfDay: 'morning' });

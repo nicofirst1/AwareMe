@@ -332,7 +332,7 @@ describe('adversarial export round trip — §8 lossless under stress (issue 20)
     const stemId = repo.listActiveStems()[0].id;
     const sessionId = repo.createSession({
       stemId,
-      stemTextSnapshot: 'Sitting over the imported library',
+      stemTextSnapshot: 'Practicing over the imported library',
       origin: 'manual',
       targetEndings: 2,
       timerSeconds: 90,

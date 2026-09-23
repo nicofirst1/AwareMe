@@ -43,7 +43,7 @@ export interface ProgrammeWeek {
 
 /** Reads the §6.2 programme week: anchor + reflection weeks → derived, then the override on top. */
 export function readProgrammeWeek(repo: Repository, now: Date = new Date()): ProgrammeWeek {
-  const first = repo.getFirstProgrammeSitting();
+  const first = repo.getFirstProgrammePractice();
   const anchorMondayKey = first ? eventWeekMondayKey(first.startedAt, first.offsetMin) : null;
   const reflectionMondayKeys = repo
     .listCompletedWeeklyReflections()
@@ -90,7 +90,7 @@ export function applyWeekSetActivation(repo: Repository, now: Date = new Date())
 }
 
 /** The morning practice's queue (§6.2): every active programme stem of the effective week, seed order. */
-export function readMorningSittingQueue(repo: Repository, now: Date = new Date()): StemRow[] {
+export function readMorningPracticeQueue(repo: Repository, now: Date = new Date()): StemRow[] {
   const { currentWeek } = readProgrammeWeek(repo, now);
   return repo.getProgrammeStemsForWeek(currentWeek);
 }
@@ -124,7 +124,7 @@ export interface HomeProgrammeStatus {
  */
 export function readHomeProgrammeStatus(repo: Repository, now: Date = new Date()): HomeProgrammeStatus {
   const settings = repo.getSettings();
-  const first = repo.getFirstProgrammeSitting();
+  const first = repo.getFirstProgrammePractice();
   const anchorMondayKey = first ? eventWeekMondayKey(first.startedAt, first.offsetMin) : null;
   const anchorLocalDate = first ? eventLocalDateKey(first.startedAt, first.offsetMin) : null;
 

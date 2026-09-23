@@ -95,7 +95,7 @@ describe('Repository.seedIfEmpty', () => {
     expect(metaRows).toHaveLength(2);
     expect(metaRows.map((r) => r.text).sort()).toEqual([...EVENING_META_STEMS].sort());
     for (const r of metaRows) {
-      // Never selectable by the sitting draws (§6.2) — seeded inactive and
+      // Never selectable by the practice draws (§6.2) — seeded inactive and
       // still inactive. Since issue 06 they ARE shown in the library as
       // resting rows tagged 'evening', so the Evening filter matches them.
       expect(r.active).toBe(0);

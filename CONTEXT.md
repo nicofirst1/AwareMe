@@ -6,7 +6,7 @@ A local, offline sentence-completion journaling app. The user repeatedly complet
 
 **Ending**: One completion the user writes for a stem within a session. Repetitive, contradictory, or trivial endings are valid — the method wants them. _Avoid_: answer, response, completion
 
-**Session**: One timed sitting in which the user writes endings to a single stem. Finalized exactly once, with an end-reason, and never reopened. _Avoid_: attempt, entry, round
+**Session**: One timed practice in which the user writes endings to a single stem. Finalized exactly once, with an end-reason, and never reopened. _Avoid_: attempt, entry, round
 
 **End-reason**: Why a session finalized — exactly one of: `user_done` (finished early), `timeout` (timer elapsed), `abandoned` (absent longer than the 5-minute grace).
 
