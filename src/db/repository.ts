@@ -679,15 +679,17 @@ export class Repository {
 
   /**
    * The evening reflection's re-read (§6.2/§6.5.2): non-deleted sessions on
-   * non-deleted morning-tagged stems with at least one non-deleted ending
-   * started in `[dayStart, dayEnd)` — the caller passes today's local-day
-   * bounds in UTC ISO (`utcBoundsOfLocalDay`). Scoped to `time_of_day =
-   * 'morning'` stems: the evening sits down to reflect the morning's
-   * practice, not everything touched today. The stem join carries its own
-   * `deleted_at IS NULL` (issue 10): a stem soft-deleted between the
-   * morning's writing and the evening's reflection must not surface in the
-   * reread — the endings stay in history/exports (§4.1.5), the practice
-   * surface just stops showing them.
+   * non-deleted MORNING-PRACTICE stems — morning-tagged or untagged (design
+   * §8.2's final tag semantics, packet-7 w2-t5: untagged picks land in the
+   * morning, so their endings re-read too; the tag's question is "which
+   * practice does this pick belong to") — with at least one non-deleted
+   * ending started in `[dayStart, dayEnd)`. The caller passes today's
+   * local-day bounds in UTC ISO (`utcBoundsOfLocalDay`). Evening-tagged
+   * stems stay out: the evening practice is not re-read — it IS the
+   * evening. The stem join carries its own `deleted_at IS NULL` (issue 10):
+   * a stem soft-deleted between the morning's writing and the evening's
+   * reflection must not surface in the reread — the endings stay in
+   * history/exports (§4.1.5), the practice surface just stops showing them.
    */
   listSessionsForDayMorning(dayStart: string, dayEnd: string): { session: SessionRow; endings: EndingRow[] }[] {
     const sessionIds = this.db
@@ -697,7 +699,7 @@ export class Repository {
          JOIN stems st ON st.id = s.stem_id
          JOIN endings e ON e.session_id = s.id
          WHERE s.deleted_at IS NULL AND e.deleted_at IS NULL AND st.deleted_at IS NULL
-           AND st.time_of_day = 'morning'
+           AND (st.time_of_day IS NULL OR st.time_of_day = 'morning')
            AND e.started_at >= ? AND e.started_at < ?
          ORDER BY s.started_at`,
         [dayStart, dayEnd],

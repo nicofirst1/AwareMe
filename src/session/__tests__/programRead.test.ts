@@ -294,6 +294,68 @@ describe('reflection inputs', () => {
   });
 });
 
+// ── Packet-7 w2-t5 / D7: the evening picks — the one new evening composition ──
+
+describe('readEveningReflectionInputs — D7 evening picks (packet-7 w2-t5)', () => {
+  it('returns the evening picks: active, non-deleted, evening-tagged, non-meta stems in listAllStems order — the seed starters included (D7/s1-F3 closes structurally)', () => {
+    const repo = makeRepo({
+      listAllStems: () => [
+        // The starter set: seed-origin evening rows (design §8.1) — they become
+        // evening pick material, the mirror of isMorningPick's "w2-t5 draws
+        // them" note. origin !== 'meta' (not === 'user') is what includes them.
+        pick('starter', { origin: 'seed', time_of_day: 'evening' }),
+        pick('user-eve', { time_of_day: 'evening' }),
+        pick('imported-eve', { origin: 'imported', time_of_day: 'evening' }),
+        // Every exclusion class, so the read cannot pass vacuously:
+        pick('morning-tagged'), // morning joins the MORNING practice
+        pick('untagged', { time_of_day: null }), // untagged joins the morning (design §8.2)
+        pick('inactive', { active: 0, time_of_day: 'evening' }), // the resting meta pair's class
+        pick('deleted', { deleted_at: '2026-09-10T00:00:00.000Z', time_of_day: 'evening' }),
+      ],
+    });
+    const inputs = readEveningReflectionInputs(repo, new Date('2026-09-16T21:00:00Z'));
+    expect(inputs.picks.map((s) => s.id)).toEqual(['starter', 'user-eve', 'imported-eve']);
+    // The rest of the flow's inputs are unchanged by the picks leg.
+    expect(inputs.metaStem?.id).toBe('evening-a');
+    expect(inputs.reviewed).toEqual([]);
+  });
+
+  it('keeps listAllStems’ own order — no re-sort (the morning precedent: start and resume walk identical queues)', () => {
+    // Recency order as the library read returns it: 'newest' first. The
+    // composition must not reorder — the queue the picker walks is the
+    // library's order, nothing else.
+    const repo = makeRepo({
+      listAllStems: () => [
+        pick('newest', { time_of_day: 'evening' }),
+        pick('middle', { origin: 'seed', time_of_day: 'evening' }),
+        pick('oldest', { time_of_day: 'evening' }),
+      ],
+    });
+    expect(readEveningReflectionInputs(repo, new Date('2026-09-16T21:00:00Z')).picks.map((s) => s.id)).toEqual([
+      'newest',
+      'middle',
+      'oldest',
+    ]);
+  });
+
+  it('never draws the reflection meta-stems into the picks (the evening pair is origin=meta; the weekly meta-stem cannot leak — listAllStems excludes is_weekly_meta, pinned at the real-SQL level in repository.review.test.ts)', () => {
+    const repo = makeRepo({
+      // The real listAllStems never returns the meta rows — they live only
+      // in listMetaStems (the weekly meta is is_weekly_meta=1, excluded by
+      // the SQL outright). The stub mirrors that contract; the origin guard
+      // below is the second layer, so even a meta row that somehow reached
+      // the library read could not join a practice draw.
+      listAllStems: () => [
+        pick('real-pick', { time_of_day: 'evening' }),
+        pick('contrived-meta', { origin: 'meta', time_of_day: 'evening' }), // worst case: active + evening
+      ],
+    });
+    expect(readEveningReflectionInputs(repo, new Date('2026-09-16T21:00:00Z')).picks.map((s) => s.id)).toEqual([
+      'real-pick',
+    ]);
+  });
+});
+
 describe('shouldClearOverride (§6.2 clearing rule)', () => {
   it('clears only when the completed reflection is the selected week', () => {
     expect(shouldClearOverride(7, 7)).toBe(true);

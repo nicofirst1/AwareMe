@@ -109,6 +109,57 @@ describe('Repository.listSessionsForDayMorning (issue 10: deleted stems in the e
   });
 });
 
+// ── Packet-7 w2-t5 / D7: the §8.2 reread widening + the picks-read's leak guard ──
+
+describe('Repository.listSessionsForDayMorning — the design §8.2 widening (packet-7 w2-t5)', () => {
+  it('includes an untagged stem’s today-session in the evening reread (untagged picks land in the morning, so their endings re-read)', () => {
+    const { repo } = freshRepository();
+    // addStem without timeOfDay seeds the honest default: untagged.
+    const untaggedId = repo.addStem({ text: 'Mock untagged reread fixture stem', category: null, origin: 'user' });
+    sessionWithEnding(repo, untaggedId, '2026-09-10T08:00:00.000Z');
+
+    const reviewed = repo.listSessionsForDayMorning('2026-09-10T00:00:00.000Z', '2026-09-11T00:00:00.000Z');
+    expect(reviewed.map((r) => r.session.stem_id)).toEqual([untaggedId]);
+  });
+
+  it('still excludes evening-tagged stems — the evening practice is not re-read (the w1-t5 solo-fallback intent survives the widening)', () => {
+    const { repo } = freshRepository();
+    const eveningId = repo.addStem({
+      text: 'Mock evening reread fixture stem',
+      category: null,
+      origin: 'user',
+      timeOfDay: 'evening',
+    });
+    sessionWithEnding(repo, eveningId, '2026-09-10T08:00:00.000Z');
+
+    const reviewed = repo.listSessionsForDayMorning('2026-09-10T00:00:00.000Z', '2026-09-11T00:00:00.000Z');
+    expect(reviewed).toEqual([]); // exact: nothing else is in the window either
+  });
+});
+
+describe('Repository.listAllStems — the weekly meta-stem cannot reach the D7 evening picks (packet-7 w2-t5)', () => {
+  it('excludes is_weekly_meta rows outright, even a contrived active evening-tagged one (worst-case shape)', () => {
+    const { db, repo } = freshRepository();
+    // The real weekly meta-stem is active=1 but time_of_day=NULL; this
+    // contrived row gives it EVERY attribute the evening-picks predicate
+    // would accept (active, evening-tagged, non-deleted, origin seed) —
+    // only is_weekly_meta=1 stands between it and a practice draw. The
+    // library read must exclude it regardless.
+    db.prepare(
+      `INSERT INTO stems (id, text, origin, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
+       VALUES ('wkmeta-contrived', 'Mock contrived weekly-meta row', 'seed', 'en', 1.0, 1, '2026-09-10T00:00:00.000Z', 'Europe/Berlin', 120, 'evening', NULL, 1)`,
+    ).run();
+
+    const library = repo.listAllStems();
+    expect(library.some((s) => s.id === 'wkmeta-contrived')).toBe(false);
+    // The exact predicate readEveningReflectionInputs applies has nothing to leak:
+    const picksShape = library.filter(
+      (s) => s.active === 1 && s.deleted_at === null && s.time_of_day === 'evening' && s.origin !== 'meta',
+    );
+    expect(picksShape.some((s) => s.id === 'wkmeta-contrived')).toBe(false);
+  });
+});
+
 describe('end-to-end review flow', () => {
   it('a meta-stem session (a real session/endings pair, stem_id pointing at a real stems row) feeds createReview', () => {
     const { db, repo } = freshRepository();

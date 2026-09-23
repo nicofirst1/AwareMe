@@ -103,11 +103,19 @@ type FlowKind = 'evening' | 'weekly';
 
 interface ReflectionFlow {
   kind: FlowKind;
-  /** 'reread': the read-only ending list with a Continue gate. 'writing': the meta-stem session. 'done': saved. */
-  phase: 'reread' | 'writing' | 'done';
+  /**
+   * 'reread': the read-only ending list with a Continue gate. 'writing': the
+   * meta-stem session. 'picks': D7's evening picks stage (evening only) — a
+   * flow-INTERNAL phase: the picks ride the practice queue below while the
+   * flow stays set, so the reflection's no-badge semantics (§6.5.2) hold and
+   * the completion effect cannot re-run. 'done': saved.
+   */
+  phase: 'reread' | 'writing' | 'picks' | 'done';
   /** The sessions the reread shows (§6.5: grouped by session, chronological, read-only). */
   reviewed: { session: SessionRow; endings: EndingRow[] }[];
   metaStem: StemRow;
+  /** D7's evening picks (§8.1), written after the reflection. Empty for the weekly flow. */
+  picks: StemRow[];
   /** Weekly only: the programme week being reflected (for the reread copy and the review row). */
   week: number | null;
   /** Weekly only: the `program_week_override` currently selects this week — completing clears it (§6.2). */
@@ -127,9 +135,12 @@ interface ReflectionFlow {
  *   week's stems, `origin='manual'`, never in any rotation (§6.2).
  * - **Solo write** (`stemId`, from the stem library): one stem, `origin='manual'`.
  * - **Evening reflection** (`timeOfDay=evening`, only when
- *   `evening_practice_enabled`): today's morning endings read-only, then
- *   the alternating evening meta-stem as a timed session (`origin='review'`,
- *   §6.5.2). Completion records the review scoped to today's morning sessions.
+ *   `evening_practice_enabled`): the day's endings on morning-practice stems
+ *   read-only (morning-tagged and untagged — design §8.2's final tag
+ *   semantics), then the alternating evening meta-stem as a timed session
+ *   (`origin='review'`, §6.5.2), then D7's evening picks as ordinary timed
+ *   sessions. Completion records the review scoped to the reread's sessions
+ *   (the picks stay outside the row) and hands the flow to its picks phase.
  * - **Weekly reflection** (`origin=weekly` — the `/write?origin=weekly`
  *   deep link is c03's notification target, plus the Home weekend card): the
  *   effective programme week's endings read-only, then the weekly meta-stem
@@ -222,6 +233,7 @@ export default function WriteScreen() {
             phase: 'writing',
             reviewed: inputs.reviewed,
             metaStem: inputs.metaStem,
+            picks: [],
             week: inputs.week,
             clearOverride: shouldClearOverride(repo.getSettings().program_week_override, inputs.week),
           });
@@ -237,6 +249,7 @@ export default function WriteScreen() {
           phase: 'writing',
           reviewed: inputs.reviewed,
           metaStem: eveningStem,
+          picks: inputs.picks,
           week: null,
           clearOverride: false,
         });
@@ -261,6 +274,7 @@ export default function WriteScreen() {
             phase: 'writing',
             reviewed: inputs.reviewed,
             metaStem: inputs.metaStem,
+            picks: inputs.picks,
             week: null,
             clearOverride: false,
           });
@@ -295,6 +309,7 @@ export default function WriteScreen() {
           phase,
           reviewed: inputs.reviewed,
           metaStem: inputs.metaStem,
+          picks: [],
           week: inputs.week,
           clearOverride: shouldClearOverride(repo.getSettings().program_week_override, inputs.week),
         });
@@ -310,6 +325,7 @@ export default function WriteScreen() {
           phase,
           reviewed: inputs.reviewed,
           metaStem: inputs.metaStem,
+          picks: inputs.picks,
           week: null,
           clearOverride: false,
         });
@@ -375,7 +391,11 @@ export default function WriteScreen() {
   const [prevSessionPhase, setPrevSessionPhase] = useState(session.phase);
   if (session.phase !== prevSessionPhase) {
     setPrevSessionPhase(session.phase);
-    if (session.phase === 'done' && queue !== null && !flow && !isLastInQueue) {
+    // D7: during the evening flow's picks phase the flow IS set, but the
+    // picks are exactly the practice queue — advance between them as the
+    // practice does. Outside a flow (or in the flow's other phases) the
+    // guard stays as before: a reflection flow carries no queue.
+    if (session.phase === 'done' && queue !== null && (!flow || flow.phase === 'picks') && !isLastInQueue) {
       setQueueIndex((i) => i + 1);
     }
   }
@@ -424,9 +444,10 @@ export default function WriteScreen() {
       // 2026-09-16; packet-7 D3 gates it): the effective week's untouched
       // programme stems are the active ones. Re-applied on every weekly
       // completion — the override just cleared back to the derived week, or
-      // the derived week just advanced (no override set). While Programme is
-      // off the funnel no-ops internally AND this call is skipped: zero
-      // state changes, the review row above still records.
+      // the derived week just advanced (no override set). The call RUNS
+      // unconditionally; while Programme is off the funnel's internal gate
+      // (applyWeekSetActivation's head, programRead.ts) skips the write —
+      // zero state changes either way, the review row above still records.
       applyWeekSetActivation(repo);
     } else {
       const { start, end } = utcBoundsOfLocalDay(new Date());
@@ -438,6 +459,19 @@ export default function WriteScreen() {
         reflectionText: reflectionText && reflectionText.length > 0 ? reflectionText : null,
         createdAt: at,
       });
+      // D7 (packet-7 w2-t5): the reflection recorded, the evening continues
+      // into its picks — a flow-INTERNAL phase (the queue machinery renders
+      // them while the flow stays set, so no badge arms and this effect
+      // cannot re-run). The review row above stays scoped to the reread's
+      // sessions: the picks are ordinary sessions outside it. With no picks
+      // the flow goes straight to 'done'.
+      if (flow.picks.length > 0) {
+        setFlow({ ...flow, phase: 'picks' });
+        setQueue(flow.picks);
+        setQueueIndex(0);
+        setStartedIndex(-1);
+        return;
+      }
     }
     setFlow({ ...flow, phase: 'done' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -527,7 +561,10 @@ export default function WriteScreen() {
     );
   }
 
-  if (flow) {
+  if (flow && flow.phase !== 'picks') {
+    // The picks phase is the one flow state the practice path below renders
+    // (D7): the picks ARE the queue there, and the flow staying set is what
+    // keeps badges and the celebration disarmed (§6.5.2).
     return (
       <ReflectionFlowView
         flow={flow}

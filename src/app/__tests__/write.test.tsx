@@ -33,6 +33,8 @@ const mockWeek2Stem = makeStem('stem-w2', 'If this mock week-two stem behaves in
 const mockUserStem = { ...makeStem('stem-user', 'My own made-up stem is', 0), origin: 'user' as const };
 /** An evening-tagged pick: a real pick, but never in the morning queue (the solo-fallback test's stem). */
 const mockEveningPick = { ...makeStem('stem-eve', 'My evening pick is', 0), origin: 'user' as const, time_of_day: 'evening' as const };
+/** A D7 evening starter: seed-origin, evening-tagged, active — the starter set becomes evening pick material (design §8.1). */
+const mockEveningStarter = { ...makeStem('stem-starter', 'My invented starter line for the mock evening is', 0), time_of_day: 'evening' as const };
 const mockWeeklyMeta = makeStem('meta-weekly', 'If this mock weekly reflection stem renders its review', 0);
 const mockEveningA = { ...makeStem('meta-evening-a', 'In my body right now I feel', 0), origin: 'meta' as const };
 const mockEveningB = { ...makeStem('meta-evening-b', 'Right now I am aware of', 0), origin: 'meta' as const };
@@ -147,7 +149,7 @@ jest.mock('@/db', () => {
       // test needs a deleted row visible to listAllStems but not listMetaStems.
       listAllStems: () =>
         mockRepoState.allStems ??
-        [mockStemA, mockStemB, mockStemC, mockWeek2Stem, mockUserStem, mockEveningPick].map((s) => ({
+        [mockStemA, mockStemB, mockStemC, mockWeek2Stem, mockUserStem, mockEveningStarter, mockEveningPick].map((s) => ({
           ...s,
           active: 1,
           deleted_at: null,
@@ -353,9 +355,20 @@ describe('WriteScreen — evening reflection (§6.2/§6.5.2)', () => {
     ];
   }
 
-  it('runs the review-today flow and records the review scoped to today’s morning sessions', async () => {
+  // w2-t5 / D7: the full evening composition — reread → reflection meta-stem
+  // → the evening picks, as a flow-INTERNAL picks phase (the practice queue
+  // renders the picks while the flow stays set, so the reflection's no-badge
+  // semantics §6.5.2 hold). The review row records at reflection completion,
+  // scoped to the REREAD's sessions — the picks are ordinary sessions
+  // written after it and never widen the row.
+  it('composes reread → reflection → evening picks (D7); the review row stays scoped to the reread and no badge arms', async () => {
     mockParams.value = { timeOfDay: 'evening' };
+    mockRepoState.settings = { endings_per_session: 1 };
     mockRepoState.reviewedMorning = reviewedMorning() as never;
+    // If the flow were nulled at the picks handoff, the final pick's done
+    // WOULD assemble badges from this history — the null assertion below is
+    // what pins the flow-internal phase (the declined queue-handoff shape).
+    mockRepoState.statsCompleteLastSession = true;
     render(<WriteScreen />);
 
     // Reread phase: today's morning endings, read-only, then Continue.
@@ -368,7 +381,11 @@ describe('WriteScreen — evening reflection (§6.2/§6.5.2)', () => {
     const input = await screen.findByLabelText('Your reflection');
     fireEvent.changeText(input, 'tired in a settled way\n');
 
-    await screen.findByText('Session saved.');
+    // D7: the flow-internal picks phase — the first evening pick's Start
+    // gate (the starter, in listAllStems order), not the flow's done screen.
+    await screen.findByText(/My invented starter line for the mock evening is/);
+    expect(screen.getByText('Start')).toBeTruthy();
+    // The review row recorded at reflection completion, scoped to the reread.
     expect(mockRepoState.createdReviews).toHaveLength(1);
     const review = mockRepoState.createdReviews[0].input;
     expect(review.sessionIds).toEqual(['morning-1']);
@@ -376,6 +393,66 @@ describe('WriteScreen — evening reflection (§6.2/§6.5.2)', () => {
     expect(review.reflectionText).toBe('tired in a settled way');
     // The evening flow never touches the override (§6.2 clearing is weekly-only).
     expect(mockRepoState.settingWrites).toEqual([]);
+    // Nothing created for the picks before their Start gate (§6.3.1) — the
+    // only session so far is the meta-stem's own (the review machinery's).
+    expect(mockRepoState.createdSessions).toEqual([{ origin: 'review', stemId: mockEveningA.id }]);
+    fireEvent.press(screen.getByText('Start'));
+    expect(mockRepoState.createdSessions).toEqual([
+      { origin: 'review', stemId: mockEveningA.id },
+      { origin: 'manual', stemId: mockEveningStarter.id },
+    ]);
+
+    // Pick 1 completes → pick 2's gate (the user pick), through the same queue.
+    const pickInput = await screen.findByLabelText('Your ending');
+    fireEvent.changeText(pickInput, 'one line about the day\n');
+    await screen.findByText(/My evening pick is/);
+    fireEvent.press(screen.getByText('Start'));
+    const pickInput2 = await screen.findByLabelText('Your ending');
+    fireEvent.changeText(pickInput2, 'another line about the evening\n');
+
+    // The flow's done screen — and no badge reveal: the flow stayed set
+    // through the picks (§6.5.2), so the celebration machinery never arms,
+    // even though the final pick crossed first_words/six_endings above.
+    await screen.findByText('Session saved.');
+    expect(screen.queryByText('First Words')).toBeNull();
+    expect(screen.queryByText('Six Endings')).toBeNull();
+    // The picks added sessions, never a second review row.
+    expect(mockRepoState.createdReviews).toHaveLength(1);
+    expect(mockRepoState.createdSessions).toEqual([
+      { origin: 'review', stemId: mockEveningA.id },
+      { origin: 'manual', stemId: mockEveningStarter.id },
+      { origin: 'manual', stemId: mockEveningPick.id },
+    ]);
+  });
+
+  // D7's "always available" + the quiet-morning pin (:383-387) composed: with
+  // NO evening-tagged picks the flow ends at the reflection — no picks stage
+  // renders, no Start gate appears. Green on the pre-w2t5 tree by design
+  // (the base flow had no picks stage at all); labeled guard, it pins the
+  // empty-picks SHAPE against regressions in the new phase logic.
+  it('an evening with no evening-tagged picks ends at the reflection — no picks stage (D7: the reflection stays available)', async () => {
+    mockParams.value = { timeOfDay: 'evening' };
+    mockRepoState.settings = { endings_per_session: 1 };
+    mockRepoState.allStems = [mockStemA, mockUserStem].map((s) => ({
+      ...s,
+      active: 1,
+      deleted_at: null,
+      created_at: '2026-09-01T06:00:00.000Z',
+    }));
+    render(<WriteScreen />);
+
+    await screen.findByText(/Nothing written this morning/);
+    fireEvent.press(screen.getByText('Continue'));
+    await screen.findByText(/In my body right now I feel/);
+    const input = await screen.findByLabelText('Your reflection');
+    fireEvent.changeText(input, 'settled\n');
+
+    await screen.findByText('Session saved.');
+    expect(screen.queryByText('Start')).toBeNull(); // no picks stage
+    expect(mockRepoState.createdReviews).toHaveLength(1);
+    // Only the meta-stem session was created (the review machinery's own);
+    // the picks queue never filled.
+    expect(mockRepoState.createdSessions).toEqual([{ origin: 'review', stemId: mockEveningA.id }]);
   });
 
   it('offers the reflection stem even on a quiet morning (no guilt, §13.4)', async () => {
