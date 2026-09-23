@@ -17,7 +17,7 @@ This file is an index, not the record: each entry points at the authoritative do
 ## Resolved open questions (§14)
 
 1. **Session resumability** — never manually resumable → ADR-0001.
-2. **On-demand stem repeat** — yes; library starts bypass the sitting queue (`origin = 'manual'`).
+2. **On-demand stem repeat** — yes; library starts bypass the practice queue (`origin = 'manual'`).
 3. **Per-stem note/tag** — no → ADR-0002.
 4. **Review period** — default 7 days, selectable at review time from presets; `reviews` stores explicit `period_start`/`period_end`.
 

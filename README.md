@@ -4,7 +4,7 @@ AwareMe is a private, on-device journaling app for the sentence completion exerc
 
 ## What it does
 
-- **Sittings.** A morning sitting walks you through the current stems, one at a time. An optional evening sitting shows today’s morning endings and closes with a reflection. A weekly reflection gathers the week’s writing for re-reading, on the day you choose.
+- **Practice.** A morning practice walks you through the current stems, one at a time. An optional evening practice shows today’s morning endings and closes with a reflection. A weekly reflection gathers the week’s writing for re-reading, on the day you choose.
 - **Uncensored writing mode.** Backspace is limited to the current word, earlier endings cannot be revisited, and cut, copy, and select are unavailable. When the timer ends, whatever is on screen is saved, including a half-typed ending. 
 - **History and review.** Every session is kept, browsable, and full-text searchable. The exercise accrues its value over weeks, through re-reading.
 - **Export.** You have full control over your date with lossless export to SQLite, JSON, and CSV.
@@ -53,7 +53,7 @@ cp src/db/seed/stems.content.example.ts src/db/seed/stems.content.ts
 
 ## Project status
 
-Feature-complete for v1.1: sittings, uncensored writing, history + review, lossless
+Feature-complete for v1.1: morning/evening practice, uncensored writing, history + review, lossless
 export, reminders, optional lock. The seed-content overlay is verified end-to-end on
 git-faithful trees (fresh clones build, test, and launch). Preparing the first public
 release — see `docs/release-android.md` for the runbook.
