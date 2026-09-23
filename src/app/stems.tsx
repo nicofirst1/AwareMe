@@ -65,7 +65,7 @@ const PROGRAMME_ORIGIN_HUE: PaletteName = 'jade';
 /**
  * The stem library (§6.6): every stem, filterable and searchable, with a
  * "write on this now" entry point that bypasses weighted selection
- * (`origin='manual'`, Q2 in DECISIONS.md), plus authoring (ticket 08): add,
+ * (`origin='manual'`, Q2 in docs/DECISIONS.md), plus authoring (ticket 08): add,
  * edit, archive, delete, reweight (all on `/stem-edit`), and bulk import
  * (`/stem-import`).
  */
@@ -117,7 +117,7 @@ export default function StemsScreen() {
   );
 
   // Selection mode (2026-09-11, replaces long-press-instant-toggle — see
-  // DECISIONS.md): long-press enters it and selects that row; while active,
+  // docs/DECISIONS.md): long-press enters it and selects that row; while active,
   // tap toggles membership instead of opening write/edit.
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const selectionMode = selectedIds.size > 0;

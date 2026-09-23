@@ -2,7 +2,7 @@
  * Migration 0001: initial schema.
  *
  * Tables and indexes per spec.md §4.2, with the two deviations recorded in
- * DECISIONS.md / docs/adr/0003-endings-row-created-on-first-keypress.md:
+ * docs/DECISIONS.md / docs/adr/0003-endings-row-created-on-first-keypress.md:
  *   - `endings.submitted_at` is nullable (an ending begun but not yet
  *     submitted has no submit time).
  *   - `sessions.last_activity_at` is a new column, bumped on autosave, so

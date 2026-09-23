@@ -1,5 +1,7 @@
 # Decisions
 
+> Moved from the repo root to `docs/` on 2026-09-23 (owner call, same-day commit). Historical archives (skill versions, ADRs, design logs, hub trails) keep citing the old root path; live pointers were updated in the same commit.
+
 Deviations from `spec.md` and resolutions of its open questions (§14). Spec §0 requires deviations be justified here.
 
 This file is an index, not the record: each entry points at the authoritative doc that holds the rationale. Append new decisions at the bottom, one bullet each — what was decided, by whom, and a pointer to the full record. The per-ticket prose this index replaced lives in git history (trimmed 2026-09-16).
@@ -72,3 +74,4 @@ Weighted stem selection, the random-window scheduler, and the 2026-09-11 "fixed 
 - Spec §5.1/§5.4 and ADR-0005 quote remainders: amend spec to match the overlay architecture (owner call).
 - jest content-consistency gating (2026-09-18, v14 GATE-BASELINE): the migrate/programmeSeed consistency tests fail on machines where the verbatim snapshot is present but the private `stems.content.ts` is absent (seed falls back to example text); restore the private file or sanction test-gating (owner call).
 - **2026-09-19, terminology: 'sitting' renamed to 'practice'** across user-facing copy and code (owner decision; resolves C19 session/sitting inconsistency). Updates spec.md, DECISIONS.md, all UI copy, and repository method names.
+- **Docs layout (2026-09-23, owner call in session):** `DECISIONS.md` and `PLAN.md` moved from the repo root into `docs/` (pairing decisions with `docs/adr/` rationale). Live pointers updated in the same commit (AGENTS.md, spec.md, live skills, CI, eslint config, 18 src comment receipts); historical archives keep the old root paths as written.

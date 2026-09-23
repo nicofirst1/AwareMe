@@ -6,11 +6,11 @@ version: 2.1.0
 
 # Working on AwareMe
 
-Orientation first: `AGENTS.md` (map), `spec.md` (the contract; §5.1 content rules, §13 hard constraints), `DECISIONS.md` (standing decisions). This skill covers HOW to work and verify here; those files cover WHAT is true.
+Orientation first: `AGENTS.md` (map), `spec.md` (the contract; §5.1 content rules, §13 hard constraints), `docs/DECISIONS.md` (standing decisions). This skill covers HOW to work and verify here; those files cover WHAT is true.
 
 ## Setup
 
-- Work in your assigned worktree. Provision per `DECISIONS.md`: `npm install --legacy-peer-deps`, then the expo-asset remedy.
+- Work in your assigned worktree. Provision per `docs/DECISIONS.md`: `npm install --legacy-peer-deps`, then the expo-asset remedy.
 - Gates: `npm run typecheck`, `npx jest`, `npm run lint`. Compare like-for-like — your worktree's node_modules (not main's), same command, same location — and a baseline failure counts as current only when re-run at this HEAD; otherwise cite it as cited. Baselines live in the round hub.
 - Jest discovery: integration tree `npx jest --testPathIgnorePatterns=/\.worktrees/` (`--watchPathIgnorePatterns` is watch-mode only, excludes nothing); inside a worktree plain `npx jest` (that pattern would exclude the worktree root itself: false zero).
 

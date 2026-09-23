@@ -17,7 +17,7 @@ import { useTheme } from '@/hooks/use-theme';
  * control"): the multiline field's trailing-"\n" `onChangeText` path in the
  * callers drives `submitActive`, with `onSubmitEditing` covering iOS's fast
  * path. The countdown Save/Next button that used to sit here was removed
- * (2026-09-15 owner decision, DECISIONS.md at merge) — it read as "the
+ * (2026-09-15 owner decision, docs/DECISIONS.md at merge) — it read as "the
  * Start button never left"; the depleting-color pressure cue moved to the
  * top strip's MM:SS numerals (`WriteTimerStrip`'s `timeColor`). Timeout and
  * Done still auto-save whatever is on screen (§6.3.8) — nothing is ever

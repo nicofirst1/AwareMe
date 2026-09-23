@@ -8,7 +8,7 @@
 
 This is a complete specification for v1. Implement it in the milestone order given in section 12. Do not skip the data model (section 4): it is the part of this app that is expensive to change later, because it defines the shape of every row the user will ever generate.
 
-Where this document says MUST, treat it as a hard constraint. Where it says SHOULD, use judgement but justify deviations in the repo's `DECISIONS.md`.
+Where this document says MUST, treat it as a hard constraint. Where it says SHOULD, use judgement but justify deviations in the repo's `docs/DECISIONS.md`.
 
 ---
 
@@ -68,7 +68,7 @@ Do not build these. Do not add stubs, dead settings toggles, or "coming soon" sc
 | Lock          | `expo-local-authentication`                | Optional, off by default                |
 | Tests         | Jest + `@testing-library/react-native`     | See section 11                          |
 
-The app MUST function fully in airplane mode. Requesting network permission at all is discouraged. If a dependency pulls in network capability, note it in `DECISIONS.md`.
+The app MUST function fully in airplane mode. Requesting network permission at all is discouraged. If a dependency pulls in network capability, note it in `docs/DECISIONS.md`.
 
 ---
 
@@ -428,4 +428,4 @@ Note for scheduling: if publishing to Google Play from a personal developer acco
 
 ## 14. Open questions for the user
 
-All four are resolved; the resolutions live in `DECISIONS.md` (with the ADRs they cite).
+All four are resolved; the resolutions live in `docs/DECISIONS.md` (with the ADRs they cite).

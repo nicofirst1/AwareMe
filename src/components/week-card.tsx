@@ -25,7 +25,7 @@ export interface WeekCardStem {
  * Markers are informational only; nothing here is an achievement (§13.4).
  *
  * Inner rows are plain `View`s — never `ThemedView` inside a tinted surface
- * (it paints a `background` rectangle over the card fill; DECISIONS.md,
+ * (it paints a `background` rectangle over the card fill; docs/DECISIONS.md,
  * 2026-09-15 expo-feedback round).
  */
 export function WeekCard({

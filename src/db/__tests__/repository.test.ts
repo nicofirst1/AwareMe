@@ -145,7 +145,7 @@ describe('Repository.seedIfEmpty', () => {
     // Issue 04: every official programme stem is categorised via the
     // week→pillar mapping; the weekly meta-stem has none. Of the 26 retired
     // v1 stems, 24 have a category and 2 (the "general" pair) are null —
-    // see DECISIONS.md.
+    // see docs/DECISIONS.md.
     expect(stems.filter((s) => s.category === null)).toHaveLength(1 + 2);
     expect(stems.filter((s) => s.category !== null)).toHaveLength(PROGRAMME_SEED_STEMS.length + 24 + EVENING_PRACTICE_SEED_STEMS.length);
   });

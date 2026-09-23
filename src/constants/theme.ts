@@ -275,7 +275,7 @@ export type CategoryName = keyof typeof CategoryColors;
  *
  * 2026-09-15: its on-fill consumer (the write screen's countdown Save
  * button) is gone (owner decision, expo-feedback round cycle 2; recorded in
- * DECISIONS.md at merge) — the write/review screens now color the top-strip
+ * docs/DECISIONS.md at merge) — the write/review screens now color the top-strip
  * MM:SS numerals via `pressureColorAt` below. Export kept (vestigial
  * token, like the schema's pre-pivot tables): the numerals' per-theme
  * derivation now lives in `pressureColorAt` — its light-theme calm endpoint
@@ -289,7 +289,7 @@ export const PressureColors = {
 /**
  * Pressure color for the write/review top strip's MM:SS numerals
  * (2026-09-15 owner decision, expo-feedback round cycle 2 — recorded in
- * DECISIONS.md at merge): the countdown Save button is gone, and §6.3.7's
+ * docs/DECISIONS.md at merge): the countdown Save button is gone, and §6.3.7's
  * depleting-color cue — a *may*, ambient only, no penalty text, no shaming
  * copy (§13.4) — now colors the numerals as the active timer depletes.
  * `fraction` 0 = calm, 1 = urgent; values outside 0..1 clamp.

@@ -42,7 +42,7 @@
  *    App-original text — committed.
  *
  * The retired "general" pair still have no `category`: spec §5.2 defines
- * exactly six categories and "general" isn't one of them (DECISIONS.md).
+ * exactly six categories and "general" isn't one of them (docs/DECISIONS.md).
  */
 /**
  * The seed content module (issue 10; resolution reworked by issue 23):

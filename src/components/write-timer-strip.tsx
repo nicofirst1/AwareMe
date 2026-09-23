@@ -36,7 +36,7 @@ export function WriteTimerStrip({
    * them in the theme's normal text color. Write/review pass the
    * `pressureColorAt` gradient here while the session is active — §6.3.7's
    * depleting-color cue, relocated from the removed countdown Save button
-   * (2026-09-15 owner decision, DECISIONS.md at merge). ThemedText merges a
+   * (2026-09-15 owner decision, docs/DECISIONS.md at merge). ThemedText merges a
    * caller's `style` last, so this overrides the default theme text color.
    */
   timeColor?: string;

@@ -221,7 +221,7 @@ function MetaStemSession({ session }: { session: ReturnType<typeof useWritingSes
       : null;
   const pressureFraction = stemProgress ?? progress;
 
-  // §6.3.7's depleting-color cue (2026-09-15 owner decision, DECISIONS.md at
+  // §6.3.7's depleting-color cue (2026-09-15 owner decision, docs/DECISIONS.md at
   // merge): the top-strip MM:SS numerals carry the pressure gradient now
   // that the countdown Save button is gone — ambient urgency only, no
   // shaming copy (§13.4). Recomputed per render (the screen re-renders on

@@ -18,7 +18,7 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
  * `openURL` — same user-initiated hop pattern as about.tsx's programme
  * link (c04), with accessible labels stating the row opens the website.
  * The app itself stays offline. No new dependency: expo-linking was
- * already a hard runtime peer of expo-router (see DECISIONS.md).
+ * already a hard runtime peer of expo-router (see docs/DECISIONS.md).
  */
 
 const BRANDEN_URL = 'https://nathanielbranden.com/';

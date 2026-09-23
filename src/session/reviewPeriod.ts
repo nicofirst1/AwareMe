@@ -1,6 +1,6 @@
 /**
  * Pure helpers for review mode's re-read period (§6.5, ticket 13, Q4 in
- * DECISIONS.md). A period is always "the last N days up to now": exclusive
+ * docs/DECISIONS.md). A period is always "the last N days up to now": exclusive
  * end at `now`, inclusive start N days before it, matching `reviews`'
  * `period_start`/`period_end` column comments (spec §4.2).
  */

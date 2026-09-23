@@ -32,4 +32,4 @@ Reviewer-checked doc duties land on main with the merge; captures backed up befo
 
 ## PLAN.md lifecycle
 
-PLAN.md is an index, not a record. Open packets: one line each, what it is plus the gate. Closed or dropped packets: one line each, status plus a pointer (merge commit, report path, or issue file); trim closure prose at close time, never append it. The story lives in the hub, the issue files, or DECISIONS.md. At round close the whole file archives to `.coordination/legacy/plan-<date>.md` and the next round starts with a fresh PLAN.
+`docs/PLAN.md` is an index, not a record. Open packets: one line each, what it is plus the gate. Closed or dropped packets: one line each, status plus a pointer (merge commit, report path, or issue file); trim closure prose at close time, never append it. The story lives in the hub, the issue files, or docs/DECISIONS.md. At round close the whole file archives to `.coordination/legacy/plan-<date>.md` and the next round starts with a fresh PLAN.

@@ -24,7 +24,7 @@ import { useAppLock } from '@/session/useAppLock';
  * Lives in the root layout, not `index.tsx`, because `index.test.tsx` is a
  * bare `render(<HomeScreen />)` with no navigation context — touching
  * `@/db`/`expo-sqlite` or `useRouter` from that screen at render time would
- * break it (see DECISIONS.md's ticket-06 and ticket-13 entries for the same
+ * break it (see docs/DECISIONS.md's ticket-06 and ticket-13 entries for the same
  * constraint on other screens). The root layout is never rendered by that
  * test, so the check is safe here.
  */

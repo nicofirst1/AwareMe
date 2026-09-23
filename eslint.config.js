@@ -9,7 +9,7 @@ module.exports = defineConfig([
   },
   {
     // react-hooks/set-state-in-effect (Compiler-generation rule) downgraded per
-    // DECISIONS.md 2026-09-16. Remaining sites (after the o10 session-state
+    // docs/DECISIONS.md 2026-09-16. Remaining sites (after the o10 session-state
     // pass, issue 17: 7 -> 4, three debt sites cleared — queue advance, badge
     // assembly, stem-timer reset):
     // - write.tsx mount loader + useWritingSession.ts mount resume: ADR-0001

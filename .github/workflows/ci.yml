@@ -50,10 +50,10 @@ jobs:
       - name: Install dependencies
         # Plain `npm ci` fails on the committed lockfile: expo@57 widened the
         # peer set and the resolution predates it. `npm install` with legacy
-        # peer deps is the repo remedy (DECISIONS.md, environment quirks).
+        # peer deps is the repo remedy (docs/DECISIONS.md, environment quirks).
         run: npm install --legacy-peer-deps
 
-      - name: Restore missing expo-asset (known npm quirk; DECISIONS.md 2026-09-16)
+      - name: Restore missing expo-asset (known npm quirk; docs/DECISIONS.md 2026-09-16)
         # node_modules/expo-asset repeatedly vanishes across npm install
         # cycles, after which Jest fails with: Cannot find module expo-asset.
         # This step only fires when the check finds the module absent, then

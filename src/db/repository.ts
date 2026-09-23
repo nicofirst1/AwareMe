@@ -43,7 +43,7 @@ export interface StemRow {
   origin: 'seed' | 'user' | 'imported' | 'meta';
   category: string | null;
   weight: number;
-  /** Morning/evening pivot (migration 0003): which fixed daily notification this stem belongs to. Null for the weekly meta-stem and any pre-pivot row never backfilled (DECISIONS.md 2026-09-14); the two evening reflection meta-stems carry 'evening' (issue 06) — tagged at seed, never drawn by a practice. */
+  /** Morning/evening pivot (migration 0003): which fixed daily notification this stem belongs to. Null for the weekly meta-stem and any pre-pivot row never backfilled (docs/DECISIONS.md 2026-09-14); the two evening reflection meta-stems carry 'evening' (issue 06) — tagged at seed, never drawn by a practice. */
   time_of_day: TimeOfDay | null;
 }
 
@@ -763,7 +763,7 @@ export class Repository {
    * single add, `'imported'` for bulk import. `timeOfDay` (morning/evening
    * pivot, migration 0003) defaults to null — a user stem not tagged to
    * either period never surfaces in a practice via `getActiveStemsForTimeOfDay`,
-   * same as a pre-pivot row (DECISIONS.md 2026-09-14: no backfill).
+   * same as a pre-pivot row (docs/DECISIONS.md 2026-09-14: no backfill).
    */
   addStem(input: {
     text: string;

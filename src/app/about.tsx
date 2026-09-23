@@ -34,7 +34,7 @@ import { useTheme } from '@/hooks/use-theme';
  * `expo-linking`'s `openURL` (the app itself stays offline; this is the one
  * user-initiated hop to the website), and the permission attribution
  * crediting Leigh Branden — a §5.1 MUST. No new dependencies: expo-linking
- * was already a hard runtime peer of expo-router (see DECISIONS.md).
+ * was already a hard runtime peer of expo-router (see docs/DECISIONS.md).
  */
 
 const OFFICIAL_PROGRAMME_URL = 'https://nathanielbranden.com/sentence-completion-i/';

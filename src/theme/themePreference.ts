@@ -19,7 +19,7 @@
  * (Delete all data). Reads fall back to 'system' — the §7 default and the
  * exact pre-preference behaviour — wherever no repository exists (bare
  * screen renders in tests), so `useTheme()` never touches the database
- * beyond one guarded read (DECISIONS.md, ticket-06/ticket-13 constraint).
+ * beyond one guarded read (docs/DECISIONS.md, ticket-06/ticket-13 constraint).
  */
 
 import { useSyncExternalStore } from 'react';

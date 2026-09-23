@@ -1,6 +1,6 @@
 /**
  * Notification scheduling (spec §6.4, morning/evening pivot 2026-09-14, see
- * DECISIONS.md and docs/adr/0004; weekly reflection added by the 2026-09-15
+ * docs/DECISIONS.md and docs/adr/0004; weekly reflection added by the 2026-09-15
  * amendment, ADR-0005). Three repeating local notifications: one daily at
  * `morning_notification_time`, one daily at `evening_notification_time` —
  * the latter ONLY when `evening_practice_enabled` (§7) — and one weekly at

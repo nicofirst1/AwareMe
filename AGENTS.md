@@ -4,8 +4,8 @@ This file is a map. The targets are the sources of truth; when a pointer and its
 
 ## Read first
 
-- `spec.md` — the contract; read before any work. RFC-2119 language: `MUST` binds, a `SHOULD` deviation needs a `DECISIONS.md` entry. §2 lists out-of-scope features (stay out — no stubs or toggles); §13 lists the hard constraints (airplane mode, no stored derived values, permission-scoped seed text).
-- `DECISIONS.md` — the decision index: §14 resolutions, standing decisions, environment quirks, parked arbitrations. Append new deviations there, one bullet with a pointer to the full record; architecture rationale lives in `docs/adr/`.
+- `spec.md` — the contract; read before any work. RFC-2119 language: `MUST` binds, a `SHOULD` deviation needs a `docs/DECISIONS.md` entry. §2 lists out-of-scope features (stay out — no stubs or toggles); §13 lists the hard constraints (airplane mode, no stored derived values, permission-scoped seed text).
+- `docs/DECISIONS.md` — the decision index: §14 resolutions, standing decisions, environment quirks, parked arbitrations. Append new deviations there, one bullet with a pointer to the full record; architecture rationale lives in `docs/adr/`.
 - `.scratch/` — the issue tracker, one folder per feature; see `docs/agents/issue-tracker.md`. Untracked (local-only) — never `git add` it. During delegation rounds, live status is the `.coordination/` round hub.
 
 ## Where things live
@@ -20,9 +20,9 @@ This file is a map. The targets are the sources of truth; when a pointer and its
 - **Design tokens** — `docs/design/DESIGN.md` publishes the theme as a Google design.md file (ADR-0006): tokens in YAML front matter, rationale in prose. It is a published view — `src/constants/theme.ts` stays normative; change it first, then re-publish. Lint with `npm run design:lint`.
 - **Gamification** — `docs/design/gamification-proposal-2026-09-11.md` is its only sanctioned scope.
 - **Export** — spec §8: lossless formats; the export→wipe→import→export round-trip test must stay green.
-- **Extra deps** — `expo-linking`, `expo-crypto` are non-discretionary; rationale in `DECISIONS.md`.
+- **Extra deps** — `expo-linking`, `expo-crypto` are non-discretionary; rationale in `docs/DECISIONS.md`.
 - **Commands** — `package.json`. Gates: `npm run typecheck`, `npx jest` (exclude `/.worktrees/` on main), `npm run lint`, `npm run design:lint`. Emulator: `./scripts/emulator.sh` (bounded boot wait). Release APK: `./scripts/rebuild-android.sh` (a debug APK has no JS bundle and runs only tethered to Metro).
-- **Jest failing with `Cannot find module 'expo-asset'`** — known recurring `node_modules` gap; remedy in `DECISIONS.md`.
+- **Jest failing with `Cannot find module 'expo-asset'`** — known recurring `node_modules` gap; remedy in `docs/DECISIONS.md`.
 
 ## Agent skills
 

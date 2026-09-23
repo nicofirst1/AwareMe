@@ -1,4 +1,4 @@
-/** The shape of every settings row, decoded. Keys match spec.md §7, as amended by the morning/evening pivot (migration 0003, DECISIONS.md): two fixed daily notification times replace the random-window/fixed-mode settings; and by the official-programme amendment (migration 0004, ADR-0005, 2026-09-15): evening-practice toggle, weekly reflection schedule, and the programme-week override. */
+/** The shape of every settings row, decoded. Keys match spec.md §7, as amended by the morning/evening pivot (migration 0003, docs/DECISIONS.md): two fixed daily notification times replace the random-window/fixed-mode settings; and by the official-programme amendment (migration 0004, ADR-0005, 2026-09-15): evening-practice toggle, weekly reflection schedule, and the programme-week override. */
 export interface Settings {
   endings_per_session: number;
   timer_seconds: number;
