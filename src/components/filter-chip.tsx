@@ -11,7 +11,11 @@ import { useTheme } from '@/hooks/use-theme';
 // stays the shared 44 layout floor. Both axes bind here: measured review
 // chips were 44 high and short numeric labels ("7") under 48 wide; the
 // pill's padding absorbs the growth, so the anatomy is unchanged.
-const AndroidMinTouchTarget = 48;
+// w2-t4 exports it (additive): the stems screen's chip strip needs the
+// chips' true floor for its fixed-height container (44pt clipped the
+// chips' bottom edge, s6 — the chrome diet fixes the container, not the
+// shared floor).
+export const AndroidMinTouchTarget = 48;
 
 /**
  * A small selectable chip (filter/category/preset toggle) — used across

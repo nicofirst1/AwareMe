@@ -104,12 +104,13 @@ describe('StemEditScreen — weight control removal', () => {
 // guard the library's bulk Deactivate enforces (canDeactivateStems) — a
 // user could archive their only active stem from the edit screen. The
 // guard's scope is UNCHANGED (contract 1): still global, still
-// at-least-one; this ticket only routes the editor through it. The
-// temporary-deactivation note is the w1-t6 rider reassigned here by the
-// coordinator's 10:20 STEER (Archive lives in this file, not stems.tsx);
-// w2-t4 retires it when the provenance engine lands. Failing-first: the
-// guard and note assertions below fail while toggleArchive is unguarded.
-describe('StemEditScreen — archive guard + programme deactivation note', () => {
+// at-least-one; this ticket only routes the editor through it.
+// w2-t4 additionally retired the temporary-deactivation note here (the
+// w1-t6 rider reassigned to t3 by the coordinator's 10:20 STEER): under
+// D2's provenance engine a deactivated programme row is never
+// re-activated by automation, so the note became the stale-citation
+// smell. Absence is pinned below in both former sites (caption + a11y).
+describe('StemEditScreen — archive guard', () => {
   it('disabling the only active stem is blocked with the notice', () => {
     mockParams.value = { id: mockStem.id };
     mockRepoState.stems = [
@@ -152,13 +153,16 @@ describe('StemEditScreen — archive guard + programme deactivation note', () =>
     expect(screen.queryByText('At least one stem must stay active.')).toBeNull();
   });
 
-  it('Disable on a programme stem says deactivation is temporary (visible + a11y label)', () => {
+  // w2-t4 retirement (granted stem-edit excursion, hub 15:31): the note is
+  // gone from BOTH former sites on a programme stem — no visible caption,
+  // and the Disable button's a11y label is the plain verb again.
+  it('retires the temporary-deactivation note everywhere (programme stem included)', () => {
     mockParams.value = { id: mockStem.id };
     // Fixture default: active programme stem (origin seed, weekNumber 1).
     render(<StemEditScreen />);
 
-    expect(screen.getByText(PROGRAMME_REACTIVATION_NOTE)).toBeTruthy();
-    expect(screen.getByLabelText(`Disable. ${PROGRAMME_REACTIVATION_NOTE}`)).toBeTruthy();
+    expect(screen.queryByText(RETIRED_PROGRAMME_REACTIVATION_NOTE)).toBeNull();
+    expect(screen.getByLabelText('Disable')).toBeTruthy();
   });
 
   it('no reactivation note on a user stem (weekNumber null)', () => {
@@ -168,17 +172,17 @@ describe('StemEditScreen — archive guard + programme deactivation note', () =>
     ];
     render(<StemEditScreen />);
 
-    expect(screen.queryByText(PROGRAMME_REACTIVATION_NOTE)).toBeNull();
+    expect(screen.queryByText(RETIRED_PROGRAMME_REACTIVATION_NOTE)).toBeNull();
     expect(screen.getByLabelText('Disable')).toBeTruthy();
   });
 });
 
-// w1-t6 rider reassigned to t3 (coordinator STEER 2026-09-23 10:20):
-// duplicates the row-caption constant in stems.tsx (out of this cycle's
-// file map) verbatim; w2-t4 removes this interim note with the provenance
-// engine. Copy per spec §13.4 (descriptive, calm, no guilt); fixture text
-// is invented mock copy, no programme/Branden text (spec §5.1).
-const PROGRAMME_REACTIVATION_NOTE =
+// w2-t4 retirement probe: the exact words the w1-t6 rider note used here
+// (duplicated verbatim from stems.tsx at the time). Kept as a literal on
+// purpose — the absence assertions hold the editor to the retirement and
+// fail loudly if any form of the note returns. Copy per spec §13.4;
+// fixture text is invented mock copy, no programme/Branden text (spec §5.1).
+const RETIRED_PROGRAMME_REACTIVATION_NOTE =
   "Deactivating is temporary: the next weekly reflection or 'Make this my week' brings this stem back.";
 
 // w1-t5 (s1-F9, s6-corrected framing): the "Time of day" picker cannot

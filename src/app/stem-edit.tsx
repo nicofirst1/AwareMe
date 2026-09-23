@@ -26,16 +26,14 @@ const CATEGORIES = Object.keys(CategoryColors) as CategoryName[];
 const LAST_ACTIVE_NOTICE = 'At least one stem must stay active.';
 
 // w1-t6 rider reassigned to t3 (coordinator STEER 2026-09-23 10:20;
-// s2-4, D2 interim): until wave 2's activation-provenance rule lands, a
-// deactivated programme stem comes back on the next weekly reflection
-// completion or 'make this my week', so the Disable action says so before
-// the press. Duplicates the row-caption constant in stems.tsx verbatim
-// (out of this cycle's file map); w2-t4 removes this interim note with
-// the provenance engine. `weekNumber !== null` is the same per-row
-// predicate stems.tsx uses — the exact scope of setProgrammeWeekActive's
-// blanket UPDATE. Copy tone per §13.4: descriptive, calm, no guilt.
-const PROGRAMME_REACTIVATION_NOTE =
-  "Deactivating is temporary: the next weekly reflection or 'Make this my week' brings this stem back.";
+// s2-4, D2 interim): a deactivated programme stem used to come back on the
+// next weekly reflection completion or 'make this my week', so the Disable
+// action said so before the press. Retired in w2-t4 (granted stem-edit
+// excursion, hub 15:31): under D2's activation-provenance engine the
+// week-set UPDATE writes provenance, not blanket actives — a row the user
+// deactivates stays deactivated, so the note would be the stale-citation
+// smell. The Disable affordance is the plain verb again; LAST_ACTIVE_NOTICE
+// above is untouched (D5 guard copy, byte-identical).
 
 // w1-t5 (s1-F9, s6-corrected framing): the "Time of day" picker cannot
 // change any practice draw (the queues are week-based); its ONE live
@@ -231,26 +229,12 @@ export default function StemEditScreen() {
 
           {existing && (
             <ThemedView style={styles.destructiveBlock}>
-              {existing.active !== 0 && existing.weekNumber !== null && (
-                <ThemedText type="small" themeColor="textSecondary">
-                  {PROGRAMME_REACTIVATION_NOTE}
-                </ThemedText>
-              )}
               {archiveNotice && (
                 <ThemedText type="small" themeColor="textSecondary" accessibilityLiveRegion="polite">
                   {archiveNotice}
                 </ThemedText>
               )}
-              <Button
-                label={existing.active ? 'Disable' : 'Enable'}
-                onPress={toggleArchive}
-                variant="text"
-                accessibilityLabel={
-                  existing.active !== 0 && existing.weekNumber !== null
-                    ? `Disable. ${PROGRAMME_REACTIVATION_NOTE}`
-                    : undefined
-                }
-              />
+              <Button label={existing.active ? 'Disable' : 'Enable'} onPress={toggleArchive} variant="text" />
               {!existing.deleted_at && <Button label="Delete" onPress={softDelete} variant="text" />}
             </ThemedView>
           )}

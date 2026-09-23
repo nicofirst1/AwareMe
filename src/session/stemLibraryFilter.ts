@@ -59,6 +59,101 @@ export function matchesStemFilters(stem: FilterableStem, filters: StemLibraryFil
   return true;
 }
 
+// w2-t4 (design §4.4): the library's default view groups the practice-first
+// list out of the already-filtered rows. Grouping is a VIEW: a pure
+// partition by identity axes only (origin, time of day, programme week) —
+// no state filtering here (matchesStemFilters stays the only state gate)
+// and no new read path (the screen feeds in its current filter result).
+// Order follows the design: Morning practice (your picks, then the
+// programme week block while Programme is on) before Evening practice (the
+// reflection meta-stems, then your evening picks, starters included).
+export type LibraryGroupKey = 'morning-picks' | 'programme-week' | 'evening-reflection' | 'evening-picks' | 'other';
+
+export interface LibraryGroup<T> {
+  key: LibraryGroupKey;
+  stems: T[];
+}
+
+export interface DefaultViewOptions {
+  /** D1's ONE binary Programme setting. Off = picks-only grouping (D3). */
+  programmeOn: boolean;
+  /** The effective programme week (readProgrammeWeek's currentWeek) while on; null when off or unknown. */
+  effectiveWeek: number | null;
+}
+
+function isMorningPickRow(s: FilterableStem): boolean {
+  return (s.origin === 'user' || s.origin === 'imported') && s.time_of_day !== 'evening';
+}
+
+/** Which practice bucket one library row belongs to, by identity alone. */
+function bucketOf(s: FilterableStem, options: DefaultViewOptions): LibraryGroupKey {
+  if (s.origin === 'meta') return 'evening-reflection';
+  if (s.origin === 'seed' && s.weekNumber != null) {
+    return options.programmeOn && s.weekNumber === options.effectiveWeek ? 'programme-week' : 'other';
+  }
+  if (s.time_of_day === 'evening') return 'evening-picks';
+  if (isMorningPickRow(s)) return 'morning-picks';
+  return 'other';
+}
+
+/**
+ * The flat order's bucket rule: same identity axes, but every programme
+ * row buckets together (all weeks — the flat list is the browsing door,
+ * not one week's practice view).
+ */
+function flatBucketOf(s: FilterableStem): LibraryGroupKey {
+  if (s.origin === 'meta') return 'evening-reflection';
+  if (s.origin === 'seed' && s.weekNumber != null) return 'programme-week';
+  if (s.time_of_day === 'evening') return 'evening-picks';
+  if (isMorningPickRow(s)) return 'morning-picks';
+  return 'other';
+}
+
+const GROUP_ORDER: LibraryGroupKey[] = ['morning-picks', 'programme-week', 'evening-reflection', 'evening-picks', 'other'];
+
+// The flat browsing order (s2-1 resolution): evening picks come before the
+// reflection on the flat list — the design's sequence "morning picks →
+// Programme → evening picks → reflection" — while the grouped evening
+// section renders the reflection first, then the picks. 'other' trails in
+// both so no filtered row is ever dropped from the view.
+const FLAT_ORDER: LibraryGroupKey[] = ['morning-picks', 'programme-week', 'evening-picks', 'evening-reflection', 'other'];
+
+/**
+ * The default view's grouped sections, in the design §4.4 order, over the
+ * rows the caller already filtered (the default state is Active + no
+ * filters, so the rows are the practice; the helper itself never filters).
+ * The programme group exists only while Programme is on AND the effective
+ * week is known; weekless seed rows (the starters) are evening/pick
+ * material, never programme-block rows (s1-F10's root fix), and anything
+ * unclassifiable trails in 'other' so no row is ever dropped.
+ */
+export function groupForDefaultView<T extends FilterableStem>(stems: readonly T[], options: DefaultViewOptions): LibraryGroup<T>[] {
+  const buckets = new Map<LibraryGroupKey, T[]>();
+  for (const stem of stems) {
+    const key = bucketOf(stem, options);
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(stem);
+    else buckets.set(key, [stem]);
+  }
+  return GROUP_ORDER.filter((key) => buckets.has(key)).map((key) => ({ key, stems: buckets.get(key)! }));
+}
+
+/**
+ * Any non-default filter/query flattens the list to one stable, learnable
+ * order (design §4.4): morning picks → programme rows → evening picks →
+ * reflection, then anything unclassifiable. A stable partition of the
+ * caller's rows — input order survives inside each bucket.
+ */
+export function orderForFlatView<T extends FilterableStem>(stems: readonly T[]): T[] {
+  const flat: T[] = [];
+  for (const key of FLAT_ORDER) {
+    for (const stem of stems) {
+      if (flatBucketOf(stem) === key) flat.push(stem);
+    }
+  }
+  return flat;
+}
+
 /**
  * The at-least-one-active guard (§6.2): the practice needs at least one
  * active stem, so deactivation is refused when it would leave zero active,
@@ -67,7 +162,8 @@ export function matchesStemFilters(stem: FilterableStem, filters: StemLibraryFil
  * select action bar's bulk Deactivate (2026-09-11, selection mode) AND the
  * editor's single-stem Archive (w1-t3, s2-3: the editor previously wrote
  * setStemActive unguarded). Bulk Activate never needs this — activating
- * can't reduce the active count.
+ * can't reduce the active count. Scope unchanged through the w2-t4 rebuild
+ * (D5, hub contract 1): both call sites keep the exact shape.
  */
 export function canDeactivateStems(selectedIds: readonly string[], stems: readonly (FilterableStem & { id: string })[]): boolean {
   const selected = new Set(selectedIds);
