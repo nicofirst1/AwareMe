@@ -1,0 +1,9 @@
+# Gitleaks secret-scan configuration for AwareMe.
+#
+# Extends the built-in default rule set (gitleaks 8.x) with no repo-specific
+# additions. Baseline 2026-09-23: a full-history scan (245 commits, 3.82 MB)
+# found zero leaks, so no allowlists are needed. If a default rule ever fires
+# on a benign pattern, allowlist it here with a comment naming the decision,
+# never by weakening the default rules wholesale.
+[extend]
+useDefault = true

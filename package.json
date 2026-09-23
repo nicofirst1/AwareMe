@@ -40,6 +40,7 @@
     "ios": "expo run:ios",
     "test": "jest",
     "lint": "expo lint",
+    "secrets:scan": "gitleaks git --redact --verbose",
     "design:lint": "npx -y @google/design.md@0.4.0 lint docs/design/DESIGN.md",
     "typecheck": "tsc --noEmit"
   },

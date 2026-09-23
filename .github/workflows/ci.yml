@@ -29,6 +29,17 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Secret scan (gitleaks)
+        # Official gitleaks action; rules live in .gitleaks.toml (default
+        # set, no allowlists). Full history is scanned (baseline 2026-09-23:
+        # 245 commits, zero leaks); any finding fails the job before the
+        # install steps run.
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Node 20
         uses: actions/setup-node@v4
