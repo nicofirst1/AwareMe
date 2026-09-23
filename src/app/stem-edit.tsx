@@ -37,6 +37,28 @@ const LAST_ACTIVE_NOTICE = 'At least one stem must stay active.';
 const PROGRAMME_REACTIVATION_NOTE =
   "Deactivating is temporary: the next weekly reflection or 'Make this my week' brings this stem back.";
 
+// w1-t5 (s1-F9, s6-corrected framing): the "Time of day" picker cannot
+// change any practice draw (the queues are week-based); its ONE live
+// effect is the evening reread's `time_of_day = 'morning'` filter
+// (listSessionsForDayMorning, repository.ts — out of this cycle's file
+// map), which silently drops a stem's today-sessions from tonight's
+// reflection when the stem is re-tagged off 'morning'. This note is the
+// minimal honest fix: it states that narrow current truth. Deliberately
+// NOT the wave-2 wording (p7-design §8.2 is an unapproved proposal —
+// "Morning: practiced in the morning and re-read in the evening. ..."):
+// wave 2 re-derives the tag's final semantics (reread widens to
+// non-evening-tagged stems; the tag starts deciding which practice a pick
+// joins) and will supersede this wording. Chosen so it stays true under
+// both models: morning-tagged stems are in the reread set today and stay
+// in it after the wave-2 widening. No disable: s6's correction makes the
+// inertness stem-class-AGNOSTIC (every stem has exactly this one live
+// effect), so there is no scope where the control "cannot matter" — and
+// disabling everywhere would freeze the one live effect. The claim is
+// pinned against the live query in stem-edit.test.tsx (contract 9).
+// Copy tone per §13.4: descriptive, calm, no guilt.
+const TIME_OF_DAY_REREAD_NOTE =
+  "The evening's re-read shows the endings you write today on stems tagged Morning.";
+
 // Morning/evening pivot (migration 0003): which fixed daily notification a
 // stem belongs to, plus "none" (null — never surfaced by either period's
 // practice, same as a pre-pivot row per docs/DECISIONS.md 2026-09-14).
@@ -194,6 +216,9 @@ export default function StemEditScreen() {
               />
             ))}
           </ThemedView>
+          <ThemedText type="small" themeColor="textSecondary">
+            {TIME_OF_DAY_REREAD_NOTE}
+          </ThemedText>
 
           <Button label="Save" onPress={save} variant="primary" />
 

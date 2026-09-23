@@ -1,7 +1,13 @@
+import { DatabaseSync } from 'node:sqlite';
+
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import StemEditScreen from '@/app/stem-edit';
 import { type LibraryStemRow } from '@/db';
+import { migrate } from '@/db/migrate';
+import { Repository } from '@/db/repository';
+import { nodeSqliteExecutor } from '@/db/testSupport/nodeSqliteExecutor';
+import { utcBoundsOfLocalDay } from '@/session/program';
 
 // Route params are per-test (edit form with ?id, bare add form) — a
 // mock-prefixed holder so jest.mock's factory can reach it despite hoisting
@@ -174,3 +180,97 @@ describe('StemEditScreen — archive guard + programme deactivation note', () =>
 // is invented mock copy, no programme/Branden text (spec §5.1).
 const PROGRAMME_REACTIVATION_NOTE =
   "Deactivating is temporary: the next weekly reflection or 'Make this my week' brings this stem back.";
+
+// w1-t5 (s1-F9, s6-corrected framing): the "Time of day" picker cannot
+// change any practice draw (queues are week-based); its ONE live effect is
+// the evening reread's `time_of_day='morning'` filter (repository.ts
+// listSessionsForDayMorning), which silently drops a stem's today-endings
+// from tonight's reflection when the stem is re-tagged off 'morning'. The
+// fix is the honest helper note under the picker (constant duplicated
+// verbatim here from stem-edit.tsx, per this file's LAST_ACTIVE_NOTICE
+// precedent); the wave-2 design (§8.2, unapproved) later supersedes the
+// wording. The note duplicates the same sentence the reread query
+// implements, so the semantics half of this describe runs against a REAL
+// in-memory repository (node:sqlite + migrations), not the mocked barrel —
+// the copy's claim is pinned to the live query, not to a mock's behavior.
+// Failing-first: the copy assertions fail while the note is missing.
+const TIME_OF_DAY_REREAD_NOTE =
+  "The evening's re-read shows the endings you write today on stems tagged Morning.";
+
+function freshLiveRepository(): { raw: DatabaseSync; repo: Repository } {
+  const raw = new DatabaseSync(':memory:');
+  const executor = nodeSqliteExecutor(raw);
+  migrate(executor, '1.0.0');
+  return { raw, repo: new Repository(executor) };
+}
+
+function insertTodaysSessionWithEnding(
+  raw: DatabaseSync,
+  stemId: string,
+  stemText: string,
+  startedAt: string,
+): string {
+  const sessionId = `session-${stemId}`;
+  raw
+    .prepare(
+      `INSERT INTO sessions (id, stem_id, stem_text_snapshot, origin, target_endings, timer_seconds, uncensored_mode,
+         started_at, tz, offset_min, device_locale)
+       VALUES (?, ?, ?, 'manual', 6, 90, 1, ?, 'Europe/Berlin', 120, 'en-DE')`,
+    )
+    .run(sessionId, stemId, stemText, startedAt);
+  raw
+    .prepare(
+      `INSERT INTO endings (id, session_id, ordinal, text, started_at, submitted_at, backspace_count)
+       VALUES (?, ?, 1, 'Mock ending fixture text', ?, ?, 0)`,
+    )
+    .run(`ending-${stemId}`, sessionId, startedAt, startedAt);
+  return sessionId;
+}
+
+describe('StemEditScreen — time-of-day note matches the reread semantics (w1-t5)', () => {
+  it('states the reread effect under the picker on the add form', () => {
+    mockParams.value = {};
+    render(<StemEditScreen />);
+
+    expect(screen.getByText(TIME_OF_DAY_REREAD_NOTE)).toBeTruthy();
+  });
+
+  it('states the reread effect under the picker on the edit form', () => {
+    mockParams.value = { id: mockStem.id };
+    render(<StemEditScreen />);
+
+    expect(screen.getByText(TIME_OF_DAY_REREAD_NOTE)).toBeTruthy();
+  });
+
+  // The ticket's named pin: re-tagging a stem updates the reread input set
+  // EXACTLY as the copy states — asserted against the real
+  // listSessionsForDayMorning query, via the same updateStem call the
+  // editor's Save makes. repository.ts is out of this cycle's map; this
+  // test does not (and must not) change it — it binds the note's claim to
+  // the live semantics so the two cannot drift apart silently.
+  it('re-tagging a stem updates the evening reread input set exactly as the copy states', () => {
+    const { raw, repo } = freshLiveRepository();
+    const text = 'Mock live-repository reread fixture stem';
+    const id = repo.addStem({ text, category: null, origin: 'user', timeOfDay: 'morning' });
+    const { start, end } = utcBoundsOfLocalDay(new Date());
+    const sessionAt = new Date(new Date(start).getTime() + 60 * 60 * 1000).toISOString();
+    insertTodaysSessionWithEnding(raw, id, text, sessionAt);
+
+    const rereadStemIds = () => repo.listSessionsForDayMorning(start, end).map((r) => r.session.stem_id);
+
+    // Baseline the copy's positive claim: a morning-tagged stem's endings
+    // written today ARE in tonight's reread.
+    expect(rereadStemIds()).toEqual([id]);
+
+    // Re-tag off Morning, exactly as the editor's Save does — the reread
+    // silently drops the stem's today-sessions (the s1-F9 surprise the
+    // note names).
+    repo.updateStem(id, { text, category: null, timeOfDay: 'evening' });
+    expect(rereadStemIds()).toEqual([]);
+
+    // Re-tag back to Morning and the today-endings return — the note stays
+    // true in both directions.
+    repo.updateStem(id, { text, category: null, timeOfDay: 'morning' });
+    expect(rereadStemIds()).toEqual([id]);
+  });
+});
