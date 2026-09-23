@@ -10,7 +10,11 @@ import { type Settings, type StemRow } from '@/db';
 // factories can't close over out-of-scope variables.)
 jest.mock('expo-router', () => {
   const { useEffect } = require('react');
+  // Spread the actual module: the off banner's Settings door is a real Link
+  // (w2-t6), so the mock must carry it while keeping the two overrides.
+  const actual = jest.requireActual('expo-router');
   return {
+    ...actual,
     useRouter: () => mockRouter,
     useFocusEffect: (effect: () => void) => useEffect(() => effect(), []),
   };
@@ -197,5 +201,67 @@ describe('ProgrammeScreen (week library)', () => {
     // Week 2's label carries no marker at all — active stems, never locked.
     expect(screen.getByLabelText('Week 2, 4 stems. Collapsed.')).toBeTruthy();
     expect(screen.getByLabelText('Week 1, 4 stems. Current week. Collapsed.')).toBeTruthy();
+  });
+
+  // Packet-7 w2-t6 (D3): the week screen stays browsable while the Programme
+  // setting is off — no gating, same structure, and the user-input override
+  // write stays live while the automation funnel no-ops (w2t2's engine).
+  it('is browsable while the programme is off: weeks render and the override write stays live (D3)', () => {
+    mockRepoState.settings = { programme: false };
+    render(<ProgrammeScreen />);
+    // Same structure as while on: markers, expansion, and both actions.
+    expect(screen.getByText('Week 1 · Current week')).toBeTruthy();
+    expect(screen.getByText('Week 2 · Locked')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Week 2, 4 stems. Locked. Collapsed.'));
+    expect(screen.getByText('Make this my week')).toBeTruthy();
+    fireEvent.press(screen.getByText('Make this my week'));
+    // The override is user input — it writes while off (D3). The week-set
+    // funnel no-ops while off (w2t2), so no activation rides it.
+    expect(mockRepoState.settingWrites).toEqual([['program_week_override', 2]]);
+    expect(mockRepoState.activationCalls).toEqual([]);
+  });
+
+  it('shows the off banner with a Settings link while off, and nothing of it while on (D3)', () => {
+    render(<ProgrammeScreen />);
+    expect(screen.queryByText(/The programme is off/)).toBeNull();
+
+    mockRepoState.settings = { programme: false };
+    render(<ProgrammeScreen />);
+    expect(
+      screen.getByText(
+        'The programme is off. Weeks don’t advance, but you can browse, pick a week, and practice it. Your practice uses your picks.',
+      ),
+    ).toBeTruthy();
+    const link = screen.getByRole('link', { name: 'Settings' });
+    expect(link.props.href).toBe('/settings');
+  });
+
+  it('while off, the intro drops the completion-clear promise and states the off-period rule (D3/D4)', () => {
+    // While off the completion effect skips the override-clear, so the
+    // clearing sentence would promise what automation no longer performs.
+    // The D4 fallback reading rides design §6.2: the chosen-week line plus
+    // the off-period counting rule.
+    mockRepoState.settings = { programme: false, program_week_override: 2 };
+    render(<ProgrammeScreen />);
+    expect(screen.queryByText(/your selection clears when its reflection completes/)).toBeNull();
+    expect(
+      screen.getByText('While the programme is off, reflections are still recorded but don’t move your week.'),
+    ).toBeTruthy();
+    expect(screen.getByText('Your current week is your chosen Week 2.')).toBeTruthy();
+  });
+
+  it('while on, the intro keeps its clearing sentence and no off-period copy appears', () => {
+    mockRepoState.settings = { program_week_override: 2 };
+    render(<ProgrammeScreen />);
+    expect(screen.getByText(/your selection clears when its reflection completes/)).toBeTruthy();
+    expect(screen.queryByText(/reflections are still recorded/)).toBeNull();
+    expect(screen.getByText('Your current week is your chosen Week 2.')).toBeTruthy();
+  });
+
+  it('renders bare from the re-enable dialog’s /week deep link (no params required, w2-t3 companion)', () => {
+    // The settings dialog pushes '/week' with no params (w2t3); this screen
+    // must land and render from that bare route.
+    render(<ProgrammeScreen />);
+    expect(screen.getByText('Week 1 · Current week')).toBeTruthy();
   });
 });

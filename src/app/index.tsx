@@ -24,7 +24,11 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { currentPracticePeriod } from '@/session/currentPractice';
 import { computeStreaks } from '@/session/progressStats';
-import { readHomeProgrammeStatus, type HomeProgrammeStatus } from '@/session/programRead';
+import {
+  readHomeProgrammeStatus,
+  readMorningPracticeQueue,
+  type HomeProgrammeStatus,
+} from '@/session/programRead';
 import { isWeeklyReviewDue } from '@/session/reviewPeriod';
 
 /**
@@ -47,6 +51,10 @@ function currentPeriodForRender(): TimeOfDay {
 }
 
 interface HomeStatus extends HomeProgrammeStatus {
+  /** The composed morning practice's size (picks + gated block, readMorningPracticeQueue) — design §6.1's "N stems ready" reads the composition, not the week block alone. */
+  readyCount: number;
+  /** The Programme setting at read time — keys the off caption and the override line's off variant (D3's read-time honesty; the engine state itself is untouched). */
+  programmeOn: boolean;
   /** "N sessions this week" — omitted (not "0 sessions") when there are none: absence is never called out (§13.4/§13.6). */
   weekCount: number;
   /** Review is worth surfacing only when there's something to re-read and a week has passed since the last one. */
@@ -66,6 +74,8 @@ function loadHomeStatus(): HomeStatus {
   const { current } = computeStreaks(repo.listSessionsForStats(), at, offsetMin);
   return {
     ...readHomeProgrammeStatus(repo, now),
+    readyCount: readMorningPracticeQueue(repo, now).length,
+    programmeOn: repo.getSettings().programme,
     weekCount: recent.length,
     reviewAvailable: wasDue && recent.length > 0,
     currentStreak: current,
@@ -259,21 +269,49 @@ export default function HomeScreen() {
             strips.
           */}
           <Card style={styles.practiceCard}>
-            <ThemedText type="eyebrow">
-              {status ? `Week ${status.week.currentWeek} of 30` : 'Morning practice'}
-            </ThemedText>
+            {/* The eyebrow is the quiet door to the weeks browser (design §6.1:
+                Home had no path to /week; the stems screen's week door moved
+                into its group header, so this link and the re-enable dialog
+                are the two doors left). Same link anatomy as every Link
+                below: role="link" + explicit label. */}
+            {status ? (
+              <Link
+                href="/week"
+                style={styles.eyebrowLink}
+                accessibilityRole="link"
+                accessibilityLabel="Open the programme weeks"
+              >
+                <ThemedText type="eyebrow">{`Week ${status.week.currentWeek} of 30`}</ThemedText>
+              </Link>
+            ) : (
+              <ThemedText type="eyebrow">Morning practice</ThemedText>
+            )}
             {status && status.week.override !== null && (
               <ThemedText type="small" themeColor="textSecondary">
-                Your chosen week: it clears when its reflection completes.
+                {/* The clearing sentence is an automation promise: while the
+                    programme is off the completion effect skips the
+                    override-clear (w2t2), so the off variant states the
+                    truth instead — no promise automation doesn't keep. */}
+                {status.programmeOn
+                  ? 'Your chosen week: it clears when its reflection completes.'
+                  : 'Your chosen week: it stays until you clear it.'}
               </ThemedText>
             )}
             {status && (
               <ThemedText type="subtitle">
                 {status.morningDone
                   ? 'Morning practice complete'
-                  : status.weekStemCount === 1
+                  : status.readyCount === 1
                     ? '1 stem ready'
-                    : `${status.weekStemCount} stems ready`}
+                    : `${status.readyCount} stems ready`}
+              </ThemedText>
+            )}
+            {status && !status.programmeOn && (
+              <ThemedText type="small" themeColor="textSecondary">
+                {/* D3's read-time honesty (design §6.1): the engine's off
+                    state changes nothing, so the caption is what tells the
+                    count's story — the practice below is the picks alone. */}
+                Programme is off. Showing your picks.
               </ThemedText>
             )}
 
@@ -286,8 +324,17 @@ export default function HomeScreen() {
               />
             </View>
 
-            {status && (status.weekCount > 0 || status.reviewAvailable || status.currentStreak >= 3) && (
+            {status && (
               <View style={styles.statusFooter}>
+                {/* s1-F5 (packet-7 w2-t6, design §6.1): the week-advancement
+                    rule becomes visible — one honest line, always present,
+                    true in both programme states (only reflections completed
+                    while the programme is on advance the week; D3's counting
+                    rule in user words). */}
+                <ThemedText type="small" themeColor="textSecondary">
+                  Your week advances when you complete its weekly reflection while the programme is on. It never
+                  moves on its own.
+                </ThemedText>
                 {status.weekCount > 0 && (
                   <ThemedText type="small" themeColor="textSecondary">
                     {status.weekCount === 1 ? '1 session this week' : `${status.weekCount} sessions this week`}
@@ -340,7 +387,7 @@ export default function HomeScreen() {
               <ThemedText type="small" themeColor="textSecondary">
                 {status.eveningDone
                   ? 'Reflected today'
-                  : 'Reread this morning’s endings, then one reflection stem.'}
+                  : 'Reread today’s endings, then reflect, then your evening picks.'}
               </ThemedText>
               <View style={styles.startRow}>
                 <Button
@@ -554,6 +601,12 @@ const styles = StyleSheet.create({
   },
   practiceCard: {
     gap: Spacing.two,
+  },
+  eyebrowLink: {
+    // The eyebrow is now the /week door (design §6.1) — same touch-floor as
+    // every other link row on this screen (reviewRow, navLink, footer).
+    minHeight: MinTouchTarget,
+    justifyContent: 'center',
   },
   startRow: {
     // Packet-3 t6 (cluster 11, p2f-27): the state line must not read as the

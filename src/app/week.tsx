@@ -1,4 +1,5 @@
-import { useFocusEffect, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,8 +8,9 @@ import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WeekCard, type WeekCardStem } from '@/components/week-card';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, MinTouchTarget, Spacing } from '@/constants/theme';
 import { getRepository, type StemRow } from '@/db';
+import { useTheme } from '@/hooks/use-theme';
 import { PROGRAMME_WEEK_CAP } from '@/session/program';
 import { applyWeekSetActivation, readProgrammeWeek, type ProgrammeWeek } from '@/session/programRead';
 
@@ -41,14 +43,21 @@ const ALL_WEEKS = Array.from({ length: PROGRAMME_WEEK_CAP }, (_, i) => i + 1);
  */
 export default function ProgrammeScreen() {
   const router = useRouter();
+  const theme = useTheme();
   const [stems, setStems] = useState<(StemRow & { weekNumber: number })[]>([]);
   const [week, setWeek] = useState<ProgrammeWeek | null>(null);
   // One expanded week at a time — the list stays a calm scan of 30 rows.
   const [expandedWeek, setExpandedWeek] = useState<number | null>(null);
+  // The Programme setting at read time (D3's display rider, packet-7 w2-t6):
+  // while off the screen is unchanged and browsable — only the honesty copy
+  // (banner, intro's clearing promise, off-period rule) keys on this. The
+  // engine's off state itself changes nothing.
+  const [programmeOn, setProgrammeOn] = useState(true);
 
   const refresh = useCallback(() => {
     const repo = getRepository();
     setStems(repo.listProgrammeStems());
+    setProgrammeOn(repo.getSettings().programme);
     const pw = readProgrammeWeek(repo);
     setWeek(pw);
   }, []);
@@ -118,13 +127,49 @@ export default function ProgrammeScreen() {
           initialNumToRender={PROGRAMME_WEEK_CAP}
           ListHeaderComponent={
             <View style={styles.intro}>
+              {/* D3's off banner (design §6.2): quiet, read-time honesty —
+                  the screen below is unchanged and browsable. It names only
+                  what stays live while off (browse, pick a week, one-off
+                  practice); the week-set funnel no-ops while off (w2t2), so
+                  it promises no activation. */}
+              {!programmeOn && (
+                <View style={styles.offBanner}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    The programme is off. Weeks don’t advance, but you can browse, pick a week, and practice it.
+                    Your practice uses your picks.
+                  </ThemedText>
+                  <Link
+                    href="/settings"
+                    style={styles.offBannerLink}
+                    accessibilityRole="link"
+                    accessibilityLabel="Settings"
+                  >
+                    <ThemedText type="small">Settings</ThemedText>
+                    <Ionicons name="chevron-forward-outline" size={16} color={theme.accent} />
+                  </Link>
+                </View>
+              )}
               <ThemedText type="small" themeColor="textSecondary">
-                The official programme, thirty weeks long. Sit on any week once, or make a week yours: your
-                selection clears when its reflection completes.
+                {/* The clearing sentence is an automation promise (the
+                    completion effect's override-clear): while off that write
+                    is skipped (w2t2), so the off variant drops it instead of
+                    promising what automation no longer performs. */}
+                {programmeOn
+                  ? 'The official programme, thirty weeks long. Sit on any week once, or make a week yours: your selection clears when its reflection completes.'
+                  : 'The official programme, thirty weeks long. Sit on any week once, or make a week yours.'}
               </ThemedText>
               {week && week.override !== null && (
                 <ThemedText type="small" themeColor="textSecondary">
                   {`Your current week is your chosen Week ${week.override}.`}
+                </ThemedText>
+              )}
+              {/* D4's fallback reading (design §6.2): while off, reflections
+                  are recorded but never advance the week — the derived week
+                  the app falls back to stays frozen until the programme is
+                  back on. */}
+              {week && week.override !== null && !programmeOn && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  While the programme is off, reflections are still recorded but don’t move your week.
                 </ThemedText>
               )}
             </View>
@@ -155,5 +200,15 @@ const styles = StyleSheet.create({
   intro: {
     gap: Spacing.one,
     marginBottom: Spacing.two,
+  },
+  offBanner: {
+    gap: Spacing.one,
+    marginBottom: Spacing.two,
+  },
+  offBannerLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.half,
+    minHeight: MinTouchTarget,
   },
 });
