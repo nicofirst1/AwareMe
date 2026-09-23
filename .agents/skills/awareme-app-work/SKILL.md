@@ -1,7 +1,7 @@
 ---
 name: awareme-app-work
 description: Implementing, reviewing, or auditing AwareMe (six endings) app changes — UI verification with pi-droid and vision models, emulator protocol, evidence standards, round protocol for delegated cycles.
-version: 2.0.0
+version: 2.1.0
 ---
 
 # Working on AwareMe
