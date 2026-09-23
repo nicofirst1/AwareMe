@@ -72,10 +72,16 @@ export function readProgrammeWeek(repo: Repository, now: Date = new Date()): Pro
 }
 
 /**
- * Week-set activation (issue 09): the effective week's programme stems are
- * the active ones — weeks 1..effectiveUnlock active (`active = 1`), weeks
- * effectiveUnlock+1..30 resting (`active = 0`). The weekly meta-stem, user
- * stems, and non-programme stems are untouched (they have no `week_number`).
+ * Week-set activation (issue 09). Under D2 the funnel is ACTIVATE-ONLY and
+ * provenance-scoped: `setProgrammeWeekActive` activates the untouched
+ * provenance-'programme' stems of weeks 1..effectiveUnlock — and never
+ * writes `active = 0` (the `ProgrammeWeek.unlockFrontier` docblock above
+ * states the rule: nothing auto-re-locks; deactivation is the user's
+ * `setStemActive` flip, out of automation's scope). The weekly meta-stem,
+ * user stems, and non-programme stems are untouched (they have no
+ * `week_number`). While the Programme setting is off the funnel is a TOTAL
+ * no-op (D3) — the gate sits at this function's head, before any read or
+ * write.
  *
  * effectiveUnlock = max(override, derivedWeek, highestActiveFromDb). This
  * ensures existing installs don't regress: if a user previously had week N
@@ -117,6 +123,23 @@ function isMorningPick(s: LibraryStemRow): boolean {
     (s.origin === 'user' || s.origin === 'imported') &&
     s.time_of_day !== 'evening'
   );
+}
+
+/**
+ * D7's evening pick: an active, non-deleted, evening-tagged stem that is
+ * not a reflection meta-stem — the evening practice's writable content
+ * (packet-7 w2-t5; design §8.1). The seed evening starters ARE picks by
+ * design (`origin !== 'meta'`, not an origin allowlist — the mirror image
+ * of `isMorningPick`'s "w2-t5 draws them" note; s1-F3 closes structurally),
+ * user/imported evening picks join, and the reflection meta-stems never do
+ * (they are the reflection itself, §6.5.2). The weekly meta-stem cannot
+ * leak: `listAllStems` excludes `is_weekly_meta` rows outright (pinned
+ * against the real query in repository.review.test.ts). Order is
+ * `listAllStems`' own recency order — no re-sort (the morning precedent),
+ * so start and resume walk identical queues.
+ */
+function isEveningPick(s: LibraryStemRow): boolean {
+  return s.active === 1 && s.deleted_at === null && s.time_of_day === 'evening' && s.origin !== 'meta';
 }
 
 /**
@@ -230,12 +253,22 @@ export interface ReflectionFlowInputs {
   reviewed: { session: SessionRow; endings: EndingRow[] }[];
   /** The reflection stem this flow writes (alternating evening stem / weekly stem). Null when the seed rows are missing. */
   metaStem: StemRow | null;
+  /**
+   * D7's evening picks (evening only; the weekly flow's is empty): the
+   * writable stems the evening practice continues with after the reflection.
+   */
+  picks: StemRow[];
 }
 
 /**
- * The evening reflection's inputs (§6.2/§6.5.2): today's morning sessions
- * read-only, then the alternating evening meta-stem — stem A after an even
- * count of completed evening reflections, stem B after an odd one.
+ * The evening reflection's inputs (§6.2/§6.5.2, D7): today's reread — the
+ * day's sessions on MORNING-PRACTICE stems, which since design §8.2's final
+ * tag semantics means morning-tagged AND untagged stems
+ * (`listSessionsForDayMorning` carries the widened filter; evening-tagged
+ * stems stay out — the evening practice is not re-read) — read-only; then
+ * the alternating evening meta-stem — stem A after an even count of
+ * completed evening reflections, stem B after an odd one; then D7's evening
+ * picks (`isEveningPick` over `listAllStems`, the seed starters included).
  */
 export function readEveningReflectionInputs(repo: Repository, now: Date = new Date()): ReflectionFlowInputs {
   const { start, end } = utcBoundsOfLocalDay(now);
@@ -249,6 +282,7 @@ export function readEveningReflectionInputs(repo: Repository, now: Date = new Da
     // reflection stays available every evening (degrades to the honest null
     // only when BOTH evening meta-stems are deleted).
     metaStem: eveningMetaStems[index % eveningMetaStems.length] ?? null,
+    picks: repo.listAllStems().filter(isEveningPick),
   };
 }
 
@@ -264,6 +298,7 @@ export function readWeeklyReflectionInputs(repo: Repository, now: Date = new Dat
     week: currentWeek,
     reviewed: repo.listSessionsForProgrammeWeek(currentWeek),
     metaStem: repo.getWeeklyMetaStem(),
+    picks: [], // the weekly flow has no picks stage (D7 is the evening's shape)
   };
 }
 
