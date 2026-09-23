@@ -59,6 +59,13 @@ const mockRepository: {
   getProgrammeStemsForWeek: (week: number) => { id: string }[];
   countProgrammeStemsCompletedInRange: (week: number, start: string, end: string) => number;
   getHighestUnlockedWeek: () => number;
+  listAllStems: () => {
+    id: string;
+    active: number;
+    deleted_at: string | null;
+    origin: string;
+    time_of_day: string | null;
+  }[];
   getSettings?: () => Settings;
 } = {
   listSessionsForHistory: () => [{ id: 'session-1' }],
@@ -70,8 +77,18 @@ const mockRepository: {
   getProgrammeStemsForWeek: () => [{ id: 'stem-1' }],
   countProgrammeStemsCompletedInRange: () => 0,
   getHighestUnlockedWeek: () => 0,
+  listAllStems: () => [],
   getSettings: () => DEFAULT_SETTINGS,
 };
+
+/** A user pick as `listAllStems` returns it — the shape isMorningPick filters on (w2t2's D1 composition). */
+const makeMorningPick = (id: string): { id: string; active: number; deleted_at: string | null; origin: string; time_of_day: string | null } => ({
+  id,
+  active: 1,
+  deleted_at: null,
+  origin: 'user',
+  time_of_day: 'morning',
+});
 
 jest.mock('@/db', () => {
   const actual = jest.requireActual<typeof import('@/db')>('@/db');
@@ -86,7 +103,14 @@ const todayName = (): string => WEEKDAY_NAMES[new Date().getDay()];
 
 describe('HomeScreen', () => {
   afterEach(() => {
+    // Reset every mutable stub: the new w2-t6 pins are the first to assert
+    // read-shaped state across tests, so leaked rows from earlier tests (an
+    // anchor, a completed reflection) would change the rendered week/count.
     mockRepository.getSettings = () => DEFAULT_SETTINGS;
+    mockRepository.listAllStems = () => [];
+    mockRepository.getFirstProgrammePractice = () => null;
+    mockRepository.listCompletedWeeklyReflections = () => [];
+    mockRepository.listCompletedEveningReflections = () => [];
     setTestWindow(DEFAULT_TEST_WINDOW.width, DEFAULT_TEST_WINDOW.height, DEFAULT_TEST_WINDOW.scale);
   });
 
@@ -169,6 +193,76 @@ describe('HomeScreen', () => {
     expect(screen.getByRole('link', { name: 'Browse the library' })).toBeTruthy();
     // The nudge is suppressed once the completion state speaks.
     expect(screen.queryByText(/is ready\./)).toBeNull();
+  });
+
+  // Packet-7 w2-t6 (s1-F5): the week-advancement rule becomes visible — one
+  // honest caption on the week card, always present, true in both programme
+  // states (the D3 counting rule in user words: only reflections completed
+  // while the programme is on advance the week).
+  it('states the week-advancement rule on the week card (s1-F5, packet-7 w2-t6)', () => {
+    render(<HomeScreen />);
+    expect(
+      screen.getByText(
+        'Your week advances when you complete its weekly reflection while the programme is on. It never moves on its own.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('reads the ready count from the composed practice: picks + programme block while on (design §6.1)', () => {
+    // Two morning picks + the one stubbed programme-block stem = the
+    // composition readMorningPracticeQueue returns — not the block alone.
+    mockRepository.listAllStems = () => [makeMorningPick('pick-a'), makeMorningPick('pick-b')];
+    render(<HomeScreen />);
+    expect(screen.getByText('3 stems ready')).toBeTruthy();
+  });
+
+  it('under Programme off the card reads picks only and says so, same structure (D3)', () => {
+    // Off: the queue is the picks alone (the block is gated off), so the
+    // count drops to 2 even though the stubbed block still has a stem. The
+    // structure is unchanged (D3: the off state changes nothing — no
+    // disabled affordances), with the read-time honesty caption added.
+    mockRepository.getSettings = () => ({ ...DEFAULT_SETTINGS, programme: false });
+    mockRepository.listAllStems = () => [makeMorningPick('pick-a'), makeMorningPick('pick-b')];
+    render(<HomeScreen />);
+    expect(screen.getByText('2 stems ready')).toBeTruthy();
+    expect(screen.getByText('Programme is off. Showing your picks.')).toBeTruthy();
+    // Same structure: eyebrow, Start, and the advancement rule all stay.
+    expect(screen.getByText('Week 1 of 30')).toBeTruthy();
+    expect(screen.getByText('Start morning practice')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Your week advances when you complete its weekly reflection while the programme is on. It never moves on its own.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('under Programme off, the chosen-week line drops the completion-clear promise (no automation promises while off)', () => {
+    // While off the completion effect skips the override-clear (w2t2), so
+    // the on-state sentence would promise something automation no longer
+    // performs. The off variant states the truth: it stays until cleared.
+    mockRepository.getSettings = () => ({ ...DEFAULT_SETTINGS, programme: false, program_week_override: 2 });
+    render(<HomeScreen />);
+    expect(screen.getByText('Your chosen week: it stays until you clear it.')).toBeTruthy();
+    expect(screen.queryByText('Your chosen week: it clears when its reflection completes.')).toBeNull();
+  });
+
+  it('while on, the chosen-week line keeps its clearing sentence', () => {
+    mockRepository.getSettings = () => ({ ...DEFAULT_SETTINGS, program_week_override: 2 });
+    render(<HomeScreen />);
+    expect(screen.getByText('Your chosen week: it clears when its reflection completes.')).toBeTruthy();
+    expect(screen.queryByText('Your chosen week: it stays until you clear it.')).toBeNull();
+  });
+
+  it('names the evening shape: reread, then reflect, then your evening picks (D7, design §6.1)', () => {
+    render(<HomeScreen />);
+    expect(screen.getByText('Reread today’s endings, then reflect, then your evening picks.')).toBeTruthy();
+    expect(screen.queryByText('Reread this morning’s endings, then one reflection stem.')).toBeNull();
+  });
+
+  it('links the week eyebrow to the programme weeks (design §6.1; the dialog’s other /week door)', () => {
+    render(<HomeScreen />);
+    const link = screen.getByRole('link', { name: 'Open the programme weeks' });
+    expect(link.props.href).toBe('/week');
   });
 
   it('still renders (default period rule) when settings cannot be read', () => {
