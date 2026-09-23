@@ -32,8 +32,8 @@ const mockStemC = makeStem('stem-c', 'If I notice how this mock third stem reads
 const mockWeek2Stem = makeStem('stem-w2', 'If this mock week-two stem behaves in tests', 2);
 const mockUserStem = { ...makeStem('stem-user', 'My own made-up stem is', 0), origin: 'user' as const };
 const mockWeeklyMeta = makeStem('meta-weekly', 'If this mock weekly reflection stem renders its review', 0);
-const mockEveningA = { ...makeStem('meta-evening-a', 'In my body right now I feel', 0), origin: 'meta' };
-const mockEveningB = { ...makeStem('meta-evening-b', 'Right now I am aware of', 0), origin: 'meta' };
+const mockEveningA = { ...makeStem('meta-evening-a', 'In my body right now I feel', 0), origin: 'meta' as const };
+const mockEveningB = { ...makeStem('meta-evening-b', 'Right now I am aware of', 0), origin: 'meta' as const };
 
 /** A session row left open seconds ago — ADR-0001's resumable shape. */
 function openSessionRow(
@@ -79,6 +79,10 @@ const mockRepoState: {
   activationCalls: number[];
   /** w1-t2 empty-state seam: when non-null, getProgrammeStemsForWeek returns this — an emptied effective week (s1-F4) without coupling the test to week derivation. */
   weekStems: StemRow[] | null;
+  /** w1-t4 seam: when non-null, listMetaStems returns this — the post-filter shape (a soft-deleted evening meta-stem's row excluded) without touching the shared default list other tests rely on. */
+  metaStems: StemRow[] | null;
+  /** w1-t4 seam: when non-null, listAllStems returns this — the real read's contract (every stem, soft-deleted included) so a deleted row is distinguishable from a missing one. */
+  allStems: (StemRow & { active: number; deleted_at: string | null; created_at: string })[] | null;
   /** Badge-reveal seam (issue 17): rows `listSessionsForStats` would return, and whether the just-finalized session is wired into them. */
   priorStatsSessions: BadgeSession[];
   statsCompleteLastSession: boolean;
@@ -99,6 +103,8 @@ const mockRepoState: {
   settingWrites: [],
   activationCalls: [],
   weekStems: null,
+  metaStems: null,
+  allStems: null,
 };
 
 // The issue's standing note: the @/db jest mock must carry every repository
@@ -128,14 +134,17 @@ jest.mock('@/db', () => {
       // One-off week visit (issue 04): the whole block, resting included.
       getProgrammeWeekBlock: (week: number) =>
         week === 1 ? [mockStemA, mockStemB, mockStemC] : week === 2 ? [mockWeek2Stem] : [],
-      listMetaStems: () => [mockWeeklyMeta, mockEveningA, mockEveningB],
+      listMetaStems: () => mockRepoState.metaStems ?? [mockWeeklyMeta, mockEveningA, mockEveningB],
       getWeeklyMetaStem: () => mockWeeklyMeta,
       // Reflection rereads
       listSessionsForDayMorning: () => mockRepoState.reviewedMorning,
       listSessionsForProgrammeWeek: () => mockRepoState.reviewedWeek,
       countProgrammeStemsCompletedInRange: () => 0,
-      // Solo fallback + library single-stem writes
+      // Solo fallback + library single-stem writes. The w1-t4 seam stands in
+      // for the real read's full shape (soft-deleted rows included) when a
+      // test needs a deleted row visible to listAllStems but not listMetaStems.
       listAllStems: () =>
+        mockRepoState.allStems ??
         [mockStemA, mockStemB, mockStemC, mockWeek2Stem, mockUserStem].map((s) => ({
           ...s,
           active: 1,
@@ -210,6 +219,8 @@ beforeEach(() => {
   mockRepoState.settingWrites = [];
   mockRepoState.activationCalls = [];
   mockRepoState.weekStems = null;
+  mockRepoState.metaStems = null;
+  mockRepoState.allStems = null;
   mockRouter.back.mockClear();
   mockRouter.push.mockClear();
 });
@@ -485,6 +496,71 @@ describe('WriteScreen — open review sessions resume into their flow (c05-queue
     // under the open row would orphan it (ADR-0001).
     await screen.findByText(/If this mock weekly reflection stem renders its review/);
     expect(mockRepoState.createdSessions).toEqual([]);
+  });
+
+  // w1-t4 (s6-new-1 + s1-F6): the delete dialog promises "only removes it
+  // from the library and future selection" (stem-edit.tsx) — an open
+  // session on a since-deleted evening meta-stem must not wedge on the dead
+  // row. The mount effect re-routes into the rotation's current survivor:
+  // the user's in-progress reflection continues as the open session it
+  // already is (nothing discarded — its own snapshot text stays on screen),
+  // and the completed reflection records under the rotation's current
+  // survivor. The mock's listMetaStems carries the post-filter shape (the
+  // deleted row excluded), listAllStems still sees the soft-deleted row —
+  // the real reads' contract.
+  it('an open session on a deleted evening meta-stem continues its flow and records onto the survivor (w1-t4)', async () => {
+    mockRepoState.metaStems = [mockWeeklyMeta, mockEveningB];
+    mockRepoState.allStems = [
+      ...[mockStemA, mockStemB, mockStemC, mockWeek2Stem, mockUserStem].map((s) => ({
+        ...s,
+        active: 1,
+        deleted_at: null,
+        created_at: '2026-09-01T06:00:00.000Z',
+      })),
+      { ...mockEveningA, active: 0, deleted_at: '2026-09-16T20:00:00.000Z', created_at: '2026-09-01T06:00:00.000Z' },
+    ];
+    mockRepoState.openSession = openSessionRow(mockEveningA.id, mockEveningA.text, { origin: 'review', targetEndings: 1 });
+    render(<WriteScreen />);
+
+    // The continued flow, not a fresh entry: the resumed session's own
+    // snapshot prompt is live (nothing discarded), the writing input is
+    // ready — no reread gate, no empty state.
+    await screen.findByText(/In my body right now I feel/);
+    expect(screen.getByLabelText('Your reflection')).toBeTruthy();
+    expect(screen.queryByText('Continue')).toBeNull();
+    expect(screen.queryByText('Nothing is active for this practice right now.')).toBeNull();
+    fireEvent.changeText(screen.getByLabelText('Your reflection'), 'picked the reflection back up\n');
+    // The completed reflection records onto the rotation's current survivor
+    // — the deleted row draws nothing new into the rotation record. The
+    // open session row itself completes as the user's own reflection:
+    // nothing discarded, no second session started.
+    await screen.findByText('Session saved.');
+    expect(mockRepoState.createdReviews).toHaveLength(1);
+    expect(mockRepoState.createdReviews[0].input.metaStemText).toBe(mockEveningB.text);
+  });
+
+  it('with no survivor left, an open session on a deleted evening meta-stem lands on the honest empty state (w1-t4 guard)', async () => {
+    // Both evening meta-stems deleted: the rotation is empty, so the only
+    // honest render is the w1-t2 empty state with its way-backs (D5 — the
+    // empty path stays reachable by design). The abandoned open row still
+    // exists in the DB; nothing discards it.
+    mockRepoState.metaStems = [mockWeeklyMeta];
+    mockRepoState.allStems = [
+      ...[mockStemA, mockStemB, mockStemC, mockWeek2Stem, mockUserStem].map((s) => ({
+        ...s,
+        active: 1,
+        deleted_at: null,
+        created_at: '2026-09-01T06:00:00.000Z',
+      })),
+      { ...mockEveningA, active: 0, deleted_at: '2026-09-16T20:00:00.000Z', created_at: '2026-09-01T06:00:00.000Z' },
+      { ...mockEveningB, active: 0, deleted_at: '2026-09-16T20:00:00.000Z', created_at: '2026-09-01T06:00:00.000Z' },
+    ];
+    mockRepoState.openSession = openSessionRow(mockEveningA.id, mockEveningA.text, { origin: 'review', targetEndings: 1 });
+    render(<WriteScreen />);
+
+    await screen.findByText('Nothing is active for this practice right now.');
+    expect(screen.getByText('Re-activate stems in the library')).toBeTruthy();
+    expect(screen.getByText('Choose a different week')).toBeTruthy();
   });
 });
 
