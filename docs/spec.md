@@ -105,6 +105,7 @@ CREATE TABLE stems (
   language          TEXT NOT NULL DEFAULT 'en',
   weight            REAL NOT NULL DEFAULT 1.0, -- vestigial since the 2026-09-14 morning/evening pivot; no longer read by selection (6.2)
   active            INTEGER NOT NULL DEFAULT 1,-- 0 = archived, excluded from selection
+  activation_provenance TEXT NOT NULL DEFAULT 'user', -- 'programme' | 'user' (2026-09-23 addition, ADR-0007): who last set `active`; automation activates only never-touched stems
   time_of_day       TEXT,                      -- 'morning' | 'evening' | NULL (2026-09-14 addition); pre-amendment practice tag; programme selection reads week_number instead (6.2)
   week_number       INTEGER,                   -- 1..30, official programme block (2026-09-15 addition, ADR-0005); NULL for non-programme stems
   is_weekly_meta    INTEGER NOT NULL DEFAULT 0,-- 1 = the official weekly reflection stem (5.4, 6.5) (2026-09-15 addition)
@@ -122,6 +123,7 @@ CREATE TABLE sessions (
   target_endings    INTEGER NOT NULL,          -- configured count at session start
   timer_seconds     INTEGER NOT NULL,          -- configured duration at session start
   uncensored_mode   INTEGER NOT NULL,          -- 0/1, backspace restriction active
+  programme_on      INTEGER NOT NULL DEFAULT 1,-- 0/1 (2026-09-23 addition, ADR-0007): programme on when the session started; week derivation counts only programme_on = 1 reflections
   started_at        TEXT NOT NULL,
   first_keypress_at TEXT,                      -- nullable: user may never type
   ended_at          TEXT,
@@ -237,12 +239,13 @@ Four screens maximum, skippable, shown once:
 
 ### 6.2 Stem selection
 
-A session is a **practice**: every active stem for one time-of-day period, written one after another in sequence.
+A session is a **practice**: the period's composed set of stems (below), written one after another in sequence.
 
-- **Programme mode is the app's only mode (2026-09-15, ADR-0005).** The morning practice loads every active programme stem of the **current programme week**: `stems` where `active = 1 AND deleted_at IS NULL AND week_number = <current week>`, in seed order. No weighting, no recency penalty, no randomness.
-- The **current programme week is derived at read time** (§13.7 — never stored): `1 +` the number of distinct calendar weeks (Mon–Sun) containing at least one completed weekly reflection session (§6.5), counted from the week of the first official-programme practice ever written, capped at 30. Advancement is therefore self-paced: missing days never skips weeks, and two reflections inside one calendar week do not skip ahead.
+- **The practice is the user's picks + the programme block, behind ONE binary `programme` setting (2026-09-23, ADR-0007; supersedes ADR-0005's programme-only mode).** The morning practice loads the user's active picks first, then — while the programme setting (§7) is on — every active programme stem of the **current programme week**: `stems` where `active = 1 AND deleted_at IS NULL AND week_number = <current week>`, in seed order. No weighting, no recency penalty, no randomness. There is no per-period picker and no three-way mode: programme-only, programme+mine, and mine-only all emerge from the gate plus the user's picks.
+- The **current programme week is derived at read time** (§13.7 — never stored): `1 +` the number of distinct calendar weeks (Mon–Sun) containing at least one completed weekly reflection session (§6.5) recorded while the programme was on (sessions record `programme_on` at write time, §4.2 — off-period reflections never count, ADR-0007), counted from the week of the first official-programme practice ever written, capped at 30. Advancement is therefore self-paced: missing days never skips weeks, and two reflections inside one calendar week do not skip ahead.
 - The user may **select any week** as their current week (§6.6). The selection is stored as the `program_week_override` setting (nullable, §7) — user input, not a derived value. Completing the reflection of the selected week clears the override so the derived week takes over; Home shows a calm nudge ("Week N complete — Week N+1 is ready"). Encouragement only — no guilt copy (§13.4).
-- The **evening practice** (only when `evening_practice_enabled`, §7) reflects the start of the day instead of repeating it: today's morning endings shown read-only (§6.5's review mechanics), then one reflection meta-stem (§5.4) as a normal timed session. The stem **alternates deterministically** between the two non-weekly review meta-stems, keyed to the count of completed evening reflection sessions. Custom/user-added stems are never in any practice rotation; they are written on demand from the library (`origin = 'manual'`).
+- **The programme can be paused (2026-09-23, ADR-0007).** Off = zero state changes: no automation write runs, the derived week stops advancing (counting rule above), and reflections are still recorded. The week screen stays browsable; the user can still pick a week and manually activate stems. Turning it back on **pins week 1** (`program_week_override = 1`, with an in-app dialog linking to the week screen, §6.6); the derived week — counting only enabled-period reflections — remains the fallback once the override clears.
+- The **evening practice** (only when `evening_practice_enabled`, §7) reflects the start of the day instead of repeating it: today's morning endings shown read-only (§6.5's review mechanics), then one reflection meta-stem (§5.4) as a normal timed session. The stem **alternates deterministically** between the two non-weekly review meta-stems, keyed to the count of completed evening reflection sessions. Custom/user-added stems enter a practice only as the user's picks (above); they are otherwise written on demand from the library (`origin = 'manual'`).
 - The practice is complete only once every stem in that set has been written (§6.3 covers the per-stem writing mechanics, unchanged).
 - `time_of_day` keeps its meaning for pre-amendment rows; programme selection is driven by `week_number`. `stems.weight` is retained in the schema (§4.2) but remains unread (ADR-0004).
 
@@ -285,8 +288,7 @@ Three forms (ADR-0005):
 - List all stems, filterable by category, origin, and active state; searchable by text. Programme stems are grouped **by week** (Week 1–30); a week's page offers a one-off practice (`origin = 'manual'`, does not move the programme position) and a "make this my week" action (sets `program_week_override`, §6.2).
 - Add: a single text field, plus optional category. Validate: non-empty after trim, under 200 characters, does not already exist verbatim. Warn but permit if it ends with terminal punctuation, since a stem should be an unfinished clause.
 - Edit: permitted. Sessions retain their snapshot (section 4.4).
-- Archive (`active = 0`) rather than delete, as the primary destructive action. Deletion is available but soft, and clearly explains that past sessions remain.
-- Adjust weight via a simple three-way control (less often / normal / more often) mapping to weights 0.4 / 1.0 / 2.5. Do not expose a raw float.
+- Archive (`active = 0`) rather than delete, as the primary destructive action. Deletion is available but soft, and clearly explains that past sessions remain. Archive is genuinely persistent (2026-09-23, ADR-0007): programme automation activates only stems the user has never touched (§6.2), so a deactivated stem — programme or not — stays deactivated.
 - Bulk import: paste or open a `.txt` file, one stem per line, `origin = 'imported'`. Show a preview and a count before committing.
 
 ### 6.7 History
@@ -318,6 +320,7 @@ Three forms (ADR-0005):
 | `weekly_meta_day`           | string | `"sunday"` | 2026-09-15 addition. Day of the weekly reflection notification (§6.4); any weekday name, lowercase                                                |
 | `weekly_meta_time`          | string | `"21:00"` | 2026-09-15 addition. Local "HH:MM" fire time of the weekly reflection notification                                                                 |
 | `program_week_override`     | int/null | `null`  | 2026-09-15 addition. User-selected current programme week (1–30); null = derive from history (§6.2). Cleared when the selected week's reflection completes |
+| `programme`                 | bool   | `true`    | 2026-09-23 addition (ADR-0007). The ONE binary Programme gate (§6.2): on = the practice includes the programme week block; off = picks only and the programme pauses. Lives in Settings, Practice section |
 
 ---
 
@@ -401,7 +404,7 @@ Implement in this order. Each milestone ends with a working, installable build.
 
 **M2: The session.** Writing screen, timer, uncensored mode, persistence, manual start only. This is the whole product in embryo; spend disproportionate time here and use it yourself before proceeding.
 
-**M3: Stem library.** Browse, add, edit, archive, weight, bulk import.
+**M3: Stem library.** Browse, add, edit, archive, bulk import.
 
 **M4: Notifications.** Fixed daily and weekly-repeat notifications, rescheduling on foreground/permission/setting change, deep link into a session.
 
