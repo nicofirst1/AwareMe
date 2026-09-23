@@ -8,7 +8,7 @@
  * via the esbuild bundle step in `scripts/audit-seed-db.sh <output-path>`,
  * which aliases `expo-crypto` to a Node shim (see audit-expo-crypto-shim.ts).
  *
- * The corpus is deliberately modest and generic: a few weeks of sittings,
+ * The corpus is deliberately modest and generic: a few weeks of practices,
  * 3-6 endings each, one review, two user stems. All ending text here is
  * placeholder prose written for these screenshots — it is never shown to a
  * real user and never mixed into a real corpus.
@@ -29,7 +29,7 @@ function iso(daysAgo: number, hour: number, minute: number): string {
   return d.toISOString();
 }
 
-interface SittingSpec {
+interface PracticeSpec {
   daysAgo: number;
   hour: number;
   minute: number;
@@ -38,8 +38,8 @@ interface SittingSpec {
   reason: 'timeout' | 'user_done';
 }
 
-/** Three weeks of sittings, dense enough that every aggregate screen has rows. */
-const SITTINGS: readonly SittingSpec[] = [
+/** Three weeks of practices, dense enough that every aggregate screen has rows. */
+const PRACTICES: readonly PracticeSpec[] = [
   {
     daysAgo: 21,
     hour: 8,
@@ -233,13 +233,13 @@ function main(): void {
   const stems = repo.listAllStems().filter((s) => s.origin === 'seed' && s.deleted_at === null && s.active === 1);
   if (stems.length === 0) throw new Error('no seed stems found — seedIfEmpty failed?');
 
-  for (const sitting of SITTINGS) {
-    const stem = stems[sitting.stemIndex % stems.length];
-    const startedAt = iso(sitting.daysAgo, sitting.hour, sitting.minute);
+  for (const practice of PRACTICES) {
+    const stem = stems[practice.stemIndex % stems.length];
+    const startedAt = iso(practice.daysAgo, practice.hour, practice.minute);
     const sessionId = repo.createSession({
       stemId: stem.id,
       stemTextSnapshot: stem.text,
-      origin: sitting.hour >= 17 ? 'manual' : 'manual',
+      origin: practice.hour >= 17 ? 'manual' : 'manual',
       targetEndings: 6,
       timerSeconds: 90,
       uncensoredMode: true,
@@ -248,14 +248,14 @@ function main(): void {
     });
 
     let t = new Date(startedAt).getTime();
-    sitting.endings.forEach((text, i) => {
+    practice.endings.forEach((text, i) => {
       t += 9000 + text.length * 45; // plausible per-ending pace
       const at = new Date(t).toISOString();
       repo.recordFirstKeypress(sessionId, i + 1, at);
       repo.autosaveEndingText(sessionId, i + 1, text, 2 + (i % 3), at);
       repo.submitEnding(sessionId, i + 1, at);
     });
-    repo.finalizeSession(sessionId, sitting.reason, new Date(t + 2000).toISOString());
+    repo.finalizeSession(sessionId, practice.reason, new Date(t + 2000).toISOString());
   }
 
   // One completed review, ~8 days ago, over the preceding week.
@@ -280,19 +280,19 @@ function main(): void {
   });
   repo.addStem({ text: 'Right now, honestly,', category: null, origin: 'user', timeOfDay: 'evening' });
 
-  // `--open`: one sitting left in flight, started ~30s ago — four endings
+  // `--open`: one practice left in flight, started ~30s ago — four endings
   // already submitted and stacked, a fifth half-typed. This is the exact
   // state the owner's write-screen finding is about (timer signals scrolling
   // away beneath the stack), so the write-active screenshots are reproducible
   // without hand-driving the session through idb every round. The 30s head
   // start matters: `useWritingSession` auto-finalizes a resumed session whose
-  // timer has already elapsed (ADR-0001), so the sitting must still be inside
+  // timer has already elapsed (ADR-0001), so the practice must still be inside
   // its 90s window when the app mounts.
   if (process.argv[3] === '--open') {
     // The LAST stem in the morning queue (`getActiveStemsForTimeOfDay`'s own
     // order — uuidv7 ids make list order uncorrelated with seed order, so
     // this must be computed, not assumed), so a timeout lands on the
-    // sitting's final stem — the write screen's completion block (badges,
+    // practice's final stem — the write screen's completion block (badges,
     // "Saved.") only renders there, and this audit wants that state too.
     const queue = repo.getActiveStemsForTimeOfDay('morning');
     const openId = queue[queue.length - 1]?.id;
@@ -326,10 +326,10 @@ function main(): void {
     const openAt = new Date(t + 9000).toISOString();
     repo.recordFirstKeypress(sessionId, 5, openAt);
     repo.autosaveEndingText(sessionId, 5, 'and if the morning belonged to me th', 2, openAt);
-    console.log(`+ 1 open sitting (4 submitted endings, 1 half-typed field)`);
+    console.log(`+ 1 open practice (4 submitted endings, 1 half-typed field)`);
   }
 
-  console.log(`seeded ${outPath}: ${SITTINGS.length} sittings, 1 review, 2 user stems`);
+  console.log(`seeded ${outPath}: ${PRACTICES.length} practices, 1 review, 2 user stems`);
 }
 
 main();

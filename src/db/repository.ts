@@ -16,8 +16,8 @@ import { PROGRAMME_WEEK_CAP } from '@/session/program';
  * a whitespace-only field reads as empty — the shape a first keypress plus a
  * timer expiry leaves behind, ADR-0003). Read-time only: no column, no
  * migration, nothing stored (§13.7). The anchor read
- * (`getFirstProgrammeSitting`) deliberately does NOT carry it — the programme
- * starts when the user first sits down, whether or not that sitting produced
+ * (`getFirstProgrammePractice`) deliberately does NOT carry it — the programme
+ * starts when the user first sits down, whether or not that practice produced
  * text.
  */
 const HAS_NON_EMPTY_ENDING = `EXISTS (
@@ -457,7 +457,7 @@ export class Repository {
    * 1 until the programme itself has started, however many reflections
    * predate it.
    */
-  getFirstProgrammeSitting(): { startedAt: string; offsetMin: number } | null {
+  getFirstProgrammePractice(): { startedAt: string; offsetMin: number } | null {
     return (
       this.db.getFirstSync<{ startedAt: string; offsetMin: number }>(
         `SELECT s.started_at as startedAt, s.offset_min as offsetMin
