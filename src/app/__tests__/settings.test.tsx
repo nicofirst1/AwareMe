@@ -7,6 +7,9 @@ import { rescheduleNotifications } from '@/notifications/scheduler';
 import { resyncThemePreference } from '@/theme/themePreference';
 
 const mockSetSetting = jest.fn();
+// Hoisted so the D4 dialog's navigation pin can assert the push (the
+// screen calls useRouter() once at mount and keeps the object).
+const mockPush = jest.fn();
 // Reassignable per test — the screen reads settings once on mount, so the
 // conditional-stem-timer test swaps this and remounts.
 let mockSettings: Settings = { ...DEFAULT_SETTINGS };
@@ -17,7 +20,7 @@ jest.mock('expo-router', () => ({
   // children inside the same Text the real native Link uses, forwarding
   // accessibility props so the o11 role/label assertions exercise what
   // ships.
-  useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
+  useRouter: () => ({ back: jest.fn(), push: mockPush }),
   Link: (props: { children: ReactNode } & Record<string, unknown>) => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { createElement } = require('react');
@@ -74,6 +77,7 @@ describe('SettingsScreen', () => {
   beforeEach(() => {
     mockSettings = { ...DEFAULT_SETTINGS };
     mockSetSetting.mockClear();
+    mockPush.mockClear();
     jest.mocked(rescheduleNotifications).mockClear();
     // The theme preference store is module-level: re-mirror the (fresh)
     // mocked settings table so each test starts from a known state.
@@ -85,7 +89,10 @@ describe('SettingsScreen', () => {
 
     expect(screen.getByText('Settings')).toBeTruthy();
     expect(screen.getByLabelText('Back')).toBeTruthy();
-    expect(screen.getByText('Session')).toBeTruthy();
+    // The section-label call rides w2-t3 (packet w2-t3 row + design §7.1):
+    // the base label read "Session"; the practice-composition section is
+    // "Practice". Display rename with its pinned test, not a silent one.
+    expect(screen.getByText('Practice')).toBeTruthy();
     expect(screen.getByText('Notifications')).toBeTruthy();
     expect(screen.getByText('Writing')).toBeTruthy();
     expect(screen.getByText('App')).toBeTruthy();
@@ -281,5 +288,128 @@ describe('SettingsScreen', () => {
 
     expect(screen.queryByText(/programme week/i)).toBeNull();
     expect(screen.queryByText(/program week/i)).toBeNull();
+  });
+
+  it('renders the Programme row first in the Practice section with the design copy (p7 design §7.1)', () => {
+    render(<SettingsScreen />);
+
+    expect(screen.getByText('Programme')).toBeTruthy();
+    // The design's two hint lines, verbatim (§13.4-safe; no "programme
+    // week" adjacency — the c02 pin above stays green).
+    expect(screen.getByText('Adds the official programme’s current week to your morning practice.')).toBeTruthy();
+    expect(
+      screen.getByText('Off, your practice is your picks only, and the week stops advancing until you turn it back on.'),
+    ).toBeTruthy();
+
+    // First row of the section (§7.1, owner-approved): compare the
+    // Programme block's position against the first stepper's among the
+    // direct children of the card that holds them both. Children elements
+    // are string | instance; RNTL 13 re-exports no instance type (and
+    // react-test-renderer ships no types), so narrow through unknown.
+    let card = screen.getByText('Programme').parent!;
+    while (!within(card).queryByText('Endings per session')) card = card.parent!;
+    const cardChildren: unknown[] = card.children;
+    let programmeIndex = -1;
+    let endingsIndex = -1;
+    cardChildren.forEach((child, i) => {
+      if (typeof child === 'string') return;
+      if (within(child).queryByText('Programme')) programmeIndex = i;
+      if (within(child).queryByText('Endings per session')) endingsIndex = i;
+    });
+    expect(programmeIndex).toBeGreaterThanOrEqual(0);
+    expect(endingsIndex).toBeGreaterThan(programmeIndex);
+  });
+
+  it('names the Programme pills for screen readers and seeds the on state (D8 default)', () => {
+    render(<SettingsScreen />);
+
+    // The OptionToggle group-label convention: each pill reads
+    // "Programme: <option>" (the map's exact a11y pattern).
+    expect(screen.getByRole('button', { name: 'Programme: on' }).props.accessibilityState.selected).toBe(true);
+    expect(screen.getByRole('button', { name: 'Programme: off' }).props.accessibilityState.selected).toBe(false);
+  });
+
+  it('persists the Programme toggle one key at a time and reschedules nothing (not notification-relevant)', () => {
+    render(<SettingsScreen />);
+
+    fireEvent.press(screen.getByRole('button', { name: 'Programme: off' }));
+    expect(mockSetSetting).toHaveBeenCalledWith('programme', false);
+    fireEvent.press(screen.getByRole('button', { name: 'Programme: on' }));
+    expect(mockSetSetting).toHaveBeenCalledWith('programme', true);
+
+    // D3: the Programme setting is not notification-relevant — the evening
+    // toggle's reschedule precedent does not transfer (research map §5.6).
+    expect(rescheduleNotifications).not.toHaveBeenCalled();
+  });
+
+  it('pins week 1 on the off→on re-enable and writes nothing but the toggle on the off leg (D4/D3)', () => {
+    render(<SettingsScreen />);
+
+    // On → off: D3-inert — the toggle write is the only state change, no
+    // override clear (two-sided so the pin cannot pass vacuously).
+    fireEvent.press(screen.getByRole('button', { name: 'Programme: off' }));
+    expect(mockSetSetting).not.toHaveBeenCalledWith('program_week_override', expect.anything());
+
+    // Off → on: the D4 re-enable pin rides the transition (the week
+    // pages' exact write shape, number 1 — not a string).
+    mockSetSetting.mockClear();
+    fireEvent.press(screen.getByRole('button', { name: 'Programme: on' }));
+    expect(mockSetSetting).toHaveBeenCalledWith('programme', true);
+    expect(mockSetSetting).toHaveBeenCalledWith('program_week_override', 1);
+  });
+
+  it('shows the re-enable dialog on every off→on transition — never on off, never without a transition', () => {
+    // Mount with the setting already on: no transition happened, no dialog.
+    const mounted = render(<SettingsScreen />);
+    expect(screen.queryByText('Programme on')).toBeNull();
+    // Pressing the already-selected pill is not an off→on transition either.
+    fireEvent.press(screen.getByRole('button', { name: 'Programme: on' }));
+    expect(screen.queryByText('Programme on')).toBeNull();
+    mounted.unmount();
+
+    mockSettings = { ...DEFAULT_SETTINGS, programme: false };
+    render(<SettingsScreen />);
+
+    // Off state is inert (D3): no dialog while off.
+    expect(screen.queryByText('Programme on')).toBeNull();
+    fireEvent.press(screen.getByRole('button', { name: 'Programme: on' }));
+    expect(screen.getByText('Programme on')).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: 'Start at Week 1' }));
+    expect(screen.queryByText('Programme on')).toBeNull();
+
+    // On → off never shows it; the NEXT off→on shows it AGAIN — the dialog
+    // is a per-transition artifact, nothing persisted (hub decision 15:52).
+    fireEvent.press(screen.getByRole('button', { name: 'Programme: off' }));
+    expect(screen.queryByText('Programme on')).toBeNull();
+    fireEvent.press(screen.getByRole('button', { name: 'Programme: on' }));
+    expect(screen.getByText('Programme on')).toBeTruthy();
+  });
+
+  it('the re-enable dialog carries the design copy; its primary dismisses without navigating (p7 design §7.2)', () => {
+    mockSettings = { ...DEFAULT_SETTINGS, programme: false };
+    render(<SettingsScreen />);
+
+    fireEvent.press(screen.getByRole('button', { name: 'Programme: on' }));
+    expect(screen.getByText('Programme on')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Your practice starts at Week 1. You can pick a different week, and your week will advance from there.',
+      ),
+    ).toBeTruthy();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Start at Week 1' }));
+    expect(screen.queryByText('Programme on')).toBeNull();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('the re-enable dialog’s Pick a different week link routes to /week (D4)', () => {
+    mockSettings = { ...DEFAULT_SETTINGS, programme: false };
+    render(<SettingsScreen />);
+
+    fireEvent.press(screen.getByRole('button', { name: 'Programme: on' }));
+    // The /about-method link convention (role="link" + explicit label).
+    fireEvent.press(screen.getByRole('link', { name: 'Pick a different week' }));
+
+    expect(mockPush).toHaveBeenCalledWith('/week');
   });
 });

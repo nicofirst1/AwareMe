@@ -239,6 +239,14 @@ export default function OnboardingScreen() {
             <ThemedText type="default" themeColor="textSecondary">
               You can change any of this later in Settings.
             </ThemedText>
+            {/* Packet-7 D8 (design §7.3): the programme line, adjacent to the
+                "later in Settings" line, same styling family. Copy only —
+                onboarding never writes the key; day-one programme-first comes
+                from DEFAULT_SETTINGS' default (the engine's). */}
+            <ThemedText type="default" themeColor="textSecondary">
+              The programme adds guided stems each week. You can disable the programme in Settings and pick your own
+              stems.
+            </ThemedText>
 
             <StepperRow
               label="Endings per session"
