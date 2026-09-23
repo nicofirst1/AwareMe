@@ -138,9 +138,9 @@ describe('programme repository reads', () => {
     }
   });
 
-  it('getFirstProgrammeSitting anchors on the earliest programme-stem session, ignoring earlier non-programme writes', () => {
+  it('getFirstProgrammePractice anchors on the earliest programme-stem session, ignoring earlier non-programme writes', () => {
     const { raw, repo } = makeDb();
-    expect(repo.getFirstProgrammeSitting()).toBeNull();
+    expect(repo.getFirstProgrammePractice()).toBeNull();
 
     const userStem = insertStem(raw, { text: 'my own stem', origin: 'user', timeOfDay: null });
     // Find any week that has stems in the corpus (issue 10: derive from loaded content).
@@ -150,14 +150,14 @@ describe('programme repository reads', () => {
     const programmeStems = repo.getProgrammeStemsForWeek(scenarioWeek);
     expect(programmeStems.length).toBeGreaterThan(0);
     const programmeStem = programmeStems[0];
-    insertCompletedSession(raw, userStem, '2026-08-15T10:00:00.000Z'); // earlier, but not a programme sitting
+    insertCompletedSession(raw, userStem, '2026-08-15T10:00:00.000Z'); // earlier, but not a programme practice
     insertCompletedSession(raw, programmeStem.id, '2026-09-01T06:00:00.000Z');
 
-    const anchor = repo.getFirstProgrammeSitting();
+    const anchor = repo.getFirstProgrammePractice();
     expect(anchor).toEqual({ startedAt: '2026-09-01T06:00:00.000Z', offsetMin: 120 });
   });
 
-  it('getFirstProgrammeSitting ignores soft-deleted sessions', () => {
+  it('getFirstProgrammePractice ignores soft-deleted sessions', () => {
     const { raw, repo } = makeDb();
     const programmeStem = repo.getProgrammeStemsForWeek(1)[0];
     insertSession(raw, {
@@ -166,7 +166,7 @@ describe('programme repository reads', () => {
       endedAt: '2026-09-01T06:10:00.000Z',
       deletedAt: '2026-09-02T00:00:00.000Z',
     });
-    expect(repo.getFirstProgrammeSitting()).toBeNull();
+    expect(repo.getFirstProgrammePractice()).toBeNull();
   });
 
   it('listCompletedWeeklyReflections sees only ended review sessions on the weekly meta-stem', () => {
@@ -265,7 +265,7 @@ describe('§6.2 derivation over real rows (readProgrammeWeek)', () => {
     const weekly = weeklyMetaStemId(repo);
     const week1Stem = repo.getProgrammeStemsForWeek(1)[0];
 
-    // Anchor: first programme sitting Tue 2026-09-01 (Berlin morning).
+    // Anchor: first programme practice Tue 2026-09-01 (Berlin morning).
     insertCompletedSession(raw, week1Stem.id, '2026-09-01T06:00:00.000Z');
     const now = new Date('2026-09-16T10:00:00.000Z');
     expect(readProgrammeWeek(repo, now).currentWeek).toBe(1); // no reflections yet

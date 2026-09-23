@@ -72,7 +72,7 @@ describe('Repository.listSessionsForDayMorning (issue 10: deleted stems in the e
     const { repo } = freshRepository();
     const [deletedStem, keptStem] = repo.listActiveStems();
 
-    // The morning: two completed sittings with endings, inside the day window.
+    // The morning: two completed practices with endings, inside the day window.
     const deletedSession = sessionWithEnding(repo, deletedStem.id, '2026-09-10T08:00:00.000Z');
     const keptSession = sessionWithEnding(repo, keptStem.id, '2026-09-10T08:30:00.000Z');
 

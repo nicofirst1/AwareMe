@@ -386,7 +386,7 @@ describe('fresh-install seed lands the programme in the database (both modes)', 
     }
 
     // The §5.4 meta-stems keep their resting role beside the set: still
-    // inactive, so no sitting draw ever picks them (issue 06's contract).
+    // inactive, so no practice draw ever picks them (issue 06's contract).
     const resting = db.prepare("SELECT COUNT(*) AS c FROM stems WHERE origin = 'meta' AND active = 0").get() as {
       c: number;
     };

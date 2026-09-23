@@ -362,7 +362,7 @@ describe('migrate', () => {
     expect(tagged.map((r) => r.id).sort()).toEqual(['evening-meta-0', 'evening-meta-1']);
     for (const row of tagged) {
       expect(EVENING_META_STEMS).toContain(row.text);
-      expect(row.active).toBe(0); // visibility only — still never drawn by a sitting
+      expect(row.active).toBe(0); // visibility only — still never drawn by a practice
     }
 
     // The weekly meta-stem keeps NULL; the user look-alike keeps NULL.

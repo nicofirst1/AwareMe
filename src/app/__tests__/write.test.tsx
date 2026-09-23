@@ -5,7 +5,7 @@ import WriteScreen from '@/app/write';
 import { type Settings, type StemRow } from '@/db';
 import type { BadgeSession } from '@/session/badges';
 
-// Route params are per-test (morning sitting, evening/weekly reflection,
+// Route params are per-test (morning practice, evening/weekly reflection,
 // one-off week, solo write, bare deep link) — a mock-prefixed holder so
 // jest.mock's factory can reach it despite hoisting.
 const mockParams: { value: Record<string, string> } = { value: {} };
@@ -21,7 +21,7 @@ function makeStem(id: string, text: string, weekNumber: number): StemRow {
 
 // jest.mock()'s factory below can't close over module-scope variables unless
 // they're prefixed `mock*` — see jest's hoisting rule.
-const mockStemA = makeStem('stem-a', 'If I give this mock sitting my full attention', 1);
+const mockStemA = makeStem('stem-a', 'If I give this mock practice my full attention', 1);
 const mockStemB = makeStem('stem-b', 'If I treat this mock test stem responsibly', 1);
 const mockStemC = makeStem('stem-c', 'If I notice how this mock third stem reads', 1);
 const mockWeek2Stem = makeStem('stem-w2', 'If this mock week-two stem behaves in tests', 2);
@@ -63,7 +63,7 @@ function openSessionRow(
 const mockRepoState: {
   settings: Partial<Settings>;
   openSession: ReturnType<typeof openSessionRow> | null;
-  firstSitting: { startedAt: string; offsetMin: number } | null;
+  firstPractice: { startedAt: string; offsetMin: number } | null;
   weeklyReflections: { startedAt: string; offsetMin: number }[];
   eveningReflections: { startedAt: string; offsetMin: number }[];
   reviewedMorning: { session: { id: string; started_at: string; stem_text_snapshot: string }; endings: { id: string; text: string }[] }[];
@@ -79,7 +79,7 @@ const mockRepoState: {
 } = {
   settings: {},
   openSession: null,
-  firstSitting: null,
+  firstPractice: null,
   weeklyReflections: [],
   eveningReflections: [],
   reviewedMorning: [],
@@ -105,10 +105,10 @@ jest.mock('@/db', () => {
       getSettings: () => ({ ...actual.DEFAULT_SETTINGS, ...mockRepoState.settings }),
       getOpenSession: () => mockRepoState.openSession,
       // §6.2 week derivation inputs
-      getFirstProgrammeSitting: () => mockRepoState.firstSitting,
+      getFirstProgrammePractice: () => mockRepoState.firstPractice,
       listCompletedWeeklyReflections: () => mockRepoState.weeklyReflections,
       listCompletedEveningReflections: () => mockRepoState.eveningReflections,
-      // Sittings
+      // Practices
       getProgrammeStemsForWeek: (week: number) =>
         week === 1 ? [mockStemA, mockStemB, mockStemC] : week === 2 ? [mockWeek2Stem] : [],
       // One-off week visit (issue 04): the whole block, resting included.
@@ -183,7 +183,7 @@ beforeEach(() => {
   mockParams.value = {};
   mockRepoState.settings = {};
   mockRepoState.openSession = null;
-  mockRepoState.firstSitting = null;
+  mockRepoState.firstPractice = null;
   mockRepoState.weeklyReflections = [];
   mockRepoState.eveningReflections = [];
   mockRepoState.reviewedMorning = [];
@@ -197,7 +197,7 @@ beforeEach(() => {
   mockRepoState.activationCalls = [];
 });
 
-describe('WriteScreen — sittings', () => {
+describe('WriteScreen — practices', () => {
   // W4 regression (layout-audit-2026-09-15): `session.state.endings` isn't
   // cleared until the next `start()`, so the queue-advance effect used to
   // land on the next stem's Start gate with the *previous* stem's endings
@@ -210,7 +210,7 @@ describe('WriteScreen — sittings', () => {
     render(<WriteScreen />);
 
     await screen.findByText(/Stem 1 of 3/);
-    await screen.findByText(/If I give this mock sitting my full attention/);
+    await screen.findByText(/If I give this mock practice my full attention/);
     fireEvent.press(screen.getByText('Start'));
 
     const input = await screen.findByLabelText('Your ending');
@@ -242,19 +242,19 @@ describe('WriteScreen — sittings', () => {
     expect(screen.queryByText(purpose)).toBeNull();
   });
 
-  it('the morning sitting is the effective programme week’s block, in seed order', () => {
+  it('the morning practice is the effective programme week’s block, in seed order', () => {
     mockParams.value = { timeOfDay: 'morning' };
     render(<WriteScreen />);
     expect(screen.getByText(/Stem 1 of 3/)).toBeTruthy();
-    expect(screen.getByText(/If I give this mock sitting my full attention/)).toBeTruthy();
+    expect(screen.getByText(/If I give this mock practice my full attention/)).toBeTruthy();
   });
 
-  it('a bare /write defaults to the morning sitting instead of a blank screen', () => {
+  it('a bare /write defaults to the morning practice instead of a blank screen', () => {
     render(<WriteScreen />);
-    expect(screen.getByText(/If I give this mock sitting my full attention/)).toBeTruthy();
+    expect(screen.getByText(/If I give this mock practice my full attention/)).toBeTruthy();
   });
 
-  it('one-off week sitting: /write?week=2 loads that week’s block as manual sessions', () => {
+  it('one-off week practice: /write?week=2 loads that week’s block as manual sessions', () => {
     mockParams.value = { week: '2' };
     render(<WriteScreen />);
     expect(screen.getByText(/If this mock week-two stem behaves in tests/)).toBeTruthy();
@@ -263,7 +263,7 @@ describe('WriteScreen — sittings', () => {
     expect(mockRepoState.createdSessions).toEqual([{ origin: 'manual', stemId: mockWeek2Stem.id }]);
   });
 
-  it('resumes an interrupted sitting at its position, not from the top (ADR-0001 + §6.2)', async () => {
+  it('resumes an interrupted practice at its position, not from the top (ADR-0001 + §6.2)', async () => {
     mockParams.value = { timeOfDay: 'morning' };
     mockRepoState.openSession = openSessionRow(mockStemB.id, mockStemB.text);
     render(<WriteScreen />);
@@ -286,7 +286,7 @@ describe('WriteScreen — evening reflection (§6.2/§6.5.2)', () => {
   function reviewedMorning() {
     return [
       {
-        session: { id: 'morning-1', started_at: '2026-09-16T06:00:00.000Z', stem_text_snapshot: 'If I give this mock sitting my full attention' },
+        session: { id: 'morning-1', started_at: '2026-09-16T06:00:00.000Z', stem_text_snapshot: 'If I give this mock practice my full attention' },
         endings: [{ id: 'e1', text: 'I noticed the light change on my desk' }],
       },
     ];
@@ -298,7 +298,7 @@ describe('WriteScreen — evening reflection (§6.2/§6.5.2)', () => {
     render(<WriteScreen />);
 
     // Reread phase: today's morning endings, read-only, then Continue.
-    await screen.findByText(/If I give this mock sitting my full attention/);
+    await screen.findByText(/If I give this mock practice my full attention/);
     expect(screen.getByText('I noticed the light change on my desk')).toBeTruthy();
     fireEvent.press(screen.getByText('Continue'));
 
@@ -346,7 +346,7 @@ describe('WriteScreen — weekly reflection (/write?origin=weekly, §6.5.1)', ()
   function reviewedWeek() {
     return [
       {
-        session: { id: 'week1-1', started_at: '2026-09-14T06:00:00.000Z', stem_text_snapshot: 'If I give this mock sitting my full attention' },
+        session: { id: 'week1-1', started_at: '2026-09-14T06:00:00.000Z', stem_text_snapshot: 'If I give this mock practice my full attention' },
         endings: [{ id: 'e1', text: 'I actually looked up from my screen at lunch' }],
       },
     ];
@@ -354,13 +354,13 @@ describe('WriteScreen — weekly reflection (/write?origin=weekly, §6.5.1)', ()
 
   it('reviews the week, then the weekly meta-stem, and clears a matching override on completion', async () => {
     mockParams.value = { origin: 'weekly' };
-    mockRepoState.firstSitting = { startedAt: '2026-09-01T06:00:00.000Z', offsetMin: 120 };
+    mockRepoState.firstPractice = { startedAt: '2026-09-01T06:00:00.000Z', offsetMin: 120 };
     mockRepoState.reviewedWeek = reviewedWeek() as never;
     mockRepoState.settings = { program_week_override: 1 };
     render(<WriteScreen />);
 
     await screen.findByText(/Week 1 review/);
-    await screen.findByText(/If I give this mock sitting my full attention/);
+    await screen.findByText(/If I give this mock practice my full attention/);
     fireEvent.press(screen.getByText('Continue'));
 
     await screen.findByText(/If this mock weekly reflection stem renders its review/);
@@ -391,7 +391,7 @@ describe('WriteScreen — weekly reflection (/write?origin=weekly, §6.5.1)', ()
 
   it('a zero-content reflection does not complete the week: override stays, review row still recorded (t10)', async () => {
     mockParams.value = { origin: 'weekly' };
-    mockRepoState.firstSitting = { startedAt: '2026-09-01T06:00:00.000Z', offsetMin: 120 };
+    mockRepoState.firstPractice = { startedAt: '2026-09-01T06:00:00.000Z', offsetMin: 120 };
     mockRepoState.reviewedWeek = reviewedWeek() as never;
     mockRepoState.settings = { program_week_override: 1 };
     render(<WriteScreen />);
@@ -445,7 +445,7 @@ describe('WriteScreen — open review sessions resume into their flow (c05-queue
     mockParams.value = { timeOfDay: 'morning', origin: 'notification' };
     mockRepoState.openSession = openSessionRow(mockWeeklyMeta.id, mockWeeklyMeta.text, { origin: 'review', targetEndings: 1 });
     render(<WriteScreen />);
-    // Still routed into the reflection flow — starting a fresh sitting
+    // Still routed into the reflection flow — starting a fresh practice
     // under the open row would orphan it (ADR-0001).
     await screen.findByText(/If this mock weekly reflection stem renders its review/);
     expect(mockRepoState.createdSessions).toEqual([]);
@@ -497,20 +497,20 @@ describe('WriteScreen — input field, keyboard, and exit-label alignment', () =
 
 describe('WriteScreen — badge reveal on the completion screen (issue 17)', () => {
   // Gamification proposal §1.A/§1.B: the completion block reveals the
-  // badges newly crossed by THIS sitting's final session, computed fresh
+  // badges newly crossed by THIS practice's final session, computed fresh
   // each render (§13.7 — nothing stored). Zero coverage before the
   // 2026-09-16 lint disposition named the badge-reveal UI as a gap; these
-  // tests drive real sittings to 'done' through the mocked repository.
+  // tests drive real practices to 'done' through the mocked repository.
 
   it('reveals the badges the final session newly crosses', async () => {
     mockParams.value = { stemId: 'stem-a' };
     mockRepoState.settings = { endings_per_session: 1 };
-    // No prior history: completing the sitting crosses 'first_words' and
+    // No prior history: completing the practice crosses 'first_words' and
     // 'six_endings' (a one-ending session meets its one-ending target).
     mockRepoState.statsCompleteLastSession = true;
     render(<WriteScreen />);
 
-    await screen.findByText(/If I give this mock sitting my full attention/);
+    await screen.findByText(/If I give this mock practice my full attention/);
     fireEvent.press(screen.getByText('Start'));
     const input = await screen.findByLabelText('Your ending');
     fireEvent.changeText(input, 'one honest sentence about right now\n');
@@ -530,7 +530,7 @@ describe('WriteScreen — badge reveal on the completion screen (issue 17)', () 
     mockRepoState.priorStatsSessions = [priorCompletedSession('prior-session')];
     render(<WriteScreen />);
 
-    await screen.findByText(/If I give this mock sitting my full attention/);
+    await screen.findByText(/If I give this mock practice my full attention/);
     fireEvent.press(screen.getByText('Start'));
     const input = await screen.findByLabelText('Your ending');
     fireEvent.changeText(input, 'one honest sentence about right now\n');
@@ -540,7 +540,7 @@ describe('WriteScreen — badge reveal on the completion screen (issue 17)', () 
     expect(screen.queryByText('Six Endings')).toBeNull();
   });
 
-  it('never reveals between stems — only the sitting-final done assembles badges', async () => {
+  it('never reveals between stems — only the practice-final done assembles badges', async () => {
     mockParams.value = { timeOfDay: 'morning' };
     mockRepoState.settings = { endings_per_session: 1 };
     mockRepoState.statsCompleteLastSession = true;
@@ -552,7 +552,7 @@ describe('WriteScreen — badge reveal on the completion screen (issue 17)', () 
     fireEvent.changeText(input, 'a stray thought I keep circling back to\n');
 
     // Stem 1 is done — 'First Words' has just been crossed by it — but the
-    // sitting is not finished: no completion block, no badge ("never
+    // practice is not finished: no completion block, no badge ("never
     // between stems", proposal §2), and the next gate is clean.
     await screen.findByText(/Stem 2 of 3/);
     expect(screen.getByText('Start')).toBeTruthy();

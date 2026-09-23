@@ -8,7 +8,7 @@ import {
   applyWeekSetActivation,
   readEveningReflectionInputs,
   readHomeProgrammeStatus,
-  readMorningSittingQueue,
+  readMorningPracticeQueue,
   readProgrammeWeek,
   readWeeklyReflectionInputs,
   shouldClearOverride,
@@ -16,7 +16,7 @@ import {
 import { DEFAULT_SETTINGS, type Repository, type Settings } from '@/db';
 
 type Repo = {
-  getFirstProgrammeSitting: () => { startedAt: string; offsetMin: number } | null;
+  getFirstProgrammePractice: () => { startedAt: string; offsetMin: number } | null;
   listCompletedWeeklyReflections: () => { startedAt: string; offsetMin: number }[];
   listCompletedEveningReflections: () => { startedAt: string; offsetMin: number }[];
   getProgrammeStemsForWeek: (week: number) => { id: string; text: string }[];
@@ -32,7 +32,7 @@ type Repo = {
 
 function makeRepo(overrides: Partial<Repo> = {}): Repository {
   return {
-    getFirstProgrammeSitting: () => null,
+    getFirstProgrammePractice: () => null,
     listCompletedWeeklyReflections: () => [],
     listCompletedEveningReflections: () => [],
     getProgrammeStemsForWeek: () => [],
@@ -56,8 +56,8 @@ function atIso(localWallIso: string, offsetMin = 120): { startedAt: string; offs
   return { startedAt: new Date(Date.parse(localWallIso) - offsetMin * 60_000).toISOString(), offsetMin };
 }
 
-/** First programme sitting Tue 2026-09-01 morning (Berlin) → anchor week Monday 2026-08-31. */
-const ANCHOR = { getFirstProgrammeSitting: () => atIso('2026-09-01T06:00:00Z') };
+/** First programme practice Tue 2026-09-01 morning (Berlin) → anchor week Monday 2026-08-31. */
+const ANCHOR = { getFirstProgrammePractice: () => atIso('2026-09-01T06:00:00Z') };
 
 describe('readProgrammeWeek', () => {
   it('derives week 1 with no anchor, even with pre-programme reflections', () => {
@@ -66,10 +66,10 @@ describe('readProgrammeWeek', () => {
     expect(week).toMatchObject({ derivedWeek: 1, override: null, currentWeek: 1 });
   });
 
-  it('counts anchored reflection weeks from the first programme sitting onward', () => {
+  it('counts anchored reflection weeks from the first programme practice onward', () => {
     const repo = makeRepo({
-      // First programme sitting in the week of Mon 2026-08-31 (UTC+2 wall: Tue 2026-09-01).
-      getFirstProgrammeSitting: () => atIso('2026-09-01T06:00:00Z'),
+      // First programme practice in the week of Mon 2026-08-31 (UTC+2 wall: Tue 2026-09-01).
+      getFirstProgrammePractice: () => atIso('2026-09-01T06:00:00Z'),
       // Two reflections in distinct later weeks + one same-week duplicate + one pre-anchor.
       listCompletedWeeklyReflections: () => [
         atIso('2026-01-11T21:00:00Z'), // pre-anchor: never counts
@@ -84,7 +84,7 @@ describe('readProgrammeWeek', () => {
 
   it('applies the override on top of the derived week', () => {
     const repo = makeRepo({
-      getFirstProgrammeSitting: () => atIso('2026-09-01T06:00:00Z'),
+      getFirstProgrammePractice: () => atIso('2026-09-01T06:00:00Z'),
       listCompletedWeeklyReflections: () => [atIso('2026-09-06T21:00:00Z')],
       getSettings: () => ({ ...DEFAULT_SETTINGS, program_week_override: 7 }),
     });
@@ -107,7 +107,7 @@ describe('readProgrammeWeek', () => {
 
 describe('readHomeProgrammeStatus', () => {
 
-  it('reports the sitting state, evening gate, and weekly card for a plain day', () => {
+  it('reports the practice state, evening gate, and weekly card for a plain day', () => {
     // Wednesday 2026-09-16 (not the default target day, Sunday).
     const repo = makeRepo({
       ...ANCHOR,
@@ -125,7 +125,7 @@ describe('readHomeProgrammeStatus', () => {
     expect(status.programmeComplete).toBe(false);
   });
 
-  it('marks the morning sitting done once every week stem completed today', () => {
+  it('marks the morning practice done once every week stem completed today', () => {
     const repo = makeRepo({
       ...ANCHOR,
       getProgrammeStemsForWeek: () => [{ id: 'a', text: 'a' }, { id: 'b', text: 'b' }],
@@ -208,7 +208,7 @@ describe('readHomeProgrammeStatus', () => {
   });
 });
 
-describe('readMorningSittingQueue', () => {
+describe('readMorningPracticeQueue', () => {
   it('loads the effective week’s stems (override respected)', () => {
     const weeks: Record<number, { id: string; text: string }[]> = {
       3: [{ id: 'w3-a', text: 'a' }],
@@ -218,7 +218,7 @@ describe('readMorningSittingQueue', () => {
       getProgrammeStemsForWeek: (week) => weeks[week] ?? [],
       getSettings: () => ({ ...DEFAULT_SETTINGS, program_week_override: 9 }),
     });
-    expect(readMorningSittingQueue(repo, new Date('2026-09-16T10:00:00Z'))).toHaveLength(2);
+    expect(readMorningPracticeQueue(repo, new Date('2026-09-16T10:00:00Z'))).toHaveLength(2);
   });
 });
 

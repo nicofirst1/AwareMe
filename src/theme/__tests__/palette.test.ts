@@ -89,7 +89,7 @@ describe('theme color tokens', () => {
     // `borderStrong` outlines non-text controls (Button secondary, LockScreen
     // Unlock); WCAG 1.4.11 sets the 3:1 bar for non-text UI boundaries, not
     // the 4.5:1 text bar. Dark buttons sit on `background` (the black screen)
-    // and on `backgroundElement` cards (the sitting card), so both pairings
+    // and on `backgroundElement` cards (the practice card), so both pairings
     // are asserted — the v14 report's "buttons not really visible in dark"
     // measured 1.25:1 (fill) and 1.39:1 (the old shared 15% border) against
     // these very surfaces (v14 issue 07).
