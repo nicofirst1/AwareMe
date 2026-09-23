@@ -11,6 +11,6 @@ Invariants that are easy to trip over:
 - The data layer is append-only with soft delete, and derived values are computed at read time, never stored (spec §4, §13.7).
 - The app never scores, praises, or interprets the user’s writing, and notification copy never contains user text (spec §13.4, §6.4).
 
-Run `npm test`, `npm run typecheck`, and `npm run design:lint` before proposing a change; all must pass. Run `npm run secrets:scan` too (gitleaks; CI enforces it on every push and pull request). Keep pull requests small, and describe the behaviour change, not just the code change.
+Run `npm test`, `npm run typecheck`, and `npm run design:lint` before proposing a change; all must pass. Run `npm run secrets:scan` too (gitleaks; CI enforces it on every push and pull request). A pre-push hook (`.githooks/pre-push`) runs the full gate set automatically before anything reaches origin — enable it once per clone with `npm run setup:hooks`. Keep pull requests small, and describe the behaviour change, not just the code change.
 
 Changing the look (colors, type, spacing, component tokens)? `src/constants/theme.ts` is the source of truth: edit it first, then re-publish `docs/design/DESIGN.md` (the Google design.md view, ADR-0006) and keep `npm run design:lint` at 0 errors.

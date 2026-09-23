@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#
+# Pre-push gate for AwareMe.
+#
+# Runs the full local gate set against the working tree before anything
+# reaches origin, mirroring CI (.github/workflows/ci.yml). Push from a clean
+# tree: the hook validates what is on disk, not the pushed ref.
+#
+# Enable once per clone:  npm run setup:hooks   (git config core.hooksPath .githooks)
+# Bypass (at your risk):  git push --no-verify
+
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+gates=(
+  "secrets:scan|npm run secrets:scan"
+  "typecheck|npm run typecheck"
+  "lint|npm run lint"
+  "jest|npx jest"
+  "design:lint|npm run design:lint"
+)
+
+echo "pre-push: running ${#gates[@]} gates..."
+for gate in "${gates[@]}"; do
+  label="${gate%%|*}"
+  command="${gate#*|}"
+  printf '\n==> [%s]\n' "$label"
+  if ! eval "$command"; then
+    printf '\npre-push: gate "%s" FAILED - push aborted.\n' "$label" >&2
+    echo "pre-push: fix the failure and push again, or bypass once with: git push --no-verify" >&2
+    exit 1
+  fi
+done
+
+printf '\npre-push: all %s gates passed.\n' "${#gates[@]}"

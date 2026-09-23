@@ -21,7 +21,7 @@ This file is a map. The targets are the sources of truth; when a pointer and its
 - **Gamification** — `docs/design/gamification-proposal-2026-09-11.md` is its only sanctioned scope.
 - **Export** — spec §8: lossless formats; the export→wipe→import→export round-trip test must stay green.
 - **Extra deps** — `expo-linking`, `expo-crypto` are non-discretionary; rationale in `docs/DECISIONS.md`.
-- **Commands** — `package.json`. Gates: `npm run typecheck`, `npx jest` (exclude `/.worktrees/` on main), `npm run lint`, `npm run design:lint`. Emulator: `./scripts/emulator.sh` (bounded boot wait). Release APK: `./scripts/rebuild-android.sh` (a debug APK has no JS bundle and runs only tethered to Metro).
+- **Commands** — `package.json`. Gates: `npm run typecheck`, `npx jest` (exclude `/.worktrees/` on main), `npm run lint`, `npm run design:lint`. Pre-push hook: `.githooks/pre-push` runs all gates plus `secrets:scan` before anything reaches origin — enable once per clone with `npm run setup:hooks`, bypass with `--no-verify`. Emulator: `./scripts/emulator.sh` (bounded boot wait). Release APK: `./scripts/rebuild-android.sh` (a debug APK has no JS bundle and runs only tethered to Metro).
 - **Jest failing with `Cannot find module 'expo-asset'`** — resolved 2026-09-23: it was a lockfile hoisting defect, fixed in the lock itself (see `docs/DECISIONS.md`, environment quirks).
 
 ## Agent skills
