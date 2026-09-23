@@ -10,9 +10,14 @@ import type { BadgeSession } from '@/session/badges';
 // jest.mock's factory can reach it despite hoisting.
 const mockParams: { value: Record<string, string> } = { value: {} };
 
+// One shared router spy (w1-t2): the empty state's way-back buttons navigate
+// imperatively via router.push, so assertions need the component's push to BE
+// a spy — a fresh object per call made it unreachable. Cleared per test.
+const mockRouter = { back: jest.fn(), push: jest.fn() };
+
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams.value,
-  useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
+  useRouter: () => mockRouter,
 }));
 
 function makeStem(id: string, text: string, weekNumber: number): StemRow {
@@ -72,6 +77,8 @@ const mockRepoState: {
   createdReviews: { input: Record<string, unknown> }[];
   settingWrites: [string, unknown][];
   activationCalls: number[];
+  /** w1-t2 empty-state seam: when non-null, getProgrammeStemsForWeek returns this — an emptied effective week (s1-F4) without coupling the test to week derivation. */
+  weekStems: StemRow[] | null;
   /** Badge-reveal seam (issue 17): rows `listSessionsForStats` would return, and whether the just-finalized session is wired into them. */
   priorStatsSessions: BadgeSession[];
   statsCompleteLastSession: boolean;
@@ -91,6 +98,7 @@ const mockRepoState: {
   createdReviews: [] as never as { input: Record<string, unknown> }[],
   settingWrites: [],
   activationCalls: [],
+  weekStems: null,
 };
 
 // The issue's standing note: the @/db jest mock must carry every repository
@@ -110,7 +118,13 @@ jest.mock('@/db', () => {
       listCompletedEveningReflections: () => mockRepoState.eveningReflections,
       // Practices
       getProgrammeStemsForWeek: (week: number) =>
-        week === 1 ? [mockStemA, mockStemB, mockStemC] : week === 2 ? [mockWeek2Stem] : [],
+        mockRepoState.weekStems !== null
+          ? mockRepoState.weekStems
+          : week === 1
+            ? [mockStemA, mockStemB, mockStemC]
+            : week === 2
+              ? [mockWeek2Stem]
+              : [],
       // One-off week visit (issue 04): the whole block, resting included.
       getProgrammeWeekBlock: (week: number) =>
         week === 1 ? [mockStemA, mockStemB, mockStemC] : week === 2 ? [mockWeek2Stem] : [],
@@ -195,6 +209,9 @@ beforeEach(() => {
   mockRepoState.createdReviews = [];
   mockRepoState.settingWrites = [];
   mockRepoState.activationCalls = [];
+  mockRepoState.weekStems = null;
+  mockRouter.back.mockClear();
+  mockRouter.push.mockClear();
 });
 
 describe('WriteScreen — practices', () => {
@@ -261,6 +278,25 @@ describe('WriteScreen — practices', () => {
     expect(mockRepoState.createdSessions).toEqual([]); // nothing created before Start (§6.3.1)
     fireEvent.press(screen.getByText('Start'));
     expect(mockRepoState.createdSessions).toEqual([{ origin: 'manual', stemId: mockWeek2Stem.id }]);
+  });
+
+  // w1-t2 (s1-F4 + s2-2, D5): the empty practice path stays reachable by
+  // design — the guard keeps ≥1 stem active globally, so a week can empty
+  // out (s5 #6). The screen must then name the real cause (not the old
+  // "No stems set", which blamed the user's setup) and offer both ways back:
+  // the stem library and the week screen, each firing its route.
+  it('an emptied effective week names the cause and offers both ways back (w1-t2)', () => {
+    mockParams.value = { timeOfDay: 'morning' };
+    mockRepoState.weekStems = []; // the effective week's programme-stem read returns nothing
+    render(<WriteScreen />);
+
+    expect(screen.getByText('Nothing is active for this practice right now.')).toBeTruthy();
+    expect(screen.queryByText(/No stems set for this time of day yet/)).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Re-activate stems in the library'));
+    expect(mockRouter.push).toHaveBeenCalledWith('/stems');
+    fireEvent.press(screen.getByLabelText('Choose a different week'));
+    expect(mockRouter.push).toHaveBeenCalledWith('/week');
   });
 
   it('resumes an interrupted practice at its position, not from the top (ADR-0001 + §6.2)', async () => {

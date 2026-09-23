@@ -518,13 +518,26 @@ export default function WriteScreen() {
     );
   }
 
+  // w1-t2 (s1-F4 + s2-2): an empty practice is reachable by design (D5 — the
+  // guard only keeps ≥1 stem active globally, so the effective week can
+  // empty out via deactivation). Name the state honestly — the old copy
+  // ("No stems set for this time of day yet") misnamed the cause as a setup
+  // gap and had no way back at all. One block serves every producer that can
+  // empty the queue (deactivated week, empty one-off block, a solo stem gone,
+  // a corrupted install's missing meta-stem), so the copy stays cause-neutral
+  // but true for all four; the two buttons are the real exits (spec §13.4:
+  // calm, actionable, no guilt).
   if (queue !== null && queue.length === 0) {
     return (
       <ThemedView style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
-          <ThemedText type="default" themeColor="textSecondary">
-            No stems set for this time of day yet. Add one from the stem library.
-          </ThemedText>
+          <ThemedView style={styles.emptyBlock}>
+            <ThemedText type="default" themeColor="textSecondary">
+              Nothing is active for this practice right now.
+            </ThemedText>
+            <Button label="Re-activate stems in the library" onPress={() => router.push('/stems')} />
+            <Button label="Choose a different week" onPress={() => router.push('/week')} />
+          </ThemedView>
         </SafeAreaView>
       </ThemedView>
     );
@@ -931,6 +944,17 @@ const styles = StyleSheet.create({
   },
   flexOne: {
     flex: 1,
+  },
+  // w1-t2: the empty state's column — the cause line and the two way-back
+  // buttons on the 24pt grid, same width cap as the practice column.
+  emptyBlock: {
+    flex: 1,
+    paddingTop: Spacing.four,
+    paddingHorizontal: Spacing.four,
+    gap: Spacing.three,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
   },
   // Pinned top (LC8): horizontal inset matches the scroll column below so
   // the strip's content lines up with the stem/endings edge (LC1's 24pt
