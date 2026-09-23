@@ -161,7 +161,7 @@ describe('t10: zero-ending sessions never count as complete (owner decision 2026
       const weekly = repo.getWeeklyMetaStem();
       if (!weekly) throw new Error('seed must include the weekly meta-stem');
       const week1Stem = repo.getProgrammeStemsForWeek(1)[0];
-      // Anchor: a real first programme sitting with content.
+      // Anchor: a real first programme practice with content.
       insertCompletedSession(raw, week1Stem.id, '2026-09-01T06:00:00.000Z');
       const now = new Date('2026-09-16T10:00:00.000Z');
 

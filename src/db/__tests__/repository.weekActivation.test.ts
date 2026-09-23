@@ -17,7 +17,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { migrate } from '../migrate';
 import { Repository } from '../repository';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
-import { applyWeekSetActivation, readMorningSittingQueue } from '../../session/programRead';
+import { applyWeekSetActivation, readMorningPracticeQueue } from '../../session/programRead';
 import { PROGRAMME_SEED_STEMS } from '../seed/stems';
 
 // Issue 10: week choices and per-week counts derive from the loaded content
@@ -220,7 +220,7 @@ describe('week-set activation end to end over the §6.2/§7 setting', () => {
     expect(activeFlags(raw, weekB)).toEqual(allActive(weekB));
     expect(restingAbove(raw, weekB)).toEqual({ c: 0 }); // higher weeks rest
     // The morning rotation reads the override week's active stems.
-    expect(readMorningSittingQueue(repo).map((s) => s.text)).toEqual(
+    expect(readMorningPracticeQueue(repo).map((s) => s.text)).toEqual(
       PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === weekB).map((s) => s.text),
     );
 
@@ -233,7 +233,7 @@ describe('week-set activation end to end over the §6.2/§7 setting', () => {
     expect(activeFlags(raw, weekA)).toEqual(allActive(weekA));
     expect(activeFlags(raw, weekB)).toEqual(allActive(weekB));
     expect(restingAbove(raw, weekB)).toEqual({ c: 0 });
-    expect(readMorningSittingQueue(repo)).toHaveLength(countOf(weekA));
+    expect(readMorningPracticeQueue(repo)).toHaveLength(countOf(weekA));
   });
 
   it('user stems and the weekly meta-stem stay out of the activation set entirely', () => {
