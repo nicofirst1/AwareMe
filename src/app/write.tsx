@@ -32,7 +32,7 @@ import { PROGRAMME_WEEK_CAP, utcBoundsOfLocalDay } from '@/session/program';
 import {
   applyWeekSetActivation,
   readEveningReflectionInputs,
-  readMorningSittingQueue,
+  readMorningPracticeQueue,
   readProgrammeWeek,
   readWeeklyReflectionInputs,
   shouldClearOverride,
@@ -299,7 +299,7 @@ export default function WriteScreen() {
       enterFlow('evening', 'reread');
     } else if (timeOfDay === 'morning') {
       setFlow(null);
-      setQueue(readMorningSittingQueue(repo));
+      setQueue(readMorningPracticeQueue(repo));
       setQueueIndex(0);
     } else {
       const weekNumber = parseWeekParam(week);
@@ -320,7 +320,7 @@ export default function WriteScreen() {
         // Bare /write (no params): the morning practice is the app's one
         // dominant action — default to it rather than a blank screen.
         setFlow(null);
-        setQueue(readMorningSittingQueue(repo));
+        setQueue(readMorningPracticeQueue(repo));
         setQueueIndex(0);
       }
     }

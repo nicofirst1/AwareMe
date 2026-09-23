@@ -189,7 +189,7 @@ export default function HomeScreen() {
   // to wrap into two-per-row rows that overflow the viewport again.
   const dockGap = Math.min(Spacing.two, contentColumnWidth * 0.05);
 
-  const startSitting = (timeOfDay: TimeOfDay) => {
+  const startPractice = (timeOfDay: TimeOfDay) => {
     router.push({ pathname: '/write', params: { timeOfDay } });
   };
 
@@ -258,7 +258,7 @@ export default function HomeScreen() {
             `backgroundElement` fill — the owner's "weird white background"
             strips.
           */}
-          <Card style={styles.sittingCard}>
+          <Card style={styles.practiceCard}>
             <ThemedText type="eyebrow">
               {status ? `Week ${status.week.currentWeek} of 30` : 'Morning practice'}
             </ThemedText>
@@ -280,7 +280,7 @@ export default function HomeScreen() {
             <View style={styles.startRow}>
               <Button
                 label="Start morning practice"
-                onPress={() => startSitting('morning')}
+                onPress={() => startPractice('morning')}
                 variant={currentPeriod === 'morning' ? 'primary' : 'secondary'}
                 style={styles.primaryButton}
               />
@@ -335,7 +335,7 @@ export default function HomeScreen() {
               A done state, never a demand: the button stays, the day's
               completion is simply acknowledged (§13.4). */}
           {status?.eveningEnabled && (
-            <Card style={styles.sittingCard}>
+            <Card style={styles.practiceCard}>
               <ThemedText type="eyebrow">Evening reflection</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
                 {status.eveningDone
@@ -345,7 +345,7 @@ export default function HomeScreen() {
               <View style={styles.startRow}>
                 <Button
                   label="Begin evening reflection"
-                  onPress={() => startSitting('evening')}
+                  onPress={() => startPractice('evening')}
                   variant={currentPeriod === 'evening' ? 'primary' : 'secondary'}
                   style={styles.primaryButton}
                 />
@@ -357,7 +357,7 @@ export default function HomeScreen() {
               `weekly_meta_day`). The deep link (/write?origin=weekly — c03's
               notification target) reaches the same flow any day. */}
           {status?.weeklyCardToday && (
-            <Card style={styles.sittingCard}>
+            <Card style={styles.practiceCard}>
               <ThemedText type="eyebrow">Weekly reflection</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
                 {status.weeklyDoneThisWeek
@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
     height: 76,
     borderRadius: Radius.large,
   },
-  sittingCard: {
+  practiceCard: {
     gap: Spacing.two,
   },
   startRow: {

@@ -109,7 +109,7 @@ function toNonNegativeInt(value: number): number {
  * written, capped at 30. Advancement is self-paced — missing days never
  * skip weeks, and two reflections inside one calendar week count once.
  *
- * @param firstProgramSittingDate local 'YYYY-MM-DD' of the first
+ * @param firstProgramPracticeDate local 'YYYY-MM-DD' of the first
  *   official-programme practice (the anchor). Null-ish → week 1: the
  *   derivation only starts once the programme itself has started, however
  *   many reflections predate it.
@@ -122,12 +122,12 @@ function toNonNegativeInt(value: number): number {
  *   clock-skewed inputs from skipping the programme ahead.
  */
 export function deriveProgramWeek(
-  firstProgramSittingDate: string | null | undefined,
+  firstProgramPracticeDate: string | null | undefined,
   reflectionCalendarWeeks: number,
   now: Date,
 ): number {
-  if (!firstProgramSittingDate) return 1;
-  const anchor = parseLocalDateKey(firstProgramSittingDate);
+  if (!firstProgramPracticeDate) return 1;
+  const anchor = parseLocalDateKey(firstProgramPracticeDate);
   if (!anchor) return 1;
 
   const counted = toNonNegativeInt(reflectionCalendarWeeks);
