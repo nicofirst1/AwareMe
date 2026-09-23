@@ -47,7 +47,7 @@ This file is an index, not the record: each entry points at the authoritative do
 ## Environment quirks
 
 - `node_modules/expo-asset` repeatedly vanishes across `npm install` cycles; Jest then fails with `Cannot find module 'expo-asset'`. Remedy: `npm install expo-asset@57.0.16 --no-save --legacy-peer-deps`; never add it to `package.json`.
-- Plain `npm ci` fails in fresh worktrees (committed lock predates expo@57's peer set) — use `npm install --legacy-peer-deps` plus the expo-asset remedy.
+- Plain `npm ci` fails in fresh worktrees — plain npm auto-installs peer dependencies the legacy-peer-deps resolution intentionally omits (measured 2026-09-23: react-native-gesture-handler, react-native-reanimated, react-dom and ~40 more; a strict lock would flip expo's native autolinking, so legacy stays) — use `npm install --legacy-peer-deps` plus the expo-asset remedy.
 
 ## Design and execution rounds
 
