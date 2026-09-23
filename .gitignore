@@ -79,6 +79,7 @@ example
 # Play Store submission materials — local-only (screenshots carry seed text visually)
 store/
 .scratch/
+.vscode/
 
 
 android-app-export
