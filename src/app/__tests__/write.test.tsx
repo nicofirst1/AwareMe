@@ -31,6 +31,8 @@ const mockStemB = makeStem('stem-b', 'If I treat this mock test stem responsibly
 const mockStemC = makeStem('stem-c', 'If I notice how this mock third stem reads', 1);
 const mockWeek2Stem = makeStem('stem-w2', 'If this mock week-two stem behaves in tests', 2);
 const mockUserStem = { ...makeStem('stem-user', 'My own made-up stem is', 0), origin: 'user' as const };
+/** An evening-tagged pick: a real pick, but never in the morning queue (the solo-fallback test's stem). */
+const mockEveningPick = { ...makeStem('stem-eve', 'My evening pick is', 0), origin: 'user' as const, time_of_day: 'evening' as const };
 const mockWeeklyMeta = makeStem('meta-weekly', 'If this mock weekly reflection stem renders its review', 0);
 const mockEveningA = { ...makeStem('meta-evening-a', 'In my body right now I feel', 0), origin: 'meta' as const };
 const mockEveningB = { ...makeStem('meta-evening-b', 'Right now I am aware of', 0), origin: 'meta' as const };
@@ -145,7 +147,7 @@ jest.mock('@/db', () => {
       // test needs a deleted row visible to listAllStems but not listMetaStems.
       listAllStems: () =>
         mockRepoState.allStems ??
-        [mockStemA, mockStemB, mockStemC, mockWeek2Stem, mockUserStem].map((s) => ({
+        [mockStemA, mockStemB, mockStemC, mockWeek2Stem, mockUserStem, mockEveningPick].map((s) => ({
           ...s,
           active: 1,
           deleted_at: null,
@@ -237,8 +239,8 @@ describe('WriteScreen — practices', () => {
     mockRepoState.settings = { endings_per_session: 1 }; // one submitted ending completes each stem
     render(<WriteScreen />);
 
-    await screen.findByText(/Stem 1 of 3/);
-    await screen.findByText(/If I give this mock practice my full attention/);
+    await screen.findByText(/Stem 1 of 4/);
+    await screen.findByText(/My own made-up stem is/);
     fireEvent.press(screen.getByText('Start'));
 
     const input = await screen.findByLabelText('Your ending');
@@ -249,8 +251,8 @@ describe('WriteScreen — practices', () => {
     expect(screen.queryByLabelText('Save this ending')).toBeNull();
     fireEvent.changeText(input, 'a stray thought I keep circling back to\n');
 
-    await screen.findByText(/Stem 2 of 3/);
-    await screen.findByText(/If I treat this mock test stem responsibly/);
+    await screen.findByText(/Stem 2 of 4/);
+    await screen.findByText(/If I give this mock practice my full attention/);
     expect(screen.getByText('Start')).toBeTruthy();
     expect(screen.queryByText('a stray thought I keep circling back to')).toBeNull();
   });
@@ -260,7 +262,7 @@ describe('WriteScreen — practices', () => {
     mockParams.value = { timeOfDay: 'morning' };
     render(<WriteScreen />);
 
-    await screen.findByText(/Stem 1 of 3/);
+    await screen.findByText(/Stem 1 of 4/);
     expect(screen.getByText(purpose)).toBeTruthy();
 
     // Active writing is bare (§6.3, §13.4): the purpose line belongs on the
@@ -270,16 +272,16 @@ describe('WriteScreen — practices', () => {
     expect(screen.queryByText(purpose)).toBeNull();
   });
 
-  it('the morning practice is the effective programme week’s block, in seed order', () => {
+  it('the morning practice composes picks first, then the effective week’s block (D1)', () => {
     mockParams.value = { timeOfDay: 'morning' };
     render(<WriteScreen />);
-    expect(screen.getByText(/Stem 1 of 3/)).toBeTruthy();
-    expect(screen.getByText(/If I give this mock practice my full attention/)).toBeTruthy();
+    expect(screen.getByText(/Stem 1 of 4/)).toBeTruthy();
+    expect(screen.getByText(/My own made-up stem is/)).toBeTruthy();
   });
 
   it('a bare /write defaults to the morning practice instead of a blank screen', () => {
     render(<WriteScreen />);
-    expect(screen.getByText(/If I give this mock practice my full attention/)).toBeTruthy();
+    expect(screen.getByText(/My own made-up stem is/)).toBeTruthy();
   });
 
   it('one-off week practice: /write?week=2 loads that week’s block as manual sessions', () => {
@@ -299,6 +301,7 @@ describe('WriteScreen — practices', () => {
   it('an emptied effective week names the cause and offers both ways back (w1-t2)', () => {
     mockParams.value = { timeOfDay: 'morning' };
     mockRepoState.weekStems = []; // the effective week's programme-stem read returns nothing
+    mockRepoState.allStems = []; // …and no picks either — the queue is truly empty (D1 composition)
     render(<WriteScreen />);
 
     expect(screen.getByText('Nothing is active for this practice right now.')).toBeTruthy();
@@ -315,16 +318,27 @@ describe('WriteScreen — practices', () => {
     mockRepoState.openSession = openSessionRow(mockStemB.id, mockStemB.text);
     render(<WriteScreen />);
 
-    await screen.findByText(/Stem 2 of 3/);
+    // The composed queue (D1): pick, block stems in seed order — B sits third.
+    await screen.findByText(/Stem 3 of 4/);
     expect(screen.getByText(/If I treat this mock test stem responsibly/)).toBeTruthy();
     // Resumed sessions are already active — no Start gate on a running timer.
     expect(screen.getByLabelText('Your ending')).toBeTruthy();
   });
 
-  it('resumes a solo library write as a one-stem queue', async () => {
+  it('resumes a pick into the composed morning practice, not the solo fallback (D1: one composition for start and resume)', async () => {
     mockRepoState.openSession = openSessionRow(mockUserStem.id, mockUserStem.text);
     render(<WriteScreen />);
+    // The pick leads the composed queue — resuming it continues the practice,
+    // it does not fall through to a one-stem solo queue.
+    await screen.findByText(/Stem 1 of 4/);
     await screen.findByText(/My own made-up stem is/);
+    expect(screen.getByLabelText('Your ending')).toBeTruthy();
+  });
+
+  it('resumes an evening-tagged solo library write as a one-stem queue (never in the morning composition)', async () => {
+    mockRepoState.openSession = openSessionRow(mockEveningPick.id, mockEveningPick.text);
+    render(<WriteScreen />);
+    await screen.findByText(/My evening pick is/);
     expect(screen.getByLabelText('Your ending')).toBeTruthy();
   });
 });
@@ -422,6 +436,26 @@ describe('WriteScreen — weekly reflection (/write?origin=weekly, §6.5.1)', ()
     expect(review.reflectionText).toBe('the week kept asking the same question');
     // §6.2: completing the SELECTED week's reflection clears the override.
     expect(mockRepoState.settingWrites).toEqual([['program_week_override', null]]);
+  });
+
+  it('Programme off: the weekly completion records the review but writes NOTHING else (D3: no override-clear, no activation)', async () => {
+    mockParams.value = { origin: 'weekly' };
+    mockRepoState.firstPractice = { startedAt: '2026-09-01T06:00:00.000Z', offsetMin: 120 };
+    mockRepoState.reviewedWeek = reviewedWeek() as never;
+    mockRepoState.settings = { programme: false, program_week_override: 1 };
+    render(<WriteScreen />);
+
+    await screen.findByText(/Week 1 review/);
+    fireEvent.press(screen.getByText('Continue'));
+    const input = await screen.findByLabelText('Your reflection');
+    fireEvent.changeText(input, 'recorded while off\n');
+    await screen.findByText('Session saved.');
+
+    // Recording continues (D3): the review row lands.
+    expect(mockRepoState.createdReviews).toHaveLength(1);
+    // Zero state changes: the override survives AND no activation runs.
+    expect(mockRepoState.settingWrites).toEqual([]);
+    expect(mockRepoState.activationCalls).toEqual([]);
   });
 
   it('does not clear anything when no override is set', async () => {
@@ -575,14 +609,14 @@ describe('WriteScreen — input field, keyboard, and exit-label alignment', () =
     mockRepoState.settings = { timer_seconds: 1 };
     render(<WriteScreen />);
 
-    await screen.findByText(/Stem 1 of 3/);
+    await screen.findByText(/Stem 1 of 4/);
     fireEvent.press(screen.getByText('Start'));
     await screen.findByLabelText('Your ending');
 
     // The session hook's own 1s interval drains the 1s timer and finalizes
     // with end_reason 'timeout'; the screen auto-advances to the next
     // stem's Start gate. The IME must not ride along (d10-04).
-    await screen.findByText(/Stem 2 of 3/, {}, { timeout: 4000 });
+    await screen.findByText(/Stem 2 of 4/, {}, { timeout: 4000 });
     expect(dismiss).toHaveBeenCalled();
     dismiss.mockRestore();
   });
@@ -590,7 +624,7 @@ describe('WriteScreen — input field, keyboard, and exit-label alignment', () =
   it('the prep gate exit control reads the same to eyes and screen readers (p2n-10)', async () => {
     mockParams.value = { timeOfDay: 'morning' };
     render(<WriteScreen />);
-    await screen.findByText(/Stem 1 of 3/);
+    await screen.findByText(/Stem 1 of 4/);
 
     expect(screen.getByLabelText('Close')).toBeTruthy();
     expect(screen.queryByLabelText('Exit session')).toBeNull();
@@ -658,7 +692,7 @@ describe('WriteScreen — badge reveal on the completion screen (issue 17)', () 
     mockRepoState.statsCompleteLastSession = true;
     render(<WriteScreen />);
 
-    await screen.findByText(/Stem 1 of 3/);
+    await screen.findByText(/Stem 1 of 4/);
     fireEvent.press(screen.getByText('Start'));
     const input = await screen.findByLabelText('Your ending');
     fireEvent.changeText(input, 'a stray thought I keep circling back to\n');
@@ -666,7 +700,7 @@ describe('WriteScreen — badge reveal on the completion screen (issue 17)', () 
     // Stem 1 is done — 'First Words' has just been crossed by it — but the
     // practice is not finished: no completion block, no badge ("never
     // between stems", proposal §2), and the next gate is clean.
-    await screen.findByText(/Stem 2 of 3/);
+    await screen.findByText(/Stem 2 of 4/);
     expect(screen.getByText('Start')).toBeTruthy();
     expect(screen.queryByText('First Words')).toBeNull();
     expect(screen.queryByText('Session saved.')).toBeNull();

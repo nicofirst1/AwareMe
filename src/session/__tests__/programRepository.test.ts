@@ -16,7 +16,7 @@ import { nodeSqliteExecutor } from '../../db/testSupport/nodeSqliteExecutor';
 import { Repository } from '../../db/repository';
 import { PROGRAMME_SEED_STEMS, WEEKLY_META_STEM } from '../../db/seed/stems';
 import { PROGRAMME_WEEK_CAP } from '../program';
-import { readProgrammeWeek } from '../programRead';
+import { applyWeekSetActivation, readHomeProgrammeStatus, readMorningPracticeQueue, readProgrammeWeek } from '../programRead';
 
 let nextRowId = 0;
 function rowId(prefix: string): string {
@@ -31,6 +31,7 @@ interface SessionInsert {
   endedAt?: string | null;
   endReason?: string | null;
   deletedAt?: string | null;
+  programmeOn?: number;
 }
 
 function makeDb(): { raw: DatabaseSync; repo: Repository } {
@@ -69,15 +70,16 @@ function insertSession(raw: DatabaseSync, input: SessionInsert): string {
   const id = rowId('session');
   raw
     .prepare(
-      `INSERT INTO sessions (id, stem_id, stem_text_snapshot, origin, target_endings, timer_seconds, uncensored_mode,
+      `INSERT INTO sessions (id, stem_id, stem_text_snapshot, origin, target_endings, timer_seconds, uncensored_mode, programme_on,
          started_at, ended_at, end_reason, tz, offset_min, device_locale, deleted_at)
-       VALUES (?, ?, ?, ?, 6, 90, 1, ?, ?, ?, 'Europe/Berlin', ?, 'en-DE', ?)`,
+       VALUES (?, ?, ?, ?, 6, 90, 1, ?, ?, ?, ?, 'Europe/Berlin', ?, 'en-DE', ?)`,
     )
     .run(
       id,
       input.stemId,
       'snapshot',
       input.origin ?? 'manual',
+      input.programmeOn ?? 1,
       input.startedAt,
       input.endedAt ?? null,
       input.endReason ?? null,
@@ -316,5 +318,92 @@ describe('§6.2 derivation over real rows (readProgrammeWeek)', () => {
     const id = insertSession(raw, { stemId: weekly, origin: 'review', startedAt: '2026-09-14T04:30:00.000Z', offsetMin: -300, endedAt: '2026-09-14T04:33:00.000Z' });
     insertEnding(raw, id, 1, '2026-09-14T04:31:00.000Z');
     expect(readProgrammeWeek(repo, now).currentWeek).toBe(2);
+  });
+});
+
+// ── Packet-7 D3/D4 + the §13.7 pins, over real rows ─────────────────────────
+
+describe('D3 counting rule over real rows — programme_on filters the derivation', () => {
+  it('an off-period reflection (programme_on 0) does not advance the derived week; the same row with 1 does', () => {
+    const { raw, repo } = makeDb();
+    const weekly = weeklyMetaStemId(repo);
+    const week1Stem = repo.getProgrammeStemsForWeek(1)[0];
+    insertCompletedSession(raw, week1Stem.id, '2026-09-01T06:00:00.000Z'); // anchor
+    const now = new Date('2026-09-16T10:00:00.000Z');
+
+    const off = insertSession(raw, { stemId: weekly, origin: 'review', startedAt: '2026-09-08T12:00:00.000Z', endedAt: '2026-09-08T12:03:00.000Z', programmeOn: 0 });
+    insertEnding(raw, off, 1, '2026-09-08T12:01:00.000Z');
+    expect(readProgrammeWeek(repo, now).derivedWeek).toBe(1); // recorded, not counted
+
+    // The very same reflection shape with the flag on DOES advance (the pin cannot pass vacuously).
+    const on = insertSession(raw, { stemId: weekly, origin: 'review', startedAt: '2026-09-09T12:00:00.000Z', endedAt: '2026-09-09T12:03:00.000Z', programmeOn: 1 });
+    insertEnding(raw, on, 1, '2026-09-09T12:01:00.000Z');
+    expect(readProgrammeWeek(repo, now).derivedWeek).toBe(2);
+  });
+
+  it('pre-wave-2 rows (the DEFAULT fill) keep counting: an absent flag reads 1', () => {
+    const { raw, repo } = makeDb();
+    const weekly = weeklyMetaStemId(repo);
+    const week1Stem = repo.getProgrammeStemsForWeek(1)[0];
+    insertCompletedSession(raw, week1Stem.id, '2026-09-01T06:00:00.000Z');
+    const legacy = insertSession(raw, { stemId: weekly, origin: 'review', startedAt: '2026-09-08T12:00:00.000Z', endedAt: '2026-09-08T12:03:00.000Z' });
+    insertEnding(raw, legacy, 1, '2026-09-08T12:01:00.000Z');
+    expect(readProgrammeWeek(repo, new Date('2026-09-16T10:00:00.000Z')).derivedWeek).toBe(2);
+  });
+
+  it('applyWeekSetActivation is a total no-op while the setting is off — stems AND settings byte-unchanged', () => {
+    const { raw, repo } = makeDb();
+    repo.setSetting('programme', false);
+    const snapshot = () => ({
+      stems: raw.prepare('SELECT * FROM stems ORDER BY id').all(),
+      settings: raw.prepare('SELECT * FROM settings ORDER BY key').all(),
+      sessions: raw.prepare('SELECT * FROM sessions ORDER BY id').all(),
+    });
+    repo.setSetting('program_week_override', 7);
+    const before = snapshot();
+
+    applyWeekSetActivation(repo, new Date('2026-09-16T10:00:00.000Z'));
+
+    expect(snapshot()).toEqual(before); // zero state changes: no activation, no override-clear
+  });
+
+  it('§13.7: the derived week is never stored — derivation-consuming reads leave every table untouched', () => {
+    const { raw, repo } = makeDb();
+    const weekly = weeklyMetaStemId(repo);
+    const week1Stem = repo.getProgrammeStemsForWeek(1)[0];
+    insertCompletedSession(raw, week1Stem.id, '2026-09-01T06:00:00.000Z');
+    const r = insertSession(raw, { stemId: weekly, origin: 'review', startedAt: '2026-09-08T12:00:00.000Z', endedAt: '2026-09-08T12:03:00.000Z' });
+    insertEnding(raw, r, 1, '2026-09-08T12:01:00.000Z');
+    repo.setSetting('program_week_override', 2);
+    const before = JSON.stringify(repo.dumpAllTables());
+
+    readProgrammeWeek(repo, new Date('2026-09-16T10:00:00.000Z'));
+    readMorningPracticeQueue(repo, new Date('2026-09-16T10:00:00.000Z'));
+    readHomeProgrammeStatus(repo, new Date('2026-09-16T10:00:00.000Z'));
+
+    expect(JSON.stringify(repo.dumpAllTables())).toBe(before); // read-time only, nothing stored
+  });
+});
+
+describe('createSession — the programme_on write-time record (§13.7: verbatim from the caller)', () => {
+  it('stores 1/0 exactly as the caller states the flag — true and false, both directions', () => {
+    const { raw, repo } = makeDb();
+    const stem = repo.getProgrammeStemsForWeek(1)[0];
+
+    const onId = repo.createSession({ stemId: stem.id, stemTextSnapshot: stem.text, origin: 'manual', targetEndings: 6, timerSeconds: 90, uncensoredMode: true, programmeOn: true, startedAt: '2026-09-16T06:00:00.000Z', deviceLocale: 'en-DE' });
+    const offId = repo.createSession({ stemId: stem.id, stemTextSnapshot: stem.text, origin: 'manual', targetEndings: 6, timerSeconds: 90, uncensoredMode: true, programmeOn: false, startedAt: '2026-09-16T07:00:00.000Z', deviceLocale: 'en-DE' });
+
+    const on = raw.prepare('SELECT programme_on as p FROM sessions WHERE id = ?').get(onId) as { p: number };
+    const off = raw.prepare('SELECT programme_on as p FROM sessions WHERE id = ?').get(offId) as { p: number };
+    expect(on.p).toBe(1);
+    expect(off.p).toBe(0); // the caller's false is stored, never recomputed from settings
+  });
+
+  it('absent flag stores 0 (the optional input contract: only callers that state the flag may claim on)', () => {
+    const { raw, repo } = makeDb();
+    const stem = repo.getProgrammeStemsForWeek(1)[0];
+    const id = repo.createSession({ stemId: stem.id, stemTextSnapshot: stem.text, origin: 'manual', targetEndings: 6, timerSeconds: 90, uncensoredMode: true, startedAt: '2026-09-16T06:00:00.000Z', deviceLocale: 'en-DE' });
+    const row = raw.prepare('SELECT programme_on as p FROM sessions WHERE id = ?').get(id) as { p: number };
+    expect(row.p).toBe(0);
   });
 });

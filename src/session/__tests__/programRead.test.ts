@@ -17,9 +17,19 @@ import { DEFAULT_SETTINGS, type Repository, type Settings } from '@/db';
 
 type Repo = {
   getFirstProgrammePractice: () => { startedAt: string; offsetMin: number } | null;
-  listCompletedWeeklyReflections: () => { startedAt: string; offsetMin: number }[];
+  listCompletedWeeklyReflections: () => { startedAt: string; offsetMin: number; programmeOn: number }[];
   listCompletedEveningReflections: () => { startedAt: string; offsetMin: number }[];
   getProgrammeStemsForWeek: (week: number) => { id: string; text: string }[];
+  listAllStems: () => {
+    id: string;
+    text: string;
+    origin: string;
+    time_of_day: string | null;
+    active: number;
+    deleted_at: string | null;
+    created_at: string;
+    weekNumber: number | null;
+  }[];
   listMetaStems: () => { id: string; text: string; origin: string }[];
   getWeeklyMetaStem: () => { id: string; text: string } | null;
   listSessionsForDayMorning: (start: string, end: string) => unknown[];
@@ -36,6 +46,7 @@ function makeRepo(overrides: Partial<Repo> = {}): Repository {
     listCompletedWeeklyReflections: () => [],
     listCompletedEveningReflections: () => [],
     getProgrammeStemsForWeek: () => [],
+    listAllStems: () => [],
     listMetaStems: () => [
       { id: 'weekly', text: 'weekly meta', origin: 'seed' },
       { id: 'evening-a', text: 'evening meta A', origin: 'meta' },
@@ -59,9 +70,14 @@ function atIso(localWallIso: string, offsetMin = 120): { startedAt: string; offs
 /** First programme practice Tue 2026-09-01 morning (Berlin) → anchor week Monday 2026-08-31. */
 const ANCHOR = { getFirstProgrammePractice: () => atIso('2026-09-01T06:00:00Z') };
 
+/** A completed WEEKLY reflection row as the repository's read now returns it (migration 0008 added `programmeOn`). Defaults to on — every pre-wave-2 row reads 1. */
+function refl(localWallIso: string, programmeOn: 0 | 1 = 1): { startedAt: string; offsetMin: number; programmeOn: number } {
+  return { ...atIso(localWallIso), programmeOn };
+}
+
 describe('readProgrammeWeek', () => {
   it('derives week 1 with no anchor, even with pre-programme reflections', () => {
-    const repo = makeRepo({ listCompletedWeeklyReflections: () => [atIso('2026-01-04T21:00:00Z')] });
+    const repo = makeRepo({ listCompletedWeeklyReflections: () => [refl('2026-01-04T21:00:00Z')] });
     const week = readProgrammeWeek(repo, new Date('2026-09-16T12:00:00Z'));
     expect(week).toMatchObject({ derivedWeek: 1, override: null, currentWeek: 1 });
   });
@@ -72,10 +88,10 @@ describe('readProgrammeWeek', () => {
       getFirstProgrammePractice: () => atIso('2026-09-01T06:00:00Z'),
       // Two reflections in distinct later weeks + one same-week duplicate + one pre-anchor.
       listCompletedWeeklyReflections: () => [
-        atIso('2026-01-11T21:00:00Z'), // pre-anchor: never counts
-        atIso('2026-09-06T21:00:00Z'), // anchor week (Sun)
-        atIso('2026-09-08T21:00:00Z'), // same Mon–Sun week as above: counts once
-        atIso('2026-09-13T21:00:00Z'), // next week
+        refl('2026-01-11T21:00:00Z'), // pre-anchor: never counts
+        refl('2026-09-06T21:00:00Z'), // anchor week (Sun)
+        refl('2026-09-08T21:00:00Z'), // same Mon–Sun week as above: counts once
+        refl('2026-09-13T21:00:00Z'), // next week
       ],
     });
     const week = readProgrammeWeek(repo, new Date('2026-09-16T12:00:00Z'));
@@ -85,7 +101,7 @@ describe('readProgrammeWeek', () => {
   it('applies the override on top of the derived week', () => {
     const repo = makeRepo({
       getFirstProgrammePractice: () => atIso('2026-09-01T06:00:00Z'),
-      listCompletedWeeklyReflections: () => [atIso('2026-09-06T21:00:00Z')],
+      listCompletedWeeklyReflections: () => [refl('2026-09-06T21:00:00Z')],
       getSettings: () => ({ ...DEFAULT_SETTINGS, program_week_override: 7 }),
     });
     const week = readProgrammeWeek(repo, new Date('2026-09-16T12:00:00Z'));
@@ -148,7 +164,7 @@ describe('readHomeProgrammeStatus', () => {
     // week +2) → derived 2 without the current week, 3 with it.
     const repo = makeRepo({
       ...ANCHOR,
-      listCompletedWeeklyReflections: () => [atIso('2026-09-09T12:00:00Z'), atIso('2026-09-20T12:00:00Z')],
+      listCompletedWeeklyReflections: () => [refl('2026-09-09T12:00:00Z'), refl('2026-09-20T12:00:00Z')],
     });
     const status = readHomeProgrammeStatus(repo, new Date('2026-09-20T12:00:00Z'));
     expect(status.nudge).toEqual({ completedWeek: 2, nextWeek: 3 });
@@ -158,7 +174,7 @@ describe('readHomeProgrammeStatus', () => {
     // week counts once, §6.2).
     const twice = makeRepo({
       ...ANCHOR,
-      listCompletedWeeklyReflections: () => [atIso('2026-09-20T12:00:00Z'), atIso('2026-09-19T12:00:00Z')],
+      listCompletedWeeklyReflections: () => [refl('2026-09-20T12:00:00Z'), refl('2026-09-19T12:00:00Z')],
     });
     expect(readHomeProgrammeStatus(twice, new Date('2026-09-20T12:00:00Z')).nudge).toEqual({
       completedWeek: 1,
@@ -167,12 +183,12 @@ describe('readHomeProgrammeStatus', () => {
   });
 
   it('never nudges before the programme started', () => {
-    const repo = makeRepo({ listCompletedWeeklyReflections: () => [atIso('2026-09-20T12:00:00Z')] });
+    const repo = makeRepo({ listCompletedWeeklyReflections: () => [refl('2026-09-20T12:00:00Z')] });
     expect(readHomeProgrammeStatus(repo, new Date('2026-09-20T12:00:00Z')).nudge).toBeNull();
   });
 
   it('gates the weekend card on weekly_meta_day and reports the done state', () => {
-    const withReflection = { listCompletedWeeklyReflections: () => [atIso('2026-09-20T12:00:00Z')] };
+    const withReflection = { listCompletedWeeklyReflections: () => [refl('2026-09-20T12:00:00Z')] };
     const sunday = new Date('2026-09-20T12:00:00Z'); // Sunday midday Berlin
     const monday = new Date('2026-09-21T10:00:00Z'); // Monday midday Berlin
 
@@ -196,7 +212,7 @@ describe('readHomeProgrammeStatus', () => {
 
     const complete = makeRepo({
       ...ANCHOR,
-      listCompletedWeeklyReflections: () => [atIso('2026-09-20T12:00:00Z')],
+      listCompletedWeeklyReflections: () => [refl('2026-09-20T12:00:00Z')],
       getSettings: () => ({ ...DEFAULT_SETTINGS, program_week_override: 30 }),
     });
     expect(readHomeProgrammeStatus(complete, new Date('2026-09-20T12:00:00Z')).programmeComplete).toBe(true);
@@ -312,7 +328,7 @@ describe('applyWeekSetActivation (issue 09: cumulative unlock with regression gu
     // Anchor week Mon 2026-08-31 + two anchored reflection weeks → derived 3.
     const { activated, repo } = makeRepoWithRecording({
       ...ANCHOR,
-      listCompletedWeeklyReflections: () => [atIso('2026-09-06T21:00:00Z'), atIso('2026-09-13T21:00:00Z')],
+      listCompletedWeeklyReflections: () => [refl('2026-09-06T21:00:00Z'), refl('2026-09-13T21:00:00Z')],
     });
     applyWeekSetActivation(repo, new Date('2026-09-16T10:00:00Z'));
     expect(activated).toEqual([3]); // unlocks weeks 1..3
@@ -332,5 +348,180 @@ describe('applyWeekSetActivation (issue 09: cumulative unlock with regression gu
     });
     applyWeekSetActivation(repo, new Date('2026-09-16T10:00:00Z'));
     expect(activated).toEqual([]);
+  });
+});
+
+// ── Packet-7 D1: the composition — picks + the gated programme block ──────
+
+/** A library row (the listAllStems shape) for one pick. Picks are user/imported stems. */
+function pick(id: string, overrides: Partial<{ origin: string; time_of_day: string | null; active: number; deleted_at: string | null }> = {}) {
+  return {
+    id,
+    text: `pick ${id}`,
+    origin: 'user',
+    time_of_day: 'morning' as string | null,
+    active: 1,
+    deleted_at: null,
+    created_at: `2026-09-01T00:00:${id}`,
+    weekNumber: null,
+    ...overrides,
+  };
+}
+
+function blockStem(id: string) {
+  return { id, text: `block ${id}` };
+}
+
+describe('readMorningPracticeQueue — D1 composition (picks + gated programme block)', () => {
+  it('composes the picks first, then the programme block, while Programme is on', () => {
+    const repo = makeRepo({
+      ...ANCHOR,
+      // listAllStems order (library recency): p2 before p1 — the queue keeps it.
+      listAllStems: () => [pick('p2'), pick('p1'), pick('resting', { active: 0 }), pick('evening-tagged', { time_of_day: 'evening' })],
+      getProgrammeStemsForWeek: (week) => (week === 1 ? [blockStem('b1'), blockStem('b2')] : []),
+    });
+    const queue = readMorningPracticeQueue(repo, new Date('2026-09-16T10:00:00Z'));
+    expect(queue.map((s) => s.id)).toEqual(['p2', 'p1', 'b1', 'b2']);
+  });
+
+  it('with Programme off the queue is the picks alone and the week is never read (D3: zero programme state)', () => {
+    const weekReads: number[] = [];
+    const repo = makeRepo({
+      listAllStems: () => [pick('p1')],
+      getProgrammeStemsForWeek: (week) => {
+        weekReads.push(week);
+        return [blockStem('b1')];
+      },
+      getSettings: () => ({ ...DEFAULT_SETTINGS, programme: false }),
+    });
+    const queue = readMorningPracticeQueue(repo, new Date('2026-09-16T10:00:00Z'));
+    expect(queue.map((s) => s.id)).toEqual(['p1']); // picks only
+    expect(weekReads).toEqual([]); // the derivation is never consulted while off
+  });
+
+  it('the pick filter is exact: only active, non-deleted, user/imported, non-evening stems join (cannot pass vacuously)', () => {
+    const repo = makeRepo({
+      listAllStems: () => [
+        pick('qualifies'), // the one that must join
+        pick('inactive', { active: 0 }),
+        pick('deleted', { deleted_at: '2026-09-10T00:00:00.000Z' }),
+        pick('evening', { time_of_day: 'evening' }),
+        pick('seeded', { origin: 'seed' }), // seed starters are evening content, never picks
+        pick('imported', { origin: 'imported' }), // imported picks DO join
+        pick('untagged', { time_of_day: null }), // untagged joins the morning (design §8.2)
+      ],
+      getSettings: () => ({ ...DEFAULT_SETTINGS, programme: false }),
+    });
+    expect(readMorningPracticeQueue(repo, new Date('2026-09-16T10:00:00Z')).map((s) => s.id)).toEqual([
+      'qualifies',
+      'imported',
+      'untagged',
+    ]);
+  });
+
+  it('Programme on with an emptied block still queues the picks (the honest empty state stays reachable when both are gone)', () => {
+    const repo = makeRepo({
+      getProgrammeStemsForWeek: () => [],
+      getSettings: () => ({ ...DEFAULT_SETTINGS, programme: false }),
+    });
+    expect(readMorningPracticeQueue(repo, new Date('2026-09-16T10:00:00Z'))).toEqual([]);
+  });
+});
+
+// ── Packet-7 D3: the counting rule — derivation counts enabled-period reflections ──
+
+describe('D3 counting rule — programme_on filters the week derivation (both sides)', () => {
+  it('an off-period reflection does not advance the derived week; the same reflection with the flag on does', () => {
+    const base = {
+      ...ANCHOR,
+      // One reflection in a distinct later week (anchor week Mon 2026-08-31, reflection Mon 2026-09-07 week).
+      listCompletedWeeklyReflections: () => [refl('2026-09-08T21:00:00Z', 0)],
+    };
+    expect(readProgrammeWeek(makeRepo(base), new Date('2026-09-16T12:00:00Z')).derivedWeek).toBe(1);
+
+    const on = { ...base, listCompletedWeeklyReflections: () => [refl('2026-09-08T21:00:00Z', 1)] };
+    expect(readProgrammeWeek(makeRepo(on), new Date('2026-09-16T12:00:00Z')).derivedWeek).toBe(2);
+  });
+
+  it('off-period reflections freeze the nudge while enabled-period ones keep it', () => {
+    const now = new Date('2026-09-20T12:00:00Z'); // Sunday, anchor week +2
+    const off = makeRepo({ ...ANCHOR, listCompletedWeeklyReflections: () => [refl('2026-09-20T12:00:00Z', 0)] });
+    expect(readHomeProgrammeStatus(off, now).nudge).toBeNull();
+    const on = makeRepo({ ...ANCHOR, listCompletedWeeklyReflections: () => [refl('2026-09-20T12:00:00Z', 1)] });
+    expect(readHomeProgrammeStatus(on, now).nudge).toEqual({ completedWeek: 1, nextWeek: 2 });
+  });
+
+  it('completion states keep counting off-period reflections (recording continues; only ADVANCEMENT is excluded)', () => {
+    const now = new Date('2026-09-20T12:00:00Z'); // Sunday midday — the weekend card's day
+    const off = makeRepo({ ...ANCHOR, listCompletedWeeklyReflections: () => [refl('2026-09-20T12:00:00Z', 0)] });
+    const status = readHomeProgrammeStatus(off, now);
+    expect(status.weeklyDoneThisWeek).toBe(true); // the reflection happened — the card may say done
+    expect(status.week.derivedWeek).toBe(1); // …but it does not advance the week
+  });
+
+  it('applyWeekSetActivation is a total no-op while Programme is off (zero state changes, even with an override set)', () => {
+    const activated: number[] = [];
+    const repo = makeRepo({
+      ...ANCHOR,
+      getSettings: () => ({ ...DEFAULT_SETTINGS, programme: false, program_week_override: 7 }),
+      setProgrammeWeekActive: (week: number) => {
+        activated.push(week);
+      },
+    });
+    applyWeekSetActivation(repo, new Date('2026-09-16T10:00:00Z'));
+    expect(activated).toEqual([]); // not even the provenance-untouched part of the write runs
+  });
+
+  it('applyWeekSetActivation still runs while Programme is on (the off gate is the setting, not a permanent off)', () => {
+    const activated: number[] = [];
+    const repo = makeRepo({
+      ...ANCHOR,
+      getSettings: () => ({ ...DEFAULT_SETTINGS, programme: true }),
+      setProgrammeWeekActive: (week: number) => {
+        activated.push(week);
+      },
+    });
+    applyWeekSetActivation(repo, new Date('2026-09-16T10:00:00Z'));
+    expect(activated).toEqual([1]);
+  });
+});
+
+// ── Packet-7 D4: re-enable — the pin is the override, the derived week is the fallback ──
+
+describe('D4 re-enable — the override pin and the derived fallback (enabled-period reflections only)', () => {
+  it('a re-enable pin (override 1) wins over a higher derived week; clearing it resumes the derived week', () => {
+    const anchorAndWeeks = {
+      ...ANCHOR,
+      // Two enabled reflection weeks → derived 3. An off-period one must not add a fourth.
+      listCompletedWeeklyReflections: () => [
+        refl('2026-09-06T21:00:00Z', 1),
+        refl('2026-09-13T21:00:00Z', 1),
+        refl('2026-09-20T21:00:00Z', 0),
+      ],
+      getProgrammeStemsForWeek: (week: number) => [blockStem(`w${week}`)],
+    };
+
+    // The pin: week 1 while the override says so.
+    const pinned = makeRepo({ ...anchorAndWeeks, getSettings: () => ({ ...DEFAULT_SETTINGS, program_week_override: 1 }) });
+    expect(readMorningPracticeQueue(pinned, new Date('2026-09-21T10:00:00Z')).map((s) => s.id)).toEqual(['w1']);
+
+    // The fallback: cleared, the derived week resumes — counting enabled-period weeks only.
+    const cleared = makeRepo({ ...anchorAndWeeks, getSettings: () => ({ ...DEFAULT_SETTINGS, program_week_override: null }) });
+    const week = readProgrammeWeek(cleared, new Date('2026-09-21T10:00:00Z'));
+    expect(week.derivedWeek).toBe(3);
+    expect(readMorningPracticeQueue(cleared, new Date('2026-09-21T10:00:00Z')).map((s) => s.id)).toEqual(['w3']);
+  });
+
+  it('the pin is idempotent: re-stating override 1 and re-running the funnel changes nothing', () => {
+    const activated: number[] = [];
+    const repo = makeRepo({
+      getSettings: () => ({ ...DEFAULT_SETTINGS, program_week_override: 1 }),
+      setProgrammeWeekActive: (week: number) => {
+        activated.push(week);
+      },
+    });
+    applyWeekSetActivation(repo, new Date('2026-09-16T10:00:00Z'));
+    applyWeekSetActivation(repo, new Date('2026-09-16T10:00:00Z'));
+    expect(activated).toEqual([1, 1]); // the same frontier, the same activation — a no-op state change
   });
 });

@@ -23,6 +23,8 @@ export interface Settings {
   weekly_meta_time: string;
   /** 2026-09-15 addition. User-selected current programme week (1–30); null = derive from history (§6.2). Cleared when the selected week's reflection completes. */
   program_week_override: number | null;
+  /** Packet-7 D1 (wave 2): the ONE binary Programme gate. On, the practice is the user's picks plus the programme week block; off is the D3 state — picks only, the week stops advancing, zero automation writes. w2-t2 reads it engine-side (composition, activation funnel, completion gates); w2-t3 ships the Settings surface row. An absent row resolves ON (D8 day-one programme-first) through `getSettings`' defaults merge — and `seedIfEmpty` writes this default like every other key. */
+  programme: boolean;
 }
 
 /** Default settings, per docs/spec.md §7 as amended by the morning/evening pivot and the official-programme amendment (ADR-0005). Values are JSON-encoded in the settings table. */
@@ -45,4 +47,5 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   weekly_meta_day: 'sunday',
   weekly_meta_time: '21:00',
   program_week_override: null,
+  programme: true,
 };

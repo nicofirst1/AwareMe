@@ -128,6 +128,7 @@ export function useWritingSession(): WritingSessionView {
           timerSeconds: open.session.timer_seconds,
           targetEndings: open.session.target_endings,
           uncensoredMode: !!open.session.uncensored_mode,
+          programmeOn: !!open.session.programme_on,
         },
       },
       at,
@@ -147,6 +148,7 @@ export function useWritingSession(): WritingSessionView {
         targetEndings: open.session.target_endings,
         timerSeconds: open.session.timer_seconds,
         uncensoredMode: !!open.session.uncensored_mode,
+        programmeOn: !!open.session.programme_on,
         stemTimerSeconds: settings.stem_timer_enabled ? settings.stem_timer_seconds : null,
       },
       startedAt: open.session.started_at,
@@ -215,6 +217,11 @@ export function useWritingSession(): WritingSessionView {
         targetEndings: stem.configOverrides?.targetEndings ?? settings.endings_per_session,
         timerSeconds: stem.configOverrides?.timerSeconds ?? settings.timer_seconds,
         uncensoredMode: settings.uncensored_mode,
+        // Packet-7 w2-t2: the write-time record of whether the Programme
+        // setting was on at Start (migration 0008, the D3 counting input —
+        // the `uncensored_mode` precedent: read once here, stored verbatim,
+        // never derived).
+        programmeOn: settings.programme,
         stemTimerSeconds: settings.stem_timer_enabled ? settings.stem_timer_seconds : null,
       };
       const id = repo.createSession({
@@ -224,6 +231,7 @@ export function useWritingSession(): WritingSessionView {
         targetEndings: config.targetEndings,
         timerSeconds: config.timerSeconds,
         uncensoredMode: config.uncensoredMode,
+        programmeOn: config.programmeOn,
         startedAt: at,
         deviceLocale: getDeviceLocale(),
         notificationId: stem.notificationId,
@@ -242,6 +250,7 @@ export function useWritingSession(): WritingSessionView {
       settings.endings_per_session,
       settings.timer_seconds,
       settings.uncensored_mode,
+      settings.programme,
       settings.stem_timer_enabled,
       settings.stem_timer_seconds,
     ],

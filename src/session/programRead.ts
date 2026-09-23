@@ -9,7 +9,7 @@
  * completion, in `write.tsx` (`createReview` + the ADR-0005-sanctioned
  * `program_week_override` clear).
  */
-import type { EndingRow, Repository, SessionRow, StemRow } from '@/db';
+import type { EndingRow, LibraryStemRow, Repository, SessionRow, StemRow } from '@/db';
 import {
   countAnchoredReflectionWeeks,
   effectiveWeek,
@@ -33,20 +33,28 @@ export interface ProgrammeWeek {
   currentWeek: number;
   /**
    * Issue 09 hybrid unlock frontier: the highest week whose stems may be
-   * active — max(override, derivedWeek, highestStoredActiveWeek). The one
-   * source of truth for "is week N locked": the week screen greys weeks
-   * above it, and `applyWeekSetActivation` unlocks to exactly it. Monotone
-   * by construction (the stored floor only rises), so nothing auto-re-locks.
+   * active — max(override, derivedWeek, highestStoredActiveWeek among
+   * provenance-'programme' rows). The one source of truth for "is week N
+   * locked": the week screen greys weeks above it, and `applyWeekSetActivation`
+   * unlocks to exactly it. Under D2 the funnel never writes `active = 0`, so
+   * nothing auto-re-locks: the frontier only stops claiming a week when the
+   * USER touches its rows out of automation's scope (the `setStemActive`
+   * provenance flip), never on its own.
    */
   unlockFrontier: number;
 }
 
-/** Reads the §6.2 programme week: anchor + reflection weeks → derived, then the override on top. */
+/** Reads the §6.2 programme week: anchor + enabled-period reflection weeks (packet-7 D3's counting rule) → derived, then the override on top. */
 export function readProgrammeWeek(repo: Repository, now: Date = new Date()): ProgrammeWeek {
   const first = repo.getFirstProgrammePractice();
   const anchorMondayKey = first ? eventWeekMondayKey(first.startedAt, first.offsetMin) : null;
+  // D3 counting rule (packet-7): only reflections recorded while the
+  // Programme setting was ON advance the week. Reflections recorded while
+  // off stay recorded (history, export, completion states) but never
+  // advance anything — the exclusion is read-time, nothing is stored.
   const reflectionMondayKeys = repo
     .listCompletedWeeklyReflections()
+    .filter((r) => r.programmeOn === 1)
     .map((r) => eventWeekMondayKey(r.startedAt, r.offsetMin));
   const anchoredCount = countAnchoredReflectionWeeks(anchorMondayKey, reflectionMondayKeys);
 
@@ -79,6 +87,12 @@ export function readProgrammeWeek(repo: Repository, now: Date = new Date()): Pro
  * to the derived week and a derived advance).
  */
 export function applyWeekSetActivation(repo: Repository, now: Date = new Date()): void {
+  // Packet-7 D3: while the Programme setting is off the week-set funnel is a
+  // TOTAL no-op — zero state changes, not even the provenance-untouched
+  // activation half. The override and manual stem activation stay live
+  // while off (they are user input, not automation).
+  if (!repo.getSettings().programme) return;
+
   const { unlockFrontier } = readProgrammeWeek(repo, now);
 
   // House guard, same shape as setProgrammeWeekActive's no-op: derivedWeek
@@ -89,10 +103,36 @@ export function applyWeekSetActivation(repo: Repository, now: Date = new Date())
   repo.setProgrammeWeekActive(unlockFrontier);
 }
 
-/** The morning practice's queue (§6.2): every active programme stem of the effective week, seed order. */
+/**
+ * D1's pick: an active, non-deleted, user/imported stem not tagged evening —
+ * the user's own morning content. Seed rows never masquerade as picks (the
+ * evening starters are seed evening content; w2-t5 draws them), untagged
+ * picks land in the morning (design §8.2: an untagged pick must land
+ * somewhere), and the meta-stems never join a practice draw.
+ */
+function isMorningPick(s: LibraryStemRow): boolean {
+  return (
+    s.active === 1 &&
+    s.deleted_at === null &&
+    (s.origin === 'user' || s.origin === 'imported') &&
+    s.time_of_day !== 'evening'
+  );
+}
+
+/**
+ * The morning practice's queue (§6.2, packet-7 D1): the user's active picks
+ * (not evening-tagged) first, then — while the Programme setting is on — the
+ * active programme block of the effective week, seed order. While Programme
+ * is off the queue is the picks alone and the programme week is never read
+ * (D3: zero programme state). Pick order is `listAllStems`' own order (the
+ * library's recency order) — the composition adds no re-sort, so start and
+ * resume walk the identical queue.
+ */
 export function readMorningPracticeQueue(repo: Repository, now: Date = new Date()): StemRow[] {
+  const picks = repo.listAllStems().filter(isMorningPick);
+  if (!repo.getSettings().programme) return picks;
   const { currentWeek } = readProgrammeWeek(repo, now);
-  return repo.getProgrammeStemsForWeek(currentWeek);
+  return [...picks, ...repo.getProgrammeStemsForWeek(currentWeek)];
 }
 
 export interface HomeProgrammeStatus {
@@ -128,14 +168,23 @@ export function readHomeProgrammeStatus(repo: Repository, now: Date = new Date()
   const anchorMondayKey = first ? eventWeekMondayKey(first.startedAt, first.offsetMin) : null;
   const anchorLocalDate = first ? eventLocalDateKey(first.startedAt, first.offsetMin) : null;
 
-  const reflectionMondayKeys = repo
-    .listCompletedWeeklyReflections()
-    .map((r) => eventWeekMondayKey(r.startedAt, r.offsetMin));
+  const reflections = repo.listCompletedWeeklyReflections();
+  // D3 counting rule (packet-7): only reflections recorded while the
+  // Programme setting was on advance the week. The UNFILTERED keys keep
+  // feeding the completion states below — recording continues while off,
+  // and "this week's reflection is done" stays true; only ADVANCEMENT is
+  // excluded (evening parity/eveningDone keep counting all completed
+  // evening reflections for the same reason: alternation is content
+  // scheduling, not advancement).
+  const reflectionMondayKeys = reflections.map((r) => eventWeekMondayKey(r.startedAt, r.offsetMin));
   const thisMondayKey = localDateKey(mondayOfWeek(now));
-  const anchoredCount = countAnchoredReflectionWeeks(anchorMondayKey, reflectionMondayKeys);
+  const enabledReflectionMondayKeys = reflections
+    .filter((r) => r.programmeOn === 1)
+    .map((r) => eventWeekMondayKey(r.startedAt, r.offsetMin));
+  const anchoredCount = countAnchoredReflectionWeeks(anchorMondayKey, enabledReflectionMondayKeys);
   const anchoredWithoutThisWeek = countAnchoredReflectionWeeks(
     anchorMondayKey,
-    reflectionMondayKeys.filter((key) => key !== thisMondayKey),
+    enabledReflectionMondayKeys.filter((key) => key !== thisMondayKey),
   );
 
   const derivedWeek = deriveProgramWeek(anchorLocalDate, anchoredCount, now);

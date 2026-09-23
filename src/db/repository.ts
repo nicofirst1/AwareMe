@@ -559,27 +559,32 @@ export class Repository {
   // -------------------------------------------------------------------
 
   /**
-   * Week-set activation (issue 09, v14-feedback): CUMULATIVE unlock.
-   * Makes weeks 1..week the programme's active weeks — all programme stems
-   * whose `week_number <= week` get `active = 1`, all others (including week
-   * itself if it was previously locked) get `active = 0`. This implements
-   * the hybrid unlock rule: auto-unlock on prior week completion (derived
-   week advances → unlock 1..N) plus manual enable ("make this my week" on
-   week M → unlock 1..M). Weeks never re-lock once unlocked.
+   * Week-set activation (issue 09, packet-7 D2): CUMULATIVE unlock over
+   * UNTOUCHED programme rows. Activates every programme stem whose
+   * `week_number <= week` — and nothing else: the write never deactivates
+   * (the old `ELSE 0` resting write is retired), never reorders (reads are
+   * `rowid`-ordered; nothing here touches order), and never re-activates a
+   * row the user has touched (`activation_provenance = 'user'` — D2's
+   * "automation may only activate stems the user has never touched").
+   * Rows outside the programme (`week_number IS NULL`: user/imported stems,
+   * the weekly meta-stem, the evening meta-stems, the retired v1 originals)
+   * are never in scope, and soft-deleted rows' `deleted_at` columns are
+   * never touched (their `active` flag rides along exactly as the retired
+   * blanket write's did — invisible to every read and export-consumable
+   * state unchanged).
    *
-   * Called at every point the effective week can change: setting or clearing
-   * `program_week_override` (the programme page) and completing a weekly
-   * reflection (write.tsx — override-clear back to the derived week, or a
-   * derived advance). Idempotent; out-of-range weeks are a no-op,
-   * same guard as `getProgrammeStemsForWeek`.
+   * Called at every point the effective week can change while Programme is
+   * on: setting or clearing `program_week_override` (the programme page)
+   * and completing a weekly reflection (write.tsx). Idempotent; out-of-range
+   * weeks are a no-op, same guard as `getProgrammeStemsForWeek`.
    */
   setProgrammeWeekActive(week: number): void {
     if (!Number.isInteger(week) || week < 1 || week > PROGRAMME_WEEK_CAP) return;
-    // Activate weeks 1..target; rest every higher week. Scoped to programme
-    // rows: user stems, the weekly meta-stem and the evening meta-stems have
-    // `week_number IS NULL` and keep their own active flags.
+    // Activate-only, provenance-scoped: `week_number <= ?` already excludes
+    // NULL weeks in SQL; the explicit IS NOT NULL keeps the scope readable.
+    // No `ELSE 0` arm exists — resting is not automation's to do (D2).
     this.db.runSync(
-      'UPDATE stems SET active = CASE WHEN week_number <= ? THEN 1 ELSE 0 END WHERE week_number IS NOT NULL',
+      "UPDATE stems SET active = 1 WHERE week_number IS NOT NULL AND week_number <= ? AND activation_provenance = 'programme'",
       [week],
     );
   }
@@ -605,16 +610,25 @@ export class Repository {
   }
 
   /**
-   * Week-set unlock threshold: returns the highest `week_number` that has any
-   * active stems. If no programme stems are active, returns 0. This is used
-   * by `applyWeekSetActivation` to preserve existing unlock state when
-   * migrating from the old single-week model to the new cumulative model
-   * (issue 09).
+   * Week-set unlock threshold: the highest `week_number` that has any active
+   * PROVENANCE-'programme' stems — the stored unlock floor of record for
+   * existing installs (issue 09's legacy floor: the `active` flags of rows
+   * automation placed). If no programme-provenance stem is active, returns 0.
+   *
+   * Packet-7 D2 re-derive: with the resting write retired, the floor is a
+   * legacy-compat input to the frontier's `max(...)`, not the monotonicity
+   * mechanism — monotonicity now comes from the write itself never clearing
+   * `active`. Scoping the read to `activation_provenance = 'programme'`
+   * keeps that true after user touches: a deactivated or user-claimed row
+   * (`setStemActive` flips provenance) has left automation's scope, so it
+   * no longer holds the floor, and the provenance-scoped activation write
+   * can never re-activate it — nothing auto-re-locks because nothing ever
+   * writes `active = 0`.
    */
   getHighestUnlockedWeek(): number {
     const row = this.db.getFirstSync<{ week: number }>(
       `SELECT week_number as week FROM stems
-       WHERE week_number IS NOT NULL AND active = 1
+       WHERE week_number IS NOT NULL AND active = 1 AND activation_provenance = 'programme'
        ORDER BY week_number DESC
        LIMIT 1`,
       [],
@@ -798,9 +812,20 @@ export class Repository {
     ]);
   }
 
-  /** Archive/unarchive (§6.6's primary destructive action — reversible, unlike delete). */
+  /**
+   * Archive/unarchive (§6.6's primary destructive action — reversible, unlike
+   * delete), and the bulk Activate/Deactivate path's single write
+   * (stems.tsx's selection loop and the editor call the same method).
+   *
+   * Packet-7 D2: EVERY user touch claims the row — `activation_provenance`
+   * flips to 'user' in the same atomic statement, in BOTH directions. A
+   * re-activation is a touch too (D2's rule is "never touched", not "never
+   * deactivated"): once the user has acted on a programme stem, week-set
+   * activation never overrides their choice again. New stems default
+   * 'user' via the column DEFAULT (addStem/import write nothing here).
+   */
   setStemActive(id: string, active: boolean): void {
-    this.db.runSync('UPDATE stems SET active = ? WHERE id = ?', [active ? 1 : 0, id]);
+    this.db.runSync("UPDATE stems SET active = ?, activation_provenance = 'user' WHERE id = ?", [active ? 1 : 0, id]);
   }
 
   /** Soft-delete: past sessions keep their snapshot and remain in history/export. */
@@ -820,6 +845,16 @@ export class Repository {
     targetEndings: number;
     timerSeconds: number;
     uncensoredMode: boolean;
+    /**
+     * Was the Programme setting on when this session started — the write-time
+     * user-context input the D3 counting rule consumes (the `uncensored_mode`
+     * precedent: recorded verbatim from the caller, never derived).
+     * OPTIONAL in the type because `useWritingSession.start` is the only
+     * production caller and always states it (w2-t2 plumbing); every
+     * pre-existing literal call site predates the flag. Absent stores 0 —
+     * only a caller that states the flag may claim on.
+     */
+    programmeOn?: boolean;
     startedAt: string;
     deviceLocale: string;
     /** Set when `origin === 'notification'`: the row this session was opened from (§6.4). */
@@ -830,9 +865,9 @@ export class Repository {
     const { tz, offsetMin } = nowEventTime(new Date(input.startedAt));
     this.db.runSync(
       `INSERT INTO sessions
-         (id, stem_id, stem_text_snapshot, origin, target_endings, timer_seconds, uncensored_mode,
+         (id, stem_id, stem_text_snapshot, origin, target_endings, timer_seconds, uncensored_mode, programme_on,
           started_at, last_activity_at, tz, offset_min, device_locale, notification_id, notified_at, opened_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         input.stemId,
@@ -841,6 +876,7 @@ export class Repository {
         input.targetEndings,
         input.timerSeconds,
         input.uncensoredMode ? 1 : 0,
+        input.programmeOn ? 1 : 0,
         input.startedAt,
         input.startedAt,
         tz,
