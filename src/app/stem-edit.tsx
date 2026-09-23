@@ -12,7 +12,7 @@ import { CategoryColors, Fonts, MaxContentWidth, Radius, Spacing, type CategoryN
 import { getRepository, type TimeOfDay } from '@/db';
 import { nowEventTime } from '@/db/time';
 import { useTheme } from '@/hooks/use-theme';
-import { validateStemText, WEIGHT_BY_SETTING, type WeightSetting } from '@/session/stemValidation';
+import { validateStemText } from '@/session/stemValidation';
 
 // Reads the category picker off the palette itself (ui-audit-2026-09-11.md
 // §2) rather than a hand-maintained list, so this can never drift out of
@@ -33,15 +33,9 @@ function fromOption(o: TimeOfDayOption): TimeOfDay | null {
   return o === 'none' ? null : o;
 }
 
-function weightToSetting(weight: number): WeightSetting {
-  if (weight <= WEIGHT_BY_SETTING.less) return 'less';
-  if (weight >= WEIGHT_BY_SETTING.more) return 'more';
-  return 'normal';
-}
-
 /**
  * Add or edit a stem (§6.6). One screen for both: with `?id=`, it loads the
- * existing stem and shows archive/delete/reweight alongside the edit form;
+ * existing stem and shows archive/delete alongside the edit form;
  * without it, it's a bare add form. Editing never touches past sessions —
  * they keep `stem_text_snapshot` regardless of what happens here.
  */
@@ -61,7 +55,6 @@ export default function StemEditScreen() {
   const [text, setText] = useState(existing?.text ?? '');
   const [category, setCategory] = useState<string | null>(existing?.category ?? null);
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDayOption>(toOption(existing?.time_of_day ?? null));
-  const [weightSetting, setWeightSetting] = useState<WeightSetting>(weightToSetting(existing?.weight ?? 1.0));
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
 
@@ -89,10 +82,8 @@ export default function StemEditScreen() {
     const resolvedTimeOfDay = fromOption(timeOfDay);
     if (existing) {
       repo.updateStem(existing.id, { text: trimmed, category, timeOfDay: resolvedTimeOfDay });
-      repo.setStemWeight(existing.id, WEIGHT_BY_SETTING[weightSetting]);
     } else {
-      const newId = repo.addStem({ text: trimmed, category, origin: 'user', timeOfDay: resolvedTimeOfDay });
-      repo.setStemWeight(newId, WEIGHT_BY_SETTING[weightSetting]);
+      repo.addStem({ text: trimmed, category, origin: 'user', timeOfDay: resolvedTimeOfDay });
     }
     router.back();
   };
@@ -167,18 +158,6 @@ export default function StemEditScreen() {
                 label={o === 'none' ? 'None' : o === 'morning' ? 'Morning' : 'Evening'}
                 selected={timeOfDay === o}
                 onPress={() => setTimeOfDay(o)}
-              />
-            ))}
-          </ThemedView>
-
-          <ThemedText type="eyebrow">How often</ThemedText>
-          <ThemedView style={styles.chipRow}>
-            {(['less', 'normal', 'more'] as const).map((w) => (
-              <FilterChip
-                key={w}
-                label={w === 'less' ? 'Less often' : w === 'more' ? 'More often' : 'Normal'}
-                selected={weightSetting === w}
-                onPress={() => setWeightSetting(w)}
               />
             ))}
           </ThemedView>

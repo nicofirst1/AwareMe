@@ -1,4 +1,4 @@
-import { validateStemText, WEIGHT_BY_SETTING } from '../stemValidation';
+import { validateStemText } from '../stemValidation';
 
 describe('validateStemText', () => {
   it('rejects empty text and whitespace-only text', () => {
@@ -33,13 +33,5 @@ describe('validateStemText', () => {
     const result = validateStemText('If I let myself rest without earning it first', []);
     expect(result.ok).toBe(true);
     expect(result.warning).toBeNull();
-  });
-});
-
-describe('WEIGHT_BY_SETTING', () => {
-  it('maps the three-way control to spec §6.6 weights', () => {
-    expect(WEIGHT_BY_SETTING.less).toBe(0.4);
-    expect(WEIGHT_BY_SETTING.normal).toBe(1.0);
-    expect(WEIGHT_BY_SETTING.more).toBe(2.5);
   });
 });

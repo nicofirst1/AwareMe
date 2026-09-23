@@ -32,12 +32,3 @@ export function validateStemText(rawText: string, existingTexts: readonly string
 
   return { ok: true, error: null, warning: null };
 }
-
-/** The three-way weight control (§6.6) — no raw float exposed. */
-export type WeightSetting = 'less' | 'normal' | 'more';
-
-export const WEIGHT_BY_SETTING: Readonly<Record<WeightSetting, number>> = {
-  less: 0.4,
-  normal: 1.0,
-  more: 2.5,
-};

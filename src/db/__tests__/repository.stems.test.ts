@@ -260,14 +260,3 @@ describe('Repository.softDeleteStem', () => {
     expect(endings).toHaveLength(1);
   });
 });
-
-describe('Repository.setStemWeight', () => {
-  it('sets an exact weight value', () => {
-    const { db, repo } = freshRepository();
-    const stemId = repo.listActiveStems()[0].id;
-
-    repo.setStemWeight(stemId, 2.5);
-    const row = db.prepare('SELECT weight FROM stems WHERE id = ?').get(stemId) as { weight: number };
-    expect(row.weight).toBe(2.5);
-  });
-});
