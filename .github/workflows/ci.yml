@@ -52,23 +52,9 @@ jobs:
         # legacy-peer-deps resolution intentionally omits (measured 2026-09-23:
         # react-native-gesture-handler, react-native-reanimated, react-dom and
         # ~40 more would enter the tree, flipping expo's native autolinking).
-        # `npm install` with legacy peer deps is the repo remedy
+        # The flag gives a clean-room install, exactly from the lockfile
         # (docs/DECISIONS.md, environment quirks).
-        run: npm install --legacy-peer-deps
-
-      - name: Restore missing expo-asset (known npm quirk; docs/DECISIONS.md 2026-09-16)
-        # node_modules/expo-asset repeatedly vanishes across npm install
-        # cycles, after which Jest fails with: Cannot find module expo-asset.
-        # This step only fires when the check finds the module absent, then
-        # reinstalls it without saving: expo-asset is never added to
-        # package.json. When the module is present the step is a no-op.
-        run: |
-          if [ ! -d node_modules/expo-asset ]; then
-            echo "expo-asset missing after install (known quirk): applying remedy"
-            npm install expo-asset@57.0.16 --no-save --legacy-peer-deps
-          else
-            echo "expo-asset present: no remedy needed"
-          fi
+        run: npm ci --legacy-peer-deps
 
       - name: Typecheck
         run: npx tsc --noEmit

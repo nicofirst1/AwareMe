@@ -46,8 +46,8 @@ This file is an index, not the record: each entry points at the authoritative do
 
 ## Environment quirks
 
-- `node_modules/expo-asset` repeatedly vanishes across `npm install` cycles; Jest then fails with `Cannot find module 'expo-asset'`. Remedy: `npm install expo-asset@57.0.16 --no-save --legacy-peer-deps`; never add it to `package.json`.
-- Plain `npm ci` fails in fresh worktrees — plain npm auto-installs peer dependencies the legacy-peer-deps resolution intentionally omits (measured 2026-09-23: react-native-gesture-handler, react-native-reanimated, react-dom and ~40 more; a strict lock would flip expo's native autolinking, so legacy stays) — use `npm install --legacy-peer-deps` plus the expo-asset remedy.
+- `npm ci` must always carry `--legacy-peer-deps`: plain npm auto-installs peer dependencies the legacy resolution intentionally omits (measured 2026-09-23: react-native-gesture-handler, react-native-reanimated, react-dom and ~40 more; a strict lock would flip expo's native autolinking, so legacy stays).
+- RESOLVED 2026-09-23: the old "expo-asset repeatedly vanishes" quirk was a lockfile hoisting defect — the lock held `expo-asset@57.0.16` only nested under `node_modules/expo/`, invisible to expo-font's root resolution (`expo-font/src/FontLoader.ts` imports it), so jest failed on every fresh install while the `--no-save` remedy masked it. The lock now hoists expo-asset to top level (same version, expo's declared range `~57.0.16`); `npm ci --legacy-peer-deps` installs it, jest needs no remedy. If it ever recurs, the lock lost its hoisted expo-asset entry again.
 
 ## Design and execution rounds
 
