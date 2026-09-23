@@ -23,12 +23,47 @@ import { useWritingSession } from '@/session/useWritingSession';
 // hoisted above the module's own initializations.
 const mockSettings: { current: Settings } = { current: { ...DEFAULT_SETTINGS } };
 
+/** Captured createSession inputs (the programme_on plumbing pin reads them). */
+const mockCreatedSessions: Record<string, unknown>[] = [];
+/** When non-null, the ADR-0001 open-session row the hook resolves on mount. */
+const mockOpenSession: { current: ReturnType<typeof makeOpenSession> | null } = { current: null };
+
+/** A session row left open seconds ago — the ADR-0001 resumable shape, with the migration-0008 flag. */
+function makeOpenSession(programmeOn: number) {
+  const now = Date.now();
+  return {
+    session: {
+      id: 'open-session',
+      stem_id: 'stem-1',
+      stem_text_snapshot: 'If I notice how this begins',
+      origin: 'manual',
+      target_endings: 6,
+      timer_seconds: 600,
+      uncensored_mode: 0,
+      programme_on: programmeOn,
+      started_at: new Date(now - 90_000).toISOString(),
+      first_keypress_at: null,
+      ended_at: null,
+      end_reason: null,
+      last_activity_at: new Date(now - 30_000).toISOString(),
+      tz: 'Europe/Berlin',
+      offset_min: 120,
+      device_locale: 'en-US',
+      deleted_at: null,
+    },
+    endings: [],
+  };
+}
+
 jest.mock('@/db', () => ({
   ...jest.requireActual<typeof import('@/db')>('@/db'),
   getRepository: () => ({
     getSettings: () => mockSettings.current,
-    getOpenSession: () => null,
-    createSession: () => 'session-1',
+    getOpenSession: () => mockOpenSession.current,
+    createSession: (input: Record<string, unknown>) => {
+      mockCreatedSessions.push(input);
+      return 'session-1';
+    },
     recordFirstKeypress: () => {},
     autosaveEndingText: () => {},
     submitEnding: () => {},
@@ -45,6 +80,8 @@ function withSettings(overrides: Partial<Settings>) {
 beforeEach(() => {
   jest.useFakeTimers();
   withSettings({});
+  mockCreatedSessions.length = 0;
+  mockOpenSession.current = null;
 });
 
 afterEach(() => {
@@ -172,5 +209,44 @@ describe('useWritingSession — per-stem countdown disabled', () => {
 
     expect(result.current.phase).toBe('active');
     expect(result.current.stemRemainingSeconds).toBeNull();
+  });
+});
+
+// ── Packet-7 w2-t2: the programme_on write-time record (the uncensored_mode mirror) ──
+
+describe('useWritingSession — programme_on plumbing (migration 0008, D3 counting input)', () => {
+  it('start() stores the flag from the setting at Start: on → createSession programmeOn true', () => {
+    withSettings({ programme: true });
+    const { result } = renderHook(() => useWritingSession());
+    act(() => {
+      result.current.start(STEM);
+    });
+    expect(mockCreatedSessions).toHaveLength(1);
+    expect(mockCreatedSessions[0].programmeOn).toBe(true);
+  });
+
+  it('start() with the setting off stores programmeOn false — the caller states the flag, the row keeps it verbatim', () => {
+    withSettings({ programme: false });
+    const { result } = renderHook(() => useWritingSession());
+    act(() => {
+      result.current.start(STEM);
+    });
+    expect(mockCreatedSessions[0].programmeOn).toBe(false);
+  });
+
+  it('resume rebuilds the session context from the ROW, not from current settings (off-period row, setting now on)', () => {
+    withSettings({ programme: true }); // the setting has moved on since the session started
+    mockOpenSession.current = makeOpenSession(0);
+    const { result } = renderHook(() => useWritingSession());
+    expect(result.current.phase).toBe('active');
+    expect(result.current.state?.config.programmeOn).toBe(false); // the row's value wins
+  });
+
+  it('resume mirrors an on-period row the same way (the uncensored_mode assertion shape)', () => {
+    withSettings({ programme: false }); // setting moved the other way; the row still says on
+    mockOpenSession.current = makeOpenSession(1);
+    const { result } = renderHook(() => useWritingSession());
+    expect(result.current.phase).toBe('active');
+    expect(result.current.state?.config.programmeOn).toBe(true);
   });
 });

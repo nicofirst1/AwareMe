@@ -33,7 +33,6 @@ import {
   applyWeekSetActivation,
   readEveningReflectionInputs,
   readMorningPracticeQueue,
-  readProgrammeWeek,
   readWeeklyReflectionInputs,
   shouldClearOverride,
 } from '@/session/programRead';
@@ -76,10 +75,13 @@ function parseWeekParam(week?: string | string[]): number | null {
  *    itself can't be reconstructed.
  */
 function resumeQueue(repo: ReturnType<typeof getRepository>, openStemId: string, weekParam: number | null): { queue: StemRow[]; startIndex: number } {
-  const { currentWeek } = readProgrammeWeek(repo);
-  const weekQueue = repo.getProgrammeStemsForWeek(currentWeek);
-  const index = weekQueue.findIndex((s) => s.id === openStemId);
-  if (index >= 0) return { queue: weekQueue, startIndex: index };
+  // The morning practice's queue is the ONE composition (packet-7 D1: picks +
+  // gated programme block) — the same function that fills a fresh start, so a
+  // resumed pick-stem session matches the queue it belongs to instead of
+  // falling through to the solo fallback.
+  const morningQueue = readMorningPracticeQueue(repo);
+  const index = morningQueue.findIndex((s) => s.id === openStemId);
+  if (index >= 0) return { queue: morningQueue, startIndex: index };
 
   if (weekParam !== null) {
     // One-off week practice (issue 04): rebuild from the whole block, resting
@@ -415,15 +417,16 @@ export default function WriteScreen() {
         reflectionText: reflectionText && reflectionText.length > 0 ? reflectionText : null,
         createdAt: at,
       });
-      if (flow.clearOverride && reflectionHasContent) {
+      if (flow.clearOverride && reflectionHasContent && repo.getSettings().programme) {
         repo.setSetting('program_week_override', null);
       }
       // Week-set activation (issue 04, coordinator-approved hub FLAG
-      // 2026-09-16): the effective week's stems are the active ones.
-      // Re-applied on every weekly completion — the override just cleared
-      // back to the derived week, or the derived week just advanced (no
-      // override set). Without it, one override cycle would leave every
-      // later derived week resting and the morning practice queue empty.
+      // 2026-09-16; packet-7 D3 gates it): the effective week's untouched
+      // programme stems are the active ones. Re-applied on every weekly
+      // completion — the override just cleared back to the derived week, or
+      // the derived week just advanced (no override set). While Programme is
+      // off the funnel no-ops internally AND this call is skipped: zero
+      // state changes, the review row above still records.
       applyWeekSetActivation(repo);
     } else {
       const { start, end } = utcBoundsOfLocalDay(new Date());

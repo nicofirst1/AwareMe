@@ -411,15 +411,16 @@ describe('Repository.seedIfEmpty — activation provenance (migration 0008, pack
 });
 
 describe('migration 0008 accessors — sessions.programme_on exposure (packet-7 D3)', () => {
-  it('listCompletedWeeklyReflections exposes programmeOn per reflection; every row reads 1 pre-wave-2', () => {
+  it('listCompletedWeeklyReflections exposes programmeOn per reflection (the caller states the flag since w2-t2)', () => {
     const { repo } = freshRepository();
     repo.seedIfEmpty();
     const weekly = repo.getWeeklyMetaStem();
     if (!weekly) throw new Error('seed must include the weekly meta-stem');
 
-    // The real Start write path: createSession does not name the new column,
-    // so the row lands on the DEFAULT 1 — no off state exists pre-wave-2,
-    // nothing is 'unknown'. w2-t2's counting rule consumes this value.
+    // Since w2-t2 the Start write path names the column and stores the
+    // caller's flag verbatim (useWritingSession passes settings.programme).
+    // The pre-wave-2 DEFAULT-fill story (every old row reads 1) is the
+    // migration's pin — migrate.test.ts owns it.
     const sessionId = repo.createSession({
       stemId: weekly.id,
       stemTextSnapshot: 'snapshot',
@@ -427,6 +428,7 @@ describe('migration 0008 accessors — sessions.programme_on exposure (packet-7 
       targetEndings: 1,
       timerSeconds: 90,
       uncensoredMode: false,
+      programmeOn: true,
       startedAt: '2026-09-07T19:00:00.000Z',
       deviceLocale: 'en-US',
     });

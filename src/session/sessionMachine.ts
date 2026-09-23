@@ -24,6 +24,13 @@ export interface SessionConfig {
   targetEndings: number;
   timerSeconds: number;
   uncensoredMode: boolean;
+  /**
+   * Was the Programme setting on when this session started (migration 0008,
+   * packet-7 D3's counting input) — carried so a resumed session's context
+   * mirrors its ROW, exactly like `uncensoredMode`. The session machine
+   * itself never branches on it; it is write-time user context, not a mode.
+   */
+  programmeOn?: boolean;
   /** Per-stem countdown in seconds (2026-09-11 addition, spec §6.3.4); undefined/null when `stem_timer_enabled` is off. */
   stemTimerSeconds?: number | null;
 }

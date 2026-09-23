@@ -54,7 +54,7 @@ const mockRepository: {
   getLastReviewAt: () => string | null;
   listSessionsForStats: () => { id: string }[];
   getFirstProgrammePractice: () => { startedAt: string; offsetMin: number } | null;
-  listCompletedWeeklyReflections: () => { startedAt: string; offsetMin: number }[];
+  listCompletedWeeklyReflections: () => { startedAt: string; offsetMin: number; programmeOn: number }[];
   listCompletedEveningReflections: () => { startedAt: string; offsetMin: number }[];
   getProgrammeStemsForWeek: (week: number) => { id: string }[];
   countProgrammeStemsCompletedInRange: (week: number, start: string, end: string) => number;
@@ -146,7 +146,7 @@ describe('HomeScreen', () => {
     const offsetMin = -now.getTimezoneOffset();
     const anchor = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000);
     mockRepository.getFirstProgrammePractice = () => ({ startedAt: anchor.toISOString(), offsetMin });
-    mockRepository.listCompletedWeeklyReflections = () => [{ startedAt: now.toISOString(), offsetMin }];
+    mockRepository.listCompletedWeeklyReflections = () => [{ startedAt: now.toISOString(), offsetMin, programmeOn: 1 }];
     render(<HomeScreen />);
     expect(screen.getByText('Week 1 complete. Week 2 is ready.')).toBeTruthy();
 
@@ -160,7 +160,7 @@ describe('HomeScreen', () => {
     const now = new Date();
     const offsetMin = -now.getTimezoneOffset();
     mockRepository.getSettings = () => ({ ...DEFAULT_SETTINGS, program_week_override: 30 });
-    mockRepository.listCompletedWeeklyReflections = () => [{ startedAt: now.toISOString(), offsetMin }];
+    mockRepository.listCompletedWeeklyReflections = () => [{ startedAt: now.toISOString(), offsetMin, programmeOn: 1 }];
     render(<HomeScreen />);
     expect(screen.getByText('Week 30 of 30')).toBeTruthy();
     expect(screen.getByText('Week 30 complete. The library is yours from here.')).toBeTruthy();
