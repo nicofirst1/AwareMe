@@ -366,3 +366,77 @@ describe('Repository.deleteAllData', () => {
     expect(repo.hasStems()).toBe(true); // re-seeded
   });
 });
+
+describe('Repository.seedIfEmpty — activation provenance (migration 0008, packet-7 D2)', () => {
+  it('seeds programme rows as provenance \'programme\' and every other class as \'user\' (fresh install)', () => {
+    const { db, repo } = freshRepository();
+    repo.seedIfEmpty();
+
+    // The programme INSERT writes 'programme' explicitly: on a fresh install
+    // migrations run BEFORE seeding, so the column's DEFAULT 'user' would
+    // otherwise mislabel every programme row. The seed's own membership rule
+    // (week_number IS NOT NULL) is the backfill rule — the two cannot drift.
+    const programme = db
+      .prepare('SELECT activation_provenance FROM stems WHERE week_number IS NOT NULL')
+      .all() as { activation_provenance: string }[];
+    expect(programme).toHaveLength(PROGRAMME_SEED_STEMS.length);
+    for (const row of programme) {
+      expect(row.activation_provenance).toBe('programme');
+    }
+
+    // Every other seed class keeps the column DEFAULT 'user': the weekly
+    // meta-stem, the two evening meta-stems, the evening starter set and
+    // the retired v1 originals (all week_number NULL).
+    const others = db
+      .prepare('SELECT origin, is_weekly_meta, activation_provenance FROM stems WHERE week_number IS NULL')
+      .all() as { origin: string; is_weekly_meta: number; activation_provenance: string }[];
+    expect(others).toHaveLength(
+      1 + EVENING_META_STEMS.length + EVENING_PRACTICE_SEED_STEMS.length + RETIRED_SEED_STEMS.length,
+    );
+    for (const row of others) {
+      expect(row.activation_provenance).toBe('user');
+    }
+  });
+
+  it('lands rows written after seeding on the DEFAULT too (addStem does not name the column)', () => {
+    const { db, repo } = freshRepository();
+    repo.seedIfEmpty();
+
+    const added = repo.addStem({ text: 'A post-seed user stem', category: null, origin: 'user' });
+    const addedRow = db.prepare('SELECT activation_provenance FROM stems WHERE id = ?').get(added) as {
+      activation_provenance: string;
+    };
+    expect(addedRow.activation_provenance).toBe('user');
+  });
+});
+
+describe('migration 0008 accessors — sessions.programme_on exposure (packet-7 D3)', () => {
+  it('listCompletedWeeklyReflections exposes programmeOn per reflection; every row reads 1 pre-wave-2', () => {
+    const { repo } = freshRepository();
+    repo.seedIfEmpty();
+    const weekly = repo.getWeeklyMetaStem();
+    if (!weekly) throw new Error('seed must include the weekly meta-stem');
+
+    // The real Start write path: createSession does not name the new column,
+    // so the row lands on the DEFAULT 1 — no off state exists pre-wave-2,
+    // nothing is 'unknown'. w2-t2's counting rule consumes this value.
+    const sessionId = repo.createSession({
+      stemId: weekly.id,
+      stemTextSnapshot: 'snapshot',
+      origin: 'review',
+      targetEndings: 1,
+      timerSeconds: 90,
+      uncensoredMode: false,
+      startedAt: '2026-09-07T19:00:00.000Z',
+      deviceLocale: 'en-US',
+    });
+    repo.recordFirstKeypress(sessionId, 1, '2026-09-07T19:01:00.000Z');
+    repo.autosaveEndingText(sessionId, 1, 'something true', 0, '2026-09-07T19:02:00.000Z');
+    repo.finalizeSession(sessionId, 'user_done', '2026-09-07T19:03:00.000Z');
+
+    const reflections = repo.listCompletedWeeklyReflections();
+    expect(reflections).toHaveLength(1);
+    expect(reflections[0].startedAt).toBe('2026-09-07T19:00:00.000Z');
+    expect(reflections[0].programmeOn).toBe(1);
+  });
+});

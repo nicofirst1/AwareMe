@@ -8,6 +8,7 @@ import { MIGRATIONS, CURRENT_SCHEMA_VERSION } from '../migrations';
 import { MIGRATION_0004_OFFICIAL_PROGRAMME } from '../migrations/0004_official_programme';
 import { MIGRATION_0006_EVENING_META_TIME_OF_DAY } from '../migrations/0006_evening_meta_time_of_day';
 import { MIGRATION_0007_EVENING_PRACTICE_STARTER_SET } from '../migrations/0007_evening_practice_starter_set';
+import { MIGRATION_0008_ACTIVATION_PROVENANCE } from '../migrations/0008_activation_provenance';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
 import { EVENING_META_STEMS, EVENING_PRACTICE_SEED_STEMS, PROGRAMME_SEED_STEMS, programmeStemCategory, WEEKLY_META_STEM } from '../seed/stems';
 
@@ -28,6 +29,15 @@ const describeWithSnapshot = SNAPSHOT_PRESENT ? describe : describe.skip;
 const MIGRATION_0004_TAGGED_TEXT = /UPDATE stems SET is_weekly_meta = 1 WHERE origin = 'meta' AND text = '([^']+)';/.exec(
   MIGRATION_0004_OFFICIAL_PROGRAMME,
 )?.[1];
+
+/**
+ * The exact backfill UPDATE migration 0008 ships, extracted from the shipped
+ * SQL constant itself (issue 10's extraction pattern): the D2 rule must BE
+ * `week_number IS NOT NULL → 'programme'` — a changed predicate fails the
+ * pin below instead of silently backfilling a different row set.
+ */
+const MIGRATION_0008_BACKFILL_UPDATE =
+  /^UPDATE stems SET activation_provenance = 'programme' WHERE week_number IS NOT NULL;$/m.exec(MIGRATION_0008_ACTIVATION_PROVENANCE)?.[0];
 
 function fixturePath(version: number): string {
   return path.join(FIXTURES_DIR, `schema-v${version}.db`);
@@ -485,6 +495,227 @@ describe('migrate', () => {
     // check must still see a fresh install, so the full corpus — starter
     // set included — seeds normally after migrate.
     expect((db.getFirstSync<{ c: number }>('SELECT COUNT(*) AS c FROM stems', []) as { c: number }).c).toBe(0);
+    const meta = db.getFirstSync<{ schema_version: number }>('SELECT schema_version FROM schema_meta WHERE id = 1', []);
+    expect(meta?.schema_version).toBe(CURRENT_SCHEMA_VERSION);
+
+    raw.close();
+    fs.rmSync(path.dirname(scratch), { recursive: true, force: true });
+  });
+
+  // --- Migration 0008 (wave-2 w2-t1): activation provenance + programme-on record ---
+
+  it("the v8 fixture carries migration 0008's two columns with their NOT NULL defaults", () => {
+    expect(CURRENT_SCHEMA_VERSION).toBe(8);
+    const raw = new DatabaseSync(fixturePath(8));
+    const columnsOf = (table: string) =>
+      Object.fromEntries(
+        (raw.prepare(`PRAGMA table_info(${table})`).all() as {
+          name: string;
+          type: string;
+          notnull: number;
+          dflt_value: string | null;
+        }[]).map((c) => [c.name, c]),
+      );
+    const stems = columnsOf('stems');
+    const sessions = columnsOf('sessions');
+    expect(stems['activation_provenance']).toMatchObject({ type: 'TEXT', notnull: 1, dflt_value: "'user'" });
+    expect(sessions['programme_on']).toMatchObject({ type: 'INTEGER', notnull: 1, dflt_value: '1' });
+    // D6/ADR-0004: the vestigial weight column is NOT dropped by 0008.
+    expect(stems['weight']).toMatchObject({ type: 'REAL' });
+    raw.close();
+  });
+
+  it("migration 0008 (v7→v8) backfills provenance deterministically — exactly the programme rows, soft-deleted included — and the shipped rule cannot drift from the live seed's membership", () => {
+    expect(MIGRATION_0008_BACKFILL_UPDATE).toBeDefined();
+    const scratch = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'six-endings-migrate-')), 'copy.db');
+    fs.copyFileSync(fixturePath(7), scratch);
+    const raw = new DatabaseSync(scratch);
+    const db = nodeSqliteExecutor(raw);
+
+    // Mimic a real v7 install's stems table: the whole live programme
+    // corpus (seeded after migrate), one soft-deleted programme stem, the
+    // weekly meta-stem, the two evening meta-stems, the evening starter
+    // set, a retired v1 original, a user stem and an imported stem. Every
+    // class the backfill must distinguish is present, built from the LIVE
+    // seed constants — so the shipped SQL and the live seed cannot drift
+    // (issue 10's cross-pin pattern; unlike 0005 there is no user-set value
+    // to preserve: the column is new, so the whole table pins against the
+    // rule).
+    for (const [index, stem] of PROGRAMME_SEED_STEMS.entries()) {
+      raw
+        .prepare(
+          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
+           VALUES (?, ?, 'seed', NULL, 'en', 1.0, ?, '2026-01-01T00:00:00.000Z', 'UTC', 0, 'morning', ?, 0)`,
+        )
+        .run(`programme-${index.toString().padStart(3, '0')}`, stem.text, stem.weekNumber === 1 ? 1 : 0, stem.weekNumber);
+    }
+    // A soft-deleted programme row: a deterministic pick from the loaded
+    // corpus (its last stem, at its own week) with a tombstone — the class
+    // 0005's precedent says stays programme provenance.
+    const deletedProgramme = PROGRAMME_SEED_STEMS[PROGRAMME_SEED_STEMS.length - 1];
+    raw
+      .prepare(
+        `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta, deleted_at)
+         VALUES ('programme-deleted', ?, 'seed', NULL, 'en', 1.0, 0, '2026-01-01T00:00:00.000Z', 'UTC', 0, 'morning', ?, 0, '2026-01-02T00:00:00.000Z')`,
+      )
+      .run(deletedProgramme.text, deletedProgramme.weekNumber);
+    raw
+      .prepare(
+        `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
+         VALUES ('weekly-meta', ?, 'seed', NULL, 'en', 1.0, 1, '2026-01-01T00:00:00.000Z', 'UTC', 0, NULL, NULL, 1)`,
+      )
+      .run(WEEKLY_META_STEM);
+    for (const [index, text] of EVENING_META_STEMS.entries()) {
+      raw
+        .prepare(
+          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
+           VALUES (?, ?, 'meta', NULL, 'en', 1.0, 0, '2026-01-01T00:00:00.000Z', 'UTC', 0, 'evening', NULL, 0)`,
+        )
+        .run(`evening-meta-${index}`, text);
+    }
+    for (const [index, stem] of EVENING_PRACTICE_SEED_STEMS.entries()) {
+      raw
+        .prepare(
+          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
+           VALUES (?, ?, 'seed', ?, 'en', 1.0, 1, '2026-01-01T00:00:00.000Z', 'UTC', 0, 'evening', NULL, 0)`,
+        )
+        .run(`starter-${index}`, stem.text, stem.category);
+    }
+    raw
+      .prepare(
+        `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta, deleted_at)
+         VALUES ('retired-1', 'A retired v1 original', 'seed', NULL, 'en', 1.0, 0, '2026-01-01T00:00:00.000Z', 'UTC', 0, 'morning', NULL, 0, '2026-01-02T00:00:00.000Z')`,
+      )
+      .run();
+    raw
+      .prepare(
+        `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min)
+         VALUES ('user-1', 'A user stem', 'user', NULL, 'en', 1.0, 1, '2026-01-01T00:00:00.000Z', 'UTC', 0)`,
+      )
+      .run();
+    raw
+      .prepare(
+        `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day)
+         VALUES ('imported-1', 'An imported stem', 'imported', NULL, 'en', 1.0, 1, '2026-01-01T00:00:00.000Z', 'UTC', 0, 'evening')`,
+      )
+      .run();
+
+    migrate(db, '9.9.9');
+
+    const meta = db.getFirstSync<{ schema_version: number }>('SELECT schema_version FROM schema_meta WHERE id = 1', []);
+    expect(meta?.schema_version).toBe(CURRENT_SCHEMA_VERSION);
+
+    // The determinism pin: EVERY row of the table against the shipped rule.
+    const rows = db.getAllSync<{
+      id: string;
+      week_number: number | null;
+      active: number;
+      deleted_at: string | null;
+      time_of_day: string | null;
+      activation_provenance: string;
+    }>('SELECT id, week_number, active, deleted_at, time_of_day, activation_provenance FROM stems', []);
+    for (const row of rows) {
+      expect(row.activation_provenance).toBe(row.week_number !== null ? 'programme' : 'user');
+    }
+
+    // Class cross-pins against the live seed: every programme week resolves
+    // 'programme' (soft-deleted included), everything else 'user'. The
+    // count composes like 0005's: the whole corpus + the soft-deleted twin.
+    const programme = rows.filter((r) => r.id.startsWith('programme-'));
+    expect(programme).toHaveLength(PROGRAMME_SEED_STEMS.length + 1); // + the soft-deleted programme row
+    for (const row of programme) expect(row.activation_provenance).toBe('programme');
+    expect(rows.find((r) => r.id === 'programme-deleted')).toMatchObject({
+      activation_provenance: 'programme',
+      active: 0,
+      deleted_at: '2026-01-02T00:00:00.000Z', // tombstone untouched
+    });
+    for (const id of ['weekly-meta', 'evening-meta-0', 'evening-meta-1', 'starter-0', 'retired-1', 'user-1', 'imported-1']) {
+      expect(rows.find((r) => r.id === id)).toMatchObject({ activation_provenance: 'user' });
+    }
+
+    // Nothing else changed: the migration writes exactly one column. The
+    // user stem keeps its state; a resting week-2+ row keeps its rest and
+    // its morning tag (found by predicate, not by index guess).
+    expect(rows.find((r) => r.id === 'user-1')).toMatchObject({ active: 1, deleted_at: null, time_of_day: null });
+    const restingWeek = rows.find((r) => r.id.startsWith('programme-') && r.week_number !== 1 && r.active === 0);
+    expect(restingWeek).toBeDefined();
+    expect(restingWeek).toMatchObject({ deleted_at: null, time_of_day: 'morning' });
+
+    // Idempotent at the SQL level: re-running the shipped UPDATE is a no-op.
+    const before = JSON.stringify(rows.map((r) => r.activation_provenance));
+    db.execSync(MIGRATION_0008_BACKFILL_UPDATE!);
+    const after = db
+      .getAllSync<{ activation_provenance: string }>('SELECT activation_provenance FROM stems', [])
+      .map((r) => r.activation_provenance);
+    expect(JSON.stringify(after)).toBe(before);
+
+    raw.close();
+    fs.rmSync(path.dirname(scratch), { recursive: true, force: true });
+  });
+
+  it('migration 0008 fills sessions.programme_on = 1 on every pre-existing row and on rows written after the upgrade (nothing is unknown)', () => {
+    const scratch = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'six-endings-migrate-')), 'copy.db');
+    fs.copyFileSync(fixturePath(7), scratch);
+    const raw = new DatabaseSync(scratch);
+    const db = nodeSqliteExecutor(raw);
+
+    // A v7 install can already carry sessions (the columns 0001 defines).
+    // Two shapes: one minimal, one with nullable columns set. The FK needs
+    // the stem to exist first.
+    db.runSync(
+      `INSERT INTO stems (id, text, origin, language, weight, active, created_at, created_tz, created_offset_min)
+       VALUES ('stem-x', 'A v7-era stem', 'user', 'en', 1.0, 1, '2026-01-01T00:00:00.000Z', 'UTC', 0)`,
+      [],
+    );
+    db.runSync(
+      `INSERT INTO sessions (id, stem_id, stem_text_snapshot, origin, target_endings, timer_seconds, uncensored_mode, started_at, last_activity_at, tz, offset_min, device_locale)
+       VALUES ('sess-min', 'stem-x', 'snapshot', 'manual', 6, 90, 1, '2026-09-01T08:00:00.000Z', '2026-09-01T08:00:00.000Z', 'UTC', 0, 'en-US')`,
+      [],
+    );
+    db.runSync(
+      `INSERT INTO sessions (id, stem_id, stem_text_snapshot, origin, target_endings, timer_seconds, uncensored_mode, started_at, first_keypress_at, ended_at, end_reason, last_activity_at, tz, offset_min, device_locale)
+       VALUES ('sess-full', 'stem-x', 'snapshot', 'review', 1, 90, 0, '2026-09-02T08:00:00.000Z', '2026-09-02T08:00:05.000Z', '2026-09-02T08:01:00.000Z', 'user_done', '2026-09-02T08:01:00.000Z', 'Europe/Berlin', 120, 'de-DE')`,
+      [],
+    );
+
+    migrate(db, '9.9.9');
+
+    // No off state exists pre-wave-2: every pre-existing reflection was
+    // written while the programme was on, so the DEFAULT fill IS the
+    // backfill — deterministic by construction.
+    const rows = db.getAllSync<{ id: string; programme_on: number }>('SELECT id, programme_on FROM sessions', []);
+    expect(rows.map((r) => r.id).sort()).toEqual(['sess-full', 'sess-min']);
+    for (const row of rows) expect(row.programme_on).toBe(1);
+
+    // A session written after the upgrade (the createSession path, which
+    // does not name the column) lands on the same DEFAULT.
+    db.runSync(
+      `INSERT INTO sessions (id, stem_id, stem_text_snapshot, origin, target_endings, timer_seconds, uncensored_mode, started_at, last_activity_at, tz, offset_min, device_locale)
+       VALUES ('sess-new', 'stem-x', 'snapshot', 'manual', 6, 90, 0, '2026-09-03T08:00:00.000Z', '2026-09-03T08:00:00.000Z', 'UTC', 0, 'en-US')`,
+      [],
+    );
+    const fresh = db.getFirstSync<{ programme_on: number }>('SELECT programme_on FROM sessions WHERE id = ?', [
+      'sess-new',
+    ]);
+    expect(fresh?.programme_on).toBe(1);
+
+    raw.close();
+    fs.rmSync(path.dirname(scratch), { recursive: true, force: true });
+  });
+
+  it('migration 0008 runs as a no-op against the empty tables of a fresh install: seeding labels the corpus itself', () => {
+    const scratch = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'six-endings-migrate-')), 'copy.db');
+    fs.copyFileSync(fixturePath(7), scratch);
+    const raw = new DatabaseSync(scratch);
+    const db = nodeSqliteExecutor(raw);
+
+    migrate(db, '9.9.9');
+
+    // 0007's template: on a fresh install the UPDATE touches zero rows and
+    // the tables stay empty — seedIfEmpty must still see a fresh install
+    // and label the corpus itself (repository.test.ts pins that side).
+    expect((db.getFirstSync<{ c: number }>('SELECT COUNT(*) AS c FROM stems', []) as { c: number }).c).toBe(0);
+    expect((db.getFirstSync<{ c: number }>('SELECT COUNT(*) AS c FROM sessions', []) as { c: number }).c).toBe(0);
     const meta = db.getFirstSync<{ schema_version: number }>('SELECT schema_version FROM schema_meta WHERE id = 1', []);
     expect(meta?.schema_version).toBe(CURRENT_SCHEMA_VERSION);
 

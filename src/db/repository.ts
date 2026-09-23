@@ -37,6 +37,9 @@ export const ALL_TABLES = [
 ] as const;
 export type TableName = (typeof ALL_TABLES)[number];
 
+/** Activation authority of record (migration 0008, packet-7 D2): 'programme' = placed by the programme's week-set activation; 'user' = placed or last touched by the user. Enforced at the write path, like `category`'s set — no SQL CHECK. */
+export type ActivationProvenance = 'programme' | 'user';
+
 export interface StemRow {
   id: string;
   text: string;
@@ -45,6 +48,8 @@ export interface StemRow {
   weight: number;
   /** Morning/evening pivot (migration 0003): which fixed daily notification this stem belongs to. Null for the weekly meta-stem and any pre-pivot row never backfilled (docs/DECISIONS.md 2026-09-14); the two evening reflection meta-stems carry 'evening' (issue 06) — tagged at seed, never drawn by a practice. */
   time_of_day: TimeOfDay | null;
+  /** D2 precedence (migration 0008): the accessors below select it; rows from SELECT-lists that predate it carry undefined, never a third value. */
+  activation_provenance?: ActivationProvenance;
 }
 
 export interface LibraryStemRow extends StemRow {
@@ -71,6 +76,8 @@ export interface SessionRow {
   tz: string;
   offset_min: number;
   device_locale: string;
+  /** D3 counting input (migration 0008): was the Programme setting on when this session started — write-time user-context input (the `uncensored_mode` precedent). The `SELECT *` readers carry it; 1 for every row written pre-wave-2 (the DEFAULT fill IS the backfill). */
+  programme_on?: number;
 }
 
 export interface EndingRow {
@@ -198,9 +205,13 @@ export class Repository {
         const { at, tz, offsetMin } = nowEventTime();
         // Activate only week 1; all later weeks rest.
         const active = stem.weekNumber === 1 ? 1 : 0;
+        // activation_provenance is written explicitly (migration 0008, D2):
+        // migrations run BEFORE seeding on a fresh install, so the column's
+        // DEFAULT 'user' would mislabel every programme row. Matches the
+        // 0008 backfill rule exactly (week_number IS NOT NULL → 'programme').
         this.db.runSync(
-          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta)
-           VALUES (?, ?, 'seed', ?, 'en', 1.0, ?, ?, ?, ?, 'morning', ?, 0)`,
+          `INSERT INTO stems (id, text, origin, category, language, weight, active, created_at, created_tz, created_offset_min, time_of_day, week_number, is_weekly_meta, activation_provenance)
+           VALUES (?, ?, 'seed', ?, 'en', 1.0, ?, ?, ?, ?, 'morning', ?, 0, 'programme')`,
           [newId(), stem.text, programmeStemCategory(stem.weekNumber, stem.text), active, at, tz, offsetMin, stem.weekNumber],
         );
       }
@@ -412,8 +423,10 @@ export class Repository {
     return this.db.getAllSync<LibraryStemRow>(
       // week_number rides along (read-path, issue 03): the library's week
       // filter buckets every row — resting and soft-deleted included — by
-      // its programme week. Schema untouched.
-      "SELECT id, text, origin, category, weight, time_of_day, active, deleted_at, created_at, week_number as weekNumber FROM stems WHERE is_weekly_meta = 0 ORDER BY created_at DESC",
+      // its programme week. Schema untouched. activation_provenance rides
+      // along for the provenance display (migration 0008, D2 — w2-t4's
+      // chips read the library rows).
+      "SELECT id, text, origin, category, weight, time_of_day, active, deleted_at, created_at, week_number as weekNumber, activation_provenance FROM stems WHERE is_weekly_meta = 0 ORDER BY created_at DESC",
       [],
     );
   }
@@ -458,9 +471,9 @@ export class Repository {
    * programme week — an in-progress session is not yet a completed
    * reflection and must not advance anything.
    */
-  listCompletedWeeklyReflections(): { startedAt: string; offsetMin: number }[] {
-    return this.db.getAllSync<{ startedAt: string; offsetMin: number }>(
-      `SELECT s.started_at as startedAt, s.offset_min as offsetMin
+  listCompletedWeeklyReflections(): { startedAt: string; offsetMin: number; programmeOn: number }[] {
+    return this.db.getAllSync<{ startedAt: string; offsetMin: number; programmeOn: number }>(
+      `SELECT s.started_at as startedAt, s.offset_min as offsetMin, s.programme_on as programmeOn
        FROM sessions s JOIN stems st ON st.id = s.stem_id
        WHERE s.deleted_at IS NULL AND s.ended_at IS NOT NULL
          AND s.origin = 'review' AND st.is_weekly_meta = 1
@@ -510,7 +523,7 @@ export class Repository {
   getProgrammeStemsForWeek(week: number): StemRow[] {
     if (!Number.isInteger(week) || week < 1 || week > PROGRAMME_WEEK_CAP) return [];
     return this.db.getAllSync<StemRow>(
-      `SELECT id, text, origin, category, weight, time_of_day FROM stems
+      `SELECT id, text, origin, category, weight, time_of_day, activation_provenance FROM stems
        WHERE active = 1 AND deleted_at IS NULL AND week_number = ?
        ORDER BY rowid`,
       [week],
@@ -529,7 +542,7 @@ export class Repository {
    */
   listProgrammeStems(): (StemRow & { weekNumber: number })[] {
     return this.db.getAllSync<StemRow & { weekNumber: number }>(
-      `SELECT id, text, origin, category, weight, time_of_day, week_number as weekNumber FROM stems
+      `SELECT id, text, origin, category, weight, time_of_day, activation_provenance, week_number as weekNumber FROM stems
        WHERE deleted_at IS NULL AND week_number IS NOT NULL
        ORDER BY week_number, rowid`,
       [],
@@ -584,7 +597,7 @@ export class Repository {
   getProgrammeWeekBlock(week: number): StemRow[] {
     if (!Number.isInteger(week) || week < 1 || week > PROGRAMME_WEEK_CAP) return [];
     return this.db.getAllSync<StemRow>(
-      `SELECT id, text, origin, category, weight, time_of_day FROM stems
+      `SELECT id, text, origin, category, weight, time_of_day, activation_provenance FROM stems
        WHERE deleted_at IS NULL AND week_number = ?
        ORDER BY rowid`,
       [week],

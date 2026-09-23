@@ -59,13 +59,20 @@ describe('export column lists match the migrated DDL exactly (spec §8)', () => 
 
   it('the CSV projection emits the listed header and carries the new columns\' data', () => {
     const dump = emptyDump();
-    dump.stems = [{ id: 's1', week_number: 3, is_weekly_meta: 0 }];
-    const stemsCsv = buildCsvFiles(dump).find((f) => f.name === 'stems.csv');
+    // Migration 0004's columns and migration 0008's two: only id + the
+    // columns the original F1 bug dropped + the two 0008 columns populated.
+    dump.stems = [{ id: 's1', week_number: 3, is_weekly_meta: 0, activation_provenance: 'programme' }];
+    dump.sessions = [{ id: 'se1', stem_id: 's1', uncensored_mode: 0, programme_on: 1 }];
+    const files = buildCsvFiles(dump);
+    const stemsCsv = files.find((f) => f.name === 'stems.csv');
+    const sessionsCsv = files.find((f) => f.name === 'sessions.csv');
     expect(stemsCsv).toBeDefined();
-    const lines = stemsCsv!.content.split('\r\n');
-    expect(lines[0].split(',')).toEqual([...CSV_COLUMNS.stems]);
-    // 14 columns, only id + the two migration-0004 columns populated —
-    // exactly the fields the original F1 bug dropped.
-    expect(lines[1]).toBe('s1,,,,,,,,,,,,3,0');
+    expect(sessionsCsv).toBeDefined();
+    const stemsLines = stemsCsv!.content.split('\r\n');
+    expect(stemsLines[0].split(',')).toEqual([...CSV_COLUMNS.stems]);
+    expect(stemsLines[1]).toBe('s1,,,,,,,,,,,,3,0,programme');
+    const sessionsLines = sessionsCsv!.content.split('\r\n');
+    expect(sessionsLines[0].split(',')).toEqual([...CSV_COLUMNS.sessions]);
+    expect(sessionsLines[1]).toBe('se1,s1,,,,,0,,,,,,,,,,,,,1');
   });
 });

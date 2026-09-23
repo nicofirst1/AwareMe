@@ -167,6 +167,7 @@ function makeStemRow(overrides: Record<string, unknown> = {}): Record<string, un
     time_of_day: null,
     week_number: null,
     is_weekly_meta: 0,
+    activation_provenance: 'user', // migration 0008: NOT NULL DEFAULT 'user' — insertDirect maps undefined to NULL, which the column rejects
     ...overrides,
   };
 }
@@ -192,6 +193,7 @@ function makeSessionRow(overrides: Record<string, unknown> = {}): Record<string,
     offset_min: 0,
     device_locale: 'en-US',
     deleted_at: null,
+    programme_on: 1, // migration 0008: NOT NULL DEFAULT 1 — insertDirect maps undefined to NULL, which the column rejects
     ...overrides,
   };
 }
