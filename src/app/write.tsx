@@ -241,6 +241,34 @@ export default function WriteScreen() {
         setQueue(null);
         return;
       }
+      // w1-t4: the open session may sit on an evening meta-stem that the
+      // editor's delete dialog has soft-deleted (the filtered listMetaStems
+      // no longer matches it; the dialog promises "only removes it from the
+      // library and future selection" — stem-edit.tsx). Re-route the flow
+      // onto the rotation's current survivor: the open session itself
+      // continues as the user's in-progress reflection (nothing discarded —
+      // its snapshot prompt and drafts ride the same row, which stays in the
+      // DB), and the completed reflection records under the survivor. With
+      // no survivor left, the honest empty state renders below.
+      const deletedEveningMeta = repo.listAllStems().find((s) => s.origin === 'meta' && s.id === openStemId);
+      if (deletedEveningMeta) {
+        const inputs = readEveningReflectionInputs(repo);
+        if (inputs.metaStem) {
+          setFlow({
+            kind: 'evening',
+            phase: 'writing',
+            reviewed: inputs.reviewed,
+            metaStem: inputs.metaStem,
+            week: null,
+            clearOverride: false,
+          });
+          setQueue(null);
+        } else {
+          setFlow(null);
+          setQueue([]);
+        }
+        return;
+      }
       // practice resume — the safety net includes meta stems (the c05 bug fix).
       const resumed = resumeQueue(repo, openStemId, parseWeekParam(week));
       setQueue(resumed.queue);

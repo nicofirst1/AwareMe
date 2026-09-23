@@ -500,6 +500,11 @@ export class Repository {
    * On-demand reviews (§6.5.3) that used an evening meta-stem land in the
    * same set — they are indistinguishable by design (same storage path,
    * §6.5.2) and merely shift which stem is next, never the programme week.
+   *
+   * Sessions on a soft-deleted meta-stem are excluded (w1-t4): ghost
+   * sessions stop steering the survivor's alternation and the done state,
+   * while the rows themselves stay in history/export (read-path filter
+   * only — mirrors the reread's own deleted-stem filter).
    */
   listCompletedEveningReflections(): { startedAt: string; offsetMin: number }[] {
     return this.db.getAllSync<{ startedAt: string; offsetMin: number }>(
@@ -507,6 +512,7 @@ export class Repository {
        FROM sessions s JOIN stems st ON st.id = s.stem_id
        WHERE s.deleted_at IS NULL AND s.ended_at IS NOT NULL
          AND s.origin = 'review' AND st.origin = 'meta' AND st.is_weekly_meta = 0
+         AND st.deleted_at IS NULL
          AND ${HAS_NON_EMPTY_ENDING}
        ORDER BY s.started_at ASC`,
       [],
@@ -725,10 +731,17 @@ export class Repository {
    * `origin = 'seed'` (tagged `is_weekly_meta = 1`), so the filter is the
    * disjunction — spec §5.4: all three remain available to on-demand
    * review. Seeded order (weekly first) is preserved by `created_at`.
+   *
+   * Soft-deleted rows are excluded (w1-t4): the evening rotation and the
+   * on-demand review's options count as "future selection", so a deleted
+   * meta-stem must stop being drawn the moment the editor's delete dialog
+   * keeps its promise — "only removes it from the library and future
+   * selection" (stem-edit.tsx `softDelete`). Past sessions on the row stay
+   * (history/export reads do not come through here).
    */
   listMetaStems(): StemRow[] {
     return this.db.getAllSync<StemRow>(
-      "SELECT id, text, origin, category, weight, time_of_day FROM stems WHERE origin = 'meta' OR is_weekly_meta = 1 ORDER BY created_at",
+      "SELECT id, text, origin, category, weight, time_of_day FROM stems WHERE (origin = 'meta' OR is_weekly_meta = 1) AND deleted_at IS NULL ORDER BY created_at",
       [],
     );
   }

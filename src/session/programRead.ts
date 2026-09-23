@@ -194,7 +194,12 @@ export function readEveningReflectionInputs(repo: Repository, now: Date = new Da
   const index = eveningReflectionStemIndex(repo.listCompletedEveningReflections().length);
   return {
     reviewed: repo.listSessionsForDayMorning(start, end),
-    metaStem: eveningMetaStems[index] ?? null,
+    // w1-t4 granted excursion: the parity index counts modulo 2 (program.ts
+    // is frozen), so after one meta-stem's deletion the slot can point past
+    // a one-stem rotation — wrap it onto the survivor so the evening
+    // reflection stays available every evening (degrades to the honest null
+    // only when BOTH evening meta-stems are deleted).
+    metaStem: eveningMetaStems[index % eveningMetaStems.length] ?? null,
   };
 }
 

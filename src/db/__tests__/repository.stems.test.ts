@@ -88,6 +88,28 @@ describe('Repository.listMetaStems', () => {
     }
     expect(inLibrary.some((s) => s.text === WEEKLY_META_STEM)).toBe(false);
   });
+
+  it('drops a soft-deleted evening meta-stem from future selection; the weekly one survives (w1-t4: the delete dialog keeps its promise)', () => {
+    const { repo } = freshRepository();
+    const deleted = repo.listMetaStems().find((s) => s.origin === 'meta');
+    if (!deleted) throw new Error('seed must include the evening meta-stems');
+    const survivor = repo.listMetaStems().find((s) => s.origin === 'meta' && s.id !== deleted.id);
+    if (!survivor) throw new Error('seed must include a second evening meta-stem');
+
+    // The stem-edit delete dialog (s6-new-1): "This only removes it from the
+    // library and future selection" — soft-delete, then the rotation and
+    // on-demand selection must stop drawing the row.
+    repo.softDeleteStem(deleted.id, '2026-09-16T20:00:00.000Z');
+
+    const metaStems = repo.listMetaStems();
+    // 3 → 2: the deleted evening meta-stem leaves the rotation…
+    expect(metaStems).toHaveLength(2);
+    expect(metaStems.some((s) => s.id === deleted.id)).toBe(false);
+    // …while the weekly meta-stem (not deletable via the editor) and the
+    // surviving evening row stay selectable (review.tsx's options never empty).
+    expect(metaStems.map((s) => s.text)).toContain(WEEKLY_META_STEM);
+    expect(metaStems.map((s) => s.id)).toContain(survivor.id);
+  });
 });
 
 describe('Repository.listAllStems × matchesStemFilters — evening visibility (issue 06)', () => {

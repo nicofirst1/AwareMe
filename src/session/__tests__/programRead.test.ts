@@ -239,6 +239,32 @@ describe('reflection inputs', () => {
     expect(readEveningReflectionInputs(afterTwo, now).metaStem?.id).toBe('evening-a');
   });
 
+  it('evening: with one meta-stem deleted, the survivor serves every parity slot (w1-t4 granted excursion)', () => {
+    // After a deletion the rotation holds one survivor (the repository's
+    // deleted_at filter removed the other), but the parity index still
+    // counts completed reflections modulo 2 (program.ts is frozen). The
+    // slot must degrade to the survivor instead of landing past the end of
+    // the rotation — otherwise the evening reflection is available only
+    // every OTHER evening after a deletion.
+    const now = new Date('2026-09-16T21:00:00Z');
+    const singleSurvivor = makeRepo({
+      listMetaStems: () => [
+        { id: 'weekly', text: 'weekly meta', origin: 'seed' },
+        { id: 'evening-b', text: 'evening meta B', origin: 'meta' },
+      ],
+      listCompletedEveningReflections: () => [atIso('2026-09-15T21:00:00Z')], // odd count → index 1
+    });
+    expect(readEveningReflectionInputs(singleSurvivor, now).metaStem?.id).toBe('evening-b');
+
+    // Both deleted (empty rotation): the honest null — the write screen's
+    // empty state — never an out-of-bounds draw.
+    const noneLeft = makeRepo({
+      listMetaStems: () => [{ id: 'weekly', text: 'weekly meta', origin: 'seed' }],
+      listCompletedEveningReflections: () => [atIso('2026-09-15T21:00:00Z')],
+    });
+    expect(readEveningReflectionInputs(noneLeft, now).metaStem).toBeNull();
+  });
+
   it('weekly: reviews the effective week and hands back the weekly meta-stem', () => {
     const repo = makeRepo({
       ...ANCHOR,

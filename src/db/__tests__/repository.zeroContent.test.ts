@@ -186,6 +186,28 @@ describe('t10: zero-ending sessions never count as complete (owner decision 2026
       expect(reflections.map((r) => r.startedAt)).toEqual(['2026-09-16T19:00:00.000Z']);
       expect(reflections).toHaveLength(1);
     });
+
+    it('a reflection on a soft-deleted meta-stem stops steering the alternation; a survivor reflection still counts (w1-t4)', () => {
+      const { raw, repo } = makeDb();
+      const eveningA = insertStem(raw, 'evening meta A', 'meta');
+      const eveningB = insertStem(raw, 'evening meta B', 'meta');
+      insertCompletedSession(raw, eveningA, '2026-09-15T19:00:00.000Z', 'review');
+      insertCompletedSession(raw, eveningB, '2026-09-16T19:00:00.000Z', 'review');
+      expect(repo.listCompletedEveningReflections()).toHaveLength(2);
+
+      // The user deletes stem A; the dialog promises past sessions stay.
+      repo.softDeleteStem(eveningA, '2026-09-16T20:00:00.000Z');
+
+      // Ghost sessions stop steering the alternation; the survivor's
+      // reflection still counts (the parity index and the evening-done card
+      // read only live rows' history).
+      const reflections = repo.listCompletedEveningReflections();
+      expect(reflections.map((r) => r.startedAt)).toEqual(['2026-09-16T19:00:00.000Z']);
+      // Nothing discarded: both session rows remain in the DB — history and
+      // export keep them (soft delete is a read-path filter, never a delete).
+      const remaining = raw.prepare('SELECT COUNT(*) as n FROM sessions').get() as { n: number };
+      expect(remaining.n).toBe(2);
+    });
   });
 
   describe('countProgrammeStemsCompletedInRange (the home morning-complete feed)', () => {
