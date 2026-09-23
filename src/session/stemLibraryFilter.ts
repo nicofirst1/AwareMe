@@ -60,22 +60,14 @@ export function matchesStemFilters(stem: FilterableStem, filters: StemLibraryFil
 }
 
 /**
- * A period's session (§6.2) needs at least one active stem for that
- * time-of-day, so the library refuses to deactivate the last active stem
- * rather than let a period go dead-ended. Deleted stems don't count as
- * active candidates either way.
- */
-export function canDeactivateStem(stems: readonly FilterableStem[], target: FilterableStem): boolean {
-  if (!target.active) return true; // already inactive; activating is always fine
-  const activeCount = stems.filter((s) => s.active && s.deleted_at === null).length;
-  return activeCount > 1;
-}
-
-/**
- * Same guard, generalized for the multi-select action bar's bulk
- * Deactivate (2026-09-11, selection mode): would deactivating every
- * `selectedIds` stem leave zero active, non-deleted stems? Bulk Activate
- * never needs this — activating can't reduce the active count.
+ * The at-least-one-active guard (§6.2): the practice needs at least one
+ * active stem, so deactivation is refused when it would leave zero active,
+ * non-deleted stems, rather than let the practice go dead-ended. Deleted
+ * stems don't count as active candidates either way. Serves the multi-
+ * select action bar's bulk Deactivate (2026-09-11, selection mode) AND the
+ * editor's single-stem Archive (w1-t3, s2-3: the editor previously wrote
+ * setStemActive unguarded). Bulk Activate never needs this — activating
+ * can't reduce the active count.
  */
 export function canDeactivateStems(selectedIds: readonly string[], stems: readonly (FilterableStem & { id: string })[]): boolean {
   const selected = new Set(selectedIds);
