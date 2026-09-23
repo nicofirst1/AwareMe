@@ -15,6 +15,12 @@ function freshRepository(): { db: DatabaseSync; repo: Repository } {
   return { db: raw, repo };
 }
 
+// w1-t7 (s1-F7): the dead active-stem read is deleted (zero production
+// callers). Fixture reads derive the same set from listAllStems.
+function activeStems(repo: Repository) {
+  return repo.listAllStems().filter((s) => s.active !== 0 && s.deleted_at === null);
+}
+
 describe('Repository.addStem', () => {
   it('inserts an active, non-deleted stem with the given text/category/origin', () => {
     const { db, repo } = freshRepository();
@@ -69,11 +75,11 @@ describe('Repository.listMetaStems', () => {
     expect(metaStems.slice(1).map((s) => s.text).sort()).toEqual([...EVENING_META_STEMS].sort());
   });
 
-  it('listActiveStems never surfaces a meta-stem; listAllStems (issue 06) surfaces only the 2 evening ones, resting and evening-tagged', () => {
+  it('no active-stem read ever surfaces a meta-stem; listAllStems (issue 06) surfaces only the 2 evening ones, resting and evening-tagged', () => {
     const { repo } = freshRepository();
     const metaStems = repo.listMetaStems();
     const metaIds = new Set(metaStems.map((s) => s.id));
-    expect(repo.listActiveStems().some((s) => metaIds.has(s.id))).toBe(false);
+    expect(activeStems(repo).some((s) => metaIds.has(s.id))).toBe(false);
 
     // Issue 06 (owner feedback "there are no evening stems"): the library
     // lists the 2 evening meta-stems — still active=0, so no practice draw
@@ -132,40 +138,6 @@ describe('Repository.listAllStems × matchesStemFilters — evening visibility (
   });
 });
 
-describe('Repository.getActiveStemsForTimeOfDay', () => {
-  it('returns only active, non-deleted stems tagged for the given time of day', () => {
-    const { db, repo } = freshRepository();
-
-    const morning = repo.getActiveStemsForTimeOfDay('morning');
-    const evening = repo.getActiveStemsForTimeOfDay('evening');
-    // Issue 09: the official programme (ADR-0005) is mornings-only, and only
-    // the first corpus week's programme stems are active at seed — weeks
-    // 2..30 rest. The weekly meta-stem carries NULL and the retired
-    // originals are soft-deleted at seed. Since issue 17 the seed's ACTIVE
-    // evening rows are exactly the practice starter set: the two evening
-    // meta-stems stay inactive (resting, issue 06) and are never drawn.
-    expect(morning.length).toBe(PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === 1).length);
-    expect(evening.length).toBe(EVENING_PRACTICE_SEED_STEMS.length);
-    expect(evening.every((s) => EVENING_PRACTICE_SEED_STEMS.some((p) => p.text === s.text))).toBe(true);
-    expect(morning.some((s) => evening.some((e) => e.id === s.id))).toBe(false);
-
-    // A newly added stem has no time_of_day (NULL) and never surfaces here.
-    const id = repo.addStem({ text: 'Untagged stem', category: null, origin: 'user' });
-    expect(repo.getActiveStemsForTimeOfDay('morning').some((s) => s.id === id)).toBe(false);
-    expect(repo.getActiveStemsForTimeOfDay('evening').some((s) => s.id === id)).toBe(false);
-
-    // Archiving removes it from the draw.
-    const morningId = morning[0].id;
-    repo.setStemActive(morningId, false);
-    expect(repo.getActiveStemsForTimeOfDay('morning').some((s) => s.id === morningId)).toBe(false);
-
-    // Soft-deleting removes it too.
-    const eveningId = repo.addStem({ text: 'An evening stem', category: null, origin: 'user', timeOfDay: 'evening' });
-    db.prepare("UPDATE stems SET deleted_at = '2026-09-14T00:00:00.000Z' WHERE id = ?").run(eveningId);
-    expect(repo.getActiveStemsForTimeOfDay('evening').some((s) => s.id === eveningId)).toBe(false);
-  });
-});
-
 describe('Repository.bulkImportStems', () => {
   it('adds one stem per line, all origin=imported, and returns the count', () => {
     const { db, repo } = freshRepository();
@@ -199,8 +171,9 @@ describe('Repository.bulkImportStems', () => {
 describe('Repository.updateStem', () => {
   it('edits text/category without touching existing sessions.stem_text_snapshot', () => {
     const { db, repo } = freshRepository();
-    const stemId = repo.listActiveStems()[0].id;
-    const originalText = repo.listActiveStems()[0].text;
+    const first = activeStems(repo)[0];
+    const stemId = first.id;
+    const originalText = first.text;
 
     const sessionId = repo.createSession({
       stemId,
@@ -232,7 +205,7 @@ describe('Repository.updateStem', () => {
 describe('Repository.setStemActive', () => {
   it('toggles active without touching deleted_at', () => {
     const { db, repo } = freshRepository();
-    const stemId = repo.listActiveStems()[0].id;
+    const stemId = activeStems(repo)[0].id;
 
     repo.setStemActive(stemId, false);
     let row = db.prepare('SELECT active, deleted_at FROM stems WHERE id = ?').get(stemId) as {
@@ -254,8 +227,9 @@ describe('Repository.setStemActive', () => {
 describe('Repository.softDeleteStem', () => {
   it('sets deleted_at and leaves past sessions/endings intact', () => {
     const { db, repo } = freshRepository();
-    const stemId = repo.listActiveStems()[0].id;
-    const stemText = repo.listActiveStems()[0].text;
+    const first = activeStems(repo)[0];
+    const stemId = first.id;
+    const stemText = first.text;
 
     const sessionId = repo.createSession({
       stemId,

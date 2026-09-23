@@ -329,7 +329,9 @@ describe('adversarial export round trip — §8 lossless under stress (issue 20)
     });
     expect(repo.bulkImportStems(library, null, null)).toBe(200);
 
-    const stemId = repo.listActiveStems()[0].id;
+    // w1-t7 (s1-F7): the dead active-stem read is deleted — fixture reads
+    // derive the same set from listAllStems.
+    const stemId = repo.listAllStems().filter((s) => s.active !== 0 && s.deleted_at === null)[0].id;
     const sessionId = repo.createSession({
       stemId,
       stemTextSnapshot: 'Practicing over the imported library',

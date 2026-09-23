@@ -332,7 +332,9 @@ describe('Repository.deleteAllData', () => {
     const { db, repo } = freshRepository();
     repo.seedIfEmpty();
 
-    const stem = repo.listActiveStems()[0];
+    // w1-t7 (s1-F7): the dead active-stem read is deleted (zero production
+    // callers) — fixture reads derive the same set from listAllStems.
+    const stem = repo.listAllStems().filter((s) => s.active !== 0 && s.deleted_at === null)[0];
     repo.createSession({
       stemId: stem.id,
       stemTextSnapshot: stem.text,
@@ -352,7 +354,7 @@ describe('Repository.deleteAllData', () => {
     expect((db.prepare('SELECT COUNT(*) as c FROM endings').get() as { c: number }).c).toBe(0);
     expect((db.prepare('SELECT COUNT(*) as c FROM notification_schedule').get() as { c: number }).c).toBe(0);
     // Re-seeded: stems and settings are back to factory state.
-    expect(repo.listActiveStems().length).toBeGreaterThan(0);
+    expect(repo.listAllStems().filter((s) => s.active !== 0 && s.deleted_at === null).length).toBeGreaterThan(0);
     expect(repo.getSettings().theme).toBe(DEFAULT_SETTINGS.theme);
     // schema_meta is bookkeeping, not user data — untouched by the wipe.
     expect((db.prepare('SELECT COUNT(*) as c FROM schema_meta').get() as { c: number }).c).toBe(1);

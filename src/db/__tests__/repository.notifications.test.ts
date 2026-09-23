@@ -13,8 +13,14 @@ function freshRepository(): { db: DatabaseSync; repo: Repository } {
   return { db: raw, repo };
 }
 
+// w1-t7 (s1-F7): the dead active-stem read is deleted (zero production
+// callers). Fixture reads derive the same set from listAllStems.
+function activeStems(repo: Repository) {
+  return repo.listAllStems().filter((s) => s.active !== 0 && s.deleted_at === null);
+}
+
 function firstStemId(repo: Repository): string {
-  return repo.listActiveStems()[0].id;
+  return activeStems(repo)[0].id;
 }
 
 describe('Repository.insertScheduledNotification / listPendingNotifications', () => {

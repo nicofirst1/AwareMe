@@ -21,15 +21,14 @@ function freshRepository(): { db: DatabaseSync; repo: Repository } {
   return { db: raw, repo };
 }
 
-function firstStemId(repo: Repository): string {
-  return repo.listActiveStems()[0].id;
+// w1-t7 (s1-F7): the dead active-stem read is deleted (zero production
+// callers). Fixture reads derive the same set from listAllStems.
+function activeStems(repo: Repository) {
+  return repo.listAllStems().filter((s) => s.active !== 0 && s.deleted_at === null);
 }
 
-// getRecentStemUsage filters on a rolling 14-day window, so hardcoded fixture
-// dates time-bomb once they age out ('2026-09-01' crossed the cutoff on
-// 2026-09-15 and broke every gate run). Recency fixtures must stay relative.
-function daysAgo(n: number): string {
-  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+function firstStemId(repo: Repository): string {
+  return activeStems(repo)[0].id;
 }
 
 describe('Repository.getSettings', () => {
@@ -42,29 +41,12 @@ describe('Repository.getSettings', () => {
   });
 });
 
-describe('Repository.listActiveStems', () => {
-  it('excludes archived and deleted stems (and the weekly meta-stem)', () => {
-    const { db, repo } = freshRepository();
-    const activeBefore = repo.listActiveStems();
-    // Issue 09: only the first corpus week's programme stems are active at
-    // seed; weeks 2..30 rest. The weekly meta-stem (active, is_weekly_meta=1)
-    // is review machinery and excluded here. The retired originals are
-    // soft-deleted at seed, the evening meta-stems are inactive. The evening
-    // practice starter set (issue 17) is active and evening-tagged.
-    expect(activeBefore.length).toBe(ACTIVE_AT_SEED);
-
-    const someId = activeBefore[0].id;
-    db.prepare('UPDATE stems SET active = 0 WHERE id = ?').run(someId);
-    expect(repo.listActiveStems().length).toBe(ACTIVE_AT_SEED - 1);
-  });
-});
-
 describe('Repository.listAllStems', () => {
-  it('includes archived and soft-deleted stems, unlike listActiveStems', () => {
+  it('includes archived and soft-deleted stems', () => {
     const { db, repo } = freshRepository();
     const someId = firstStemId(repo);
     db.prepare('UPDATE stems SET active = 0 WHERE id = ?').run(someId);
-    const otherId = repo.listActiveStems()[0].id;
+    const otherId = activeStems(repo)[0].id;
     db.prepare("UPDATE stems SET deleted_at = '2026-09-06T00:00:00.000Z' WHERE id = ?").run(otherId);
 
     const all = repo.listAllStems();
@@ -79,69 +61,12 @@ describe('Repository.listAllStems', () => {
         RETIRED_SEED_STEMS.length,
     );
     // ACTIVE_AT_SEED - 2: two of the seeded-active rows were touched above.
-    expect(repo.listActiveStems().length).toBe(ACTIVE_AT_SEED - 2);
+    expect(activeStems(repo).length).toBe(ACTIVE_AT_SEED - 2);
 
     const archived = all.find((s) => s.id === someId)!;
     expect(archived.active).toBe(0);
     const deleted = all.find((s) => s.id === otherId)!;
     expect(deleted.deleted_at).toBe('2026-09-06T00:00:00.000Z');
-  });
-});
-
-describe('Repository.getRecentStemUsage', () => {
-  it('returns sessions from the last 14 days with the stem category, most recent first', () => {
-    const { db, repo } = freshRepository();
-    const stemId = firstStemId(repo);
-    const category = (db.prepare('SELECT category FROM stems WHERE id = ?').get(stemId) as { category: string | null })
-      .category;
-
-    const olderStartedAt = daysAgo(2);
-    const newerStartedAt = daysAgo(1);
-
-    repo.createSession({
-      stemId,
-      stemTextSnapshot: 'snap',
-      origin: 'manual',
-      targetEndings: 3,
-      timerSeconds: 90,
-      uncensoredMode: true,
-      startedAt: olderStartedAt,
-      deviceLocale: 'en-US',
-    });
-    repo.createSession({
-      stemId,
-      stemTextSnapshot: 'snap',
-      origin: 'manual',
-      targetEndings: 3,
-      timerSeconds: 90,
-      uncensoredMode: true,
-      startedAt: newerStartedAt,
-      deviceLocale: 'en-US',
-    });
-
-    const usage = repo.getRecentStemUsage();
-    expect(usage).toHaveLength(2);
-    expect(usage[0].startedAt).toBe(newerStartedAt);
-    expect(usage[0].stemId).toBe(stemId);
-    expect(usage[0].category).toBe(category);
-  });
-
-  it('excludes soft-deleted sessions', () => {
-    const { db, repo } = freshRepository();
-    const stemId = firstStemId(repo);
-    const sessionId = repo.createSession({
-      stemId,
-      stemTextSnapshot: 'snap',
-      origin: 'manual',
-      targetEndings: 3,
-      timerSeconds: 90,
-      uncensoredMode: true,
-      startedAt: daysAgo(1),
-      deviceLocale: 'en-US',
-    });
-    db.prepare('UPDATE sessions SET deleted_at = ? WHERE id = ?').run('2026-09-06T00:00:00.000Z', sessionId);
-
-    expect(repo.getRecentStemUsage()).toHaveLength(0);
   });
 });
 

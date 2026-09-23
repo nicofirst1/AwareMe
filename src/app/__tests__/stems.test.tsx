@@ -55,12 +55,25 @@ const BULK_REACTIVATION_NOTE =
 // fixture (the evening reflection meta-stem). Null = the default 30-stem list.
 let mockStemsOverride: LibraryStemRow[] | null = null;
 
+// w1-t7 (s2-8): bulkSetActive writes repo.setStemActive per effective id —
+// the mock below extends with a shared spy so the failing-first test can
+// assert exactly which rows the bulk actions touched (the mock previously
+// had no setStemActive, so any press would have thrown).
+const mockSetStemActive = jest.fn();
+
 jest.mock('@/db', () => {
   const actual = jest.requireActual('@/db');
   return {
     ...actual,
-    getRepository: () => ({ listAllStems: () => mockStemsOverride ?? mockStems }),
+    getRepository: () => ({
+      listAllStems: () => mockStemsOverride ?? mockStems,
+      setStemActive: (...args: unknown[]) => mockSetStemActive(...args),
+    }),
   };
+});
+
+beforeEach(() => {
+  mockSetStemActive.mockClear();
 });
 
 afterEach(() => {
@@ -170,6 +183,70 @@ describe('StemsScreen', () => {
     fireEvent(screen.getByLabelText(/Write on: Stem number 0\./), 'longPress');
     expect(screen.queryByText(BULK_REACTIVATION_NOTE)).toBeNull();
     expect(screen.getByLabelText('Deactivate')).toBeTruthy();
+  });
+
+  // w1-t7 (s2-11): the search matches stem text only (stemLibraryFilter),
+  // so the placeholder must say what it searches.
+  it('search states its scope in the placeholder', () => {
+    render(<StemsScreen />);
+
+    expect(screen.getByPlaceholderText('Search stem text')).toBeTruthy();
+  });
+
+  // w1-t7 (s2-8 + s2-7 residual): bulk actions apply to the rows the user
+  // can SEE — the current filter result ∩ the selection, soft-deleted rows
+  // excluded. Filters changed after selecting narrow the write; the search
+  // query is a filter too, so the selection survives keystrokes (the
+  // alternative — clear selection on filter change — would dump it on every
+  // keystroke mid-bulk). The t6 note keys on the SAME effective set: no
+  // programme row touched → no warning.
+  it('applies bulk actions only to rows the current filters show', () => {
+    const user = makeStem(20);
+    user.origin = 'user';
+    user.weekNumber = null;
+    user.text = 'User-owned fixture stem';
+    mockStemsOverride = [makeStem(0), makeStem(4), user];
+    render(<StemsScreen />);
+
+    fireEvent(screen.getByLabelText(/Write on: Stem number 0\./), 'longPress');
+    // Selection mode is now on: subsequent rows toggle via their
+    // selection-mode labels (the 'Write on:' label is replaced).
+    fireEvent.press(screen.getByLabelText('Stem number 4. Active. Not selected.'));
+    fireEvent.press(screen.getByLabelText('User-owned fixture stem. Active. Not selected.'));
+    expect(screen.getByText('3 selected')).toBeTruthy();
+
+    // Filtering down to the user row keeps the selection (a query keystroke
+    // must not dump it) and narrows the effective set.
+    fireEvent.changeText(screen.getByLabelText('Search stems'), 'User-owned');
+    expect(screen.getByText('3 selected')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('Deactivate'));
+    expect(mockSetStemActive).toHaveBeenCalledTimes(1);
+    expect(mockSetStemActive).toHaveBeenCalledWith('stem-20', false);
+    expect(screen.queryByText(BULK_REACTIVATION_NOTE)).toBeNull();
+  });
+
+  // w1-t7 (s2's folded a11y gap): the selection-mode row label dropped the
+  // Active/Disabled state and the meta caption the normal label carries —
+  // a screen-reader user mid-bulk-action could not hear which rows are
+  // active. Both are restored in selection mode.
+  it('selection-mode row labels keep the state and the meta caption', () => {
+    mockStemsOverride = [makeStem(0), makeEveningMetaStem()];
+    render(<StemsScreen />);
+
+    fireEvent.press(screen.getByLabelText('More filters'));
+    // The State row's 'All': with a category present there are four 'All'
+    // chips (category, State, Origin, Time of day); document order makes
+    // index 1 the State row's.
+    fireEvent.press(screen.getAllByText('All')[1]);
+
+    fireEvent(screen.getByLabelText(/Write on: Evening reflection stem\./), 'longPress');
+    expect(
+      screen.getByLabelText(
+        'Evening reflection stem. Disabled. Part of the evening reflection, whether Active or Disabled. Selected.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Stem number 0. Active. Not selected.')).toBeTruthy();
   });
 
   // Issue 03: switching the State filter surfaces disabled and soft-deleted

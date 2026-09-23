@@ -12,6 +12,7 @@ import { ThemedView } from '@/components/themed-view';
 import { CategoryColors, Fonts, MaxContentWidth, Radius, Spacing, type CategoryName } from '@/constants/theme';
 import { getRepository, type TimeOfDay } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
+import { validateStemText } from '@/session/stemValidation';
 
 // See stem-edit.tsx's identical comment: derived from the palette so the
 // two category pickers can never drift apart (ui-audit-2026-09-11.md §2).
@@ -33,6 +34,13 @@ function linesToStems(raw: string): string[] {
  * Bulk import (§6.6): paste text or open a `.txt` file, one stem per line,
  * `origin='imported'`. Shows a preview + count before committing — nothing
  * is written until the user taps Import.
+ *
+ * w1-t7 (s2-9): the paste runs through the same checks Add runs
+ * (`validateStemText`, against the existing texts plus the lines already
+ * accepted from this paste, so intra-paste duplicates are caught too).
+ * Skipped lines are reported in the preview; only accepted lines reach
+ * `bulkImportStems` — the repository call itself stays unconditional (the
+ * export round-trip seeds through it, contract 5).
  */
 export default function StemImportScreen() {
   const router = useRouter();
@@ -44,6 +52,23 @@ export default function StemImportScreen() {
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDayOption>('none');
 
   const lines = useMemo(() => linesToStems(raw), [raw]);
+
+  // Same semantics as Add's duplicate check (stem-edit.tsx): existing texts
+  // come from `listStemTexts` (deleted rows and meta rows excluded), and a
+  // line is checked against them PLUS the lines accepted earlier in this
+  // paste. Validation failures skip the line; warnings (terminal
+  // punctuation) still accept, exactly as Add does.
+  const accepted = useMemo(() => {
+    const seen = new Set(repo.listStemTexts());
+    const kept: string[] = [];
+    for (const line of lines) {
+      if (validateStemText(line, [...seen]).ok) {
+        kept.push(line);
+        seen.add(line);
+      }
+    }
+    return { kept, skipped: lines.length - kept.length };
+  }, [repo, lines]);
 
   const openFile = async () => {
     try {
@@ -57,9 +82,9 @@ export default function StemImportScreen() {
   };
 
   const commit = () => {
-    if (lines.length === 0) return;
+    if (accepted.kept.length === 0) return;
     const resolvedTimeOfDay: TimeOfDay | null = timeOfDay === 'none' ? null : timeOfDay;
-    const count = repo.bulkImportStems(lines, category, resolvedTimeOfDay);
+    const count = repo.bulkImportStems(accepted.kept, category, resolvedTimeOfDay);
     Alert.alert('Imported', `Added ${count} stem${count === 1 ? '' : 's'}.`, [
       { text: 'OK', onPress: () => router.back() },
     ]);
@@ -107,12 +132,20 @@ export default function StemImportScreen() {
           </ThemedView>
 
           <ThemedText type="subtitle">
-            {lines.length} stem{lines.length === 1 ? '' : 's'} to import
+            {accepted.kept.length} stem{accepted.kept.length === 1 ? '' : 's'} to import
           </ThemedText>
 
-          {lines.length > 0 && (
+          {accepted.skipped > 0 && (
+            <ThemedText type="small" themeColor="textSecondary">
+              {accepted.skipped === 1
+                ? '1 line skipped (duplicate or invalid).'
+                : `${accepted.skipped} lines skipped (duplicates or invalid).`}
+            </ThemedText>
+          )}
+
+          {accepted.kept.length > 0 && (
             <ThemedView style={[styles.preview, { backgroundColor: theme.backgroundElement }]}>
-              {lines.map((line, i) => (
+              {accepted.kept.map((line, i) => (
                 <ThemedText key={i} type="small">
                   {line}
                 </ThemedText>
@@ -120,7 +153,7 @@ export default function StemImportScreen() {
             </ThemedView>
           )}
 
-          <Button label="Import" onPress={commit} disabled={lines.length === 0} variant="primary" />
+          <Button label="Import" onPress={commit} disabled={accepted.kept.length === 0} variant="primary" />
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
