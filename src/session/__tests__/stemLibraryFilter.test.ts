@@ -1,4 +1,4 @@
-import { canDeactivateStem, canDeactivateStems, matchesStemFilters, type FilterableStem, type StemLibraryFilters } from '../stemLibraryFilter';
+import { canDeactivateStems, matchesStemFilters, type FilterableStem, type StemLibraryFilters } from '../stemLibraryFilter';
 
 const BASE: StemLibraryFilters = { query: '', activeFilter: 'active', originFilter: 'all', categoryFilter: 'all' };
 
@@ -117,28 +117,10 @@ describe('matchesStemFilters', () => {
   });
 });
 
-describe('canDeactivateStem', () => {
-  it('allows deactivating when more than one active stem remains', () => {
-    const stems = [stem({ active: 1 }), stem({ active: 1 })];
-    expect(canDeactivateStem(stems, stems[0])).toBe(true);
-  });
-
-  it('refuses to deactivate the last active stem', () => {
-    const stems = [stem({ active: 1 }), stem({ active: 0 })];
-    expect(canDeactivateStem(stems, stems[0])).toBe(false);
-  });
-
-  it('deleted stems do not count toward the active total', () => {
-    const stems = [stem({ active: 1 }), stem({ active: 1, deleted_at: '2026-09-01T00:00:00.000Z' })];
-    expect(canDeactivateStem(stems, stems[0])).toBe(false);
-  });
-
-  it('always allows activating (target is already inactive)', () => {
-    const stems = [stem({ active: 0 })];
-    expect(canDeactivateStem(stems, stems[0])).toBe(true);
-  });
-});
-
+// w1-t3 (s2-3): the singular canDeactivateStem had zero production
+// callers and is removed; its semantics are fully covered by the plural
+// (the editor passes a one-element selection — same active-count math),
+// whose suite below pins the at-least-one rule.
 describe('canDeactivateStems', () => {
   it('allows bulk deactivate when an active stem remains outside the selection', () => {
     const stems = [idStem('a', { active: 1 }), idStem('b', { active: 1 }), idStem('c', { active: 1 })];

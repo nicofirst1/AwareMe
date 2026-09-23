@@ -12,12 +12,30 @@ import { CategoryColors, Fonts, MaxContentWidth, Radius, Spacing, type CategoryN
 import { getRepository, type TimeOfDay } from '@/db';
 import { nowEventTime } from '@/db/time';
 import { useTheme } from '@/hooks/use-theme';
+import { canDeactivateStems } from '@/session/stemLibraryFilter';
 import { validateStemText } from '@/session/stemValidation';
 
 // Reads the category picker off the palette itself (ui-audit-2026-09-11.md
 // §2) rather than a hand-maintained list, so this can never drift out of
 // sync with `CategoryColors` or the same list in stem-import.tsx.
 const CATEGORIES = Object.keys(CategoryColors) as CategoryName[];
+
+// w1-t3 (s2-3): same words as the library's bulk-Deactivate notice
+// (stems.tsx, out of this cycle's file map, so the literal is duplicated
+// here, not imported).
+const LAST_ACTIVE_NOTICE = 'At least one stem must stay active.';
+
+// w1-t6 rider reassigned to t3 (coordinator STEER 2026-09-23 10:20;
+// s2-4, D2 interim): until wave 2's activation-provenance rule lands, a
+// deactivated programme stem comes back on the next weekly reflection
+// completion or 'make this my week', so the Archive action says so before
+// the press. Duplicates the row-caption constant in stems.tsx verbatim
+// (out of this cycle's file map); w2-t4 removes this interim note with
+// the provenance engine. `weekNumber !== null` is the same per-row
+// predicate stems.tsx uses — the exact scope of setProgrammeWeekActive's
+// blanket UPDATE. Copy tone per §13.4: descriptive, calm, no guilt.
+const PROGRAMME_REACTIVATION_NOTE =
+  "Deactivating is temporary: the next weekly reflection or 'Make this my week' brings this stem back.";
 
 // Morning/evening pivot (migration 0003): which fixed daily notification a
 // stem belongs to, plus "none" (null — never surfaced by either period's
@@ -46,7 +64,10 @@ export default function StemEditScreen() {
   const repo = useMemo(() => getRepository(), []);
   const isEdit = !!id;
 
-  const existing = useMemo(() => (id ? repo.listAllStems().find((s) => s.id === id) ?? null : null), [id, repo]);
+  // One read serves both the edited row and the guard's active count
+  // (w1-t3): the guard must see every stem, not just the one on screen.
+  const allStems = useMemo(() => repo.listAllStems(), [repo]);
+  const existing = useMemo(() => (id ? allStems.find((s) => s.id === id) ?? null : null), [id, allStems]);
   const existingTexts = useMemo(
     () => repo.listStemTexts().filter((t) => t !== existing?.text),
     [repo, existing],
@@ -57,6 +78,7 @@ export default function StemEditScreen() {
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDayOption>(toOption(existing?.time_of_day ?? null));
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [archiveNotice, setArchiveNotice] = useState<string | null>(null);
 
   if (isEdit && !existing) {
     return (
@@ -88,9 +110,20 @@ export default function StemEditScreen() {
     router.back();
   };
 
+  // w1-t3 (s2-3): Archive routes through the same guard as the library's
+  // bulk Deactivate (canDeactivateStems), so the last active stem cannot
+  // be archived from the editor. Guard scope unchanged (D5, contract 1):
+  // still global, still at-least-one. Unarchive is never blocked —
+  // activating can't reduce the active count.
   const toggleArchive = () => {
     if (!existing) return;
-    repo.setStemActive(existing.id, existing.active === 0);
+    const deactivating = existing.active !== 0;
+    if (deactivating && !canDeactivateStems([existing.id], allStems)) {
+      setArchiveNotice(LAST_ACTIVE_NOTICE);
+      return;
+    }
+    setArchiveNotice(null);
+    repo.setStemActive(existing.id, !deactivating);
     router.back();
   };
 
@@ -166,7 +199,26 @@ export default function StemEditScreen() {
 
           {existing && (
             <ThemedView style={styles.destructiveBlock}>
-              <Button label={existing.active ? 'Archive' : 'Unarchive'} onPress={toggleArchive} variant="text" />
+              {existing.active !== 0 && existing.weekNumber !== null && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {PROGRAMME_REACTIVATION_NOTE}
+                </ThemedText>
+              )}
+              {archiveNotice && (
+                <ThemedText type="small" themeColor="textSecondary" accessibilityLiveRegion="polite">
+                  {archiveNotice}
+                </ThemedText>
+              )}
+              <Button
+                label={existing.active ? 'Archive' : 'Unarchive'}
+                onPress={toggleArchive}
+                variant="text"
+                accessibilityLabel={
+                  existing.active !== 0 && existing.weekNumber !== null
+                    ? `Archive. ${PROGRAMME_REACTIVATION_NOTE}`
+                    : undefined
+                }
+              />
               {!existing.deleted_at && <Button label="Delete" onPress={softDelete} variant="text" />}
             </ThemedView>
           )}
