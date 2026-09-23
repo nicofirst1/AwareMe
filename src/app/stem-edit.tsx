@@ -28,7 +28,7 @@ const LAST_ACTIVE_NOTICE = 'At least one stem must stay active.';
 // w1-t6 rider reassigned to t3 (coordinator STEER 2026-09-23 10:20;
 // s2-4, D2 interim): until wave 2's activation-provenance rule lands, a
 // deactivated programme stem comes back on the next weekly reflection
-// completion or 'make this my week', so the Archive action says so before
+// completion or 'make this my week', so the Disable action says so before
 // the press. Duplicates the row-caption constant in stems.tsx verbatim
 // (out of this cycle's file map); w2-t4 removes this interim note with
 // the provenance engine. `weekNumber !== null` is the same per-row
@@ -56,8 +56,13 @@ const PROGRAMME_REACTIVATION_NOTE =
 // disabling everywhere would freeze the one live effect. The claim is
 // pinned against the live query in stem-edit.test.tsx (contract 9).
 // Copy tone per §13.4: descriptive, calm, no guilt.
+//
+// w1-t7 excursion (t5-audit disposition, coordinator grant 11:41): the
+// note's possessive apostrophe is U+2019 — this file's user-visible copy
+// carries curly apostrophes (8 sibling lines), and the t5 audit
+// hex-verified this line as the sole ASCII (0x27) deviator.
 const TIME_OF_DAY_REREAD_NOTE =
-  "The evening's re-read shows the endings you write today on stems tagged Morning.";
+  "The evening’s re-read shows the endings you write today on stems tagged Morning.";
 
 // Morning/evening pivot (migration 0003): which fixed daily notification a
 // stem belongs to, plus "none" (null — never surfaced by either period's
@@ -132,11 +137,13 @@ export default function StemEditScreen() {
     router.back();
   };
 
-  // w1-t3 (s2-3): Archive routes through the same guard as the library's
-  // bulk Deactivate (canDeactivateStems), so the last active stem cannot
-  // be archived from the editor. Guard scope unchanged (D5, contract 1):
-  // still global, still at-least-one. Unarchive is never blocked —
-  // activating can't reduce the active count.
+  // w1-t3 (s2-3): the disable action routes through the same guard as the
+  // library's bulk Deactivate (canDeactivateStems), so the last active
+  // stem cannot be disabled from the editor. Guard scope unchanged (D5,
+  // contract 1): still global, still at-least-one. Enabling is never
+  // blocked — activating can't reduce the active count.
+  // (w1-t7d, s2-10: the button says Disable/Enable — one vocabulary with
+  // the library's Disabled state; storage/export values stay 'archived'.)
   const toggleArchive = () => {
     if (!existing) return;
     const deactivating = existing.active !== 0;
@@ -235,12 +242,12 @@ export default function StemEditScreen() {
                 </ThemedText>
               )}
               <Button
-                label={existing.active ? 'Archive' : 'Unarchive'}
+                label={existing.active ? 'Disable' : 'Enable'}
                 onPress={toggleArchive}
                 variant="text"
                 accessibilityLabel={
                   existing.active !== 0 && existing.weekNumber !== null
-                    ? `Archive. ${PROGRAMME_REACTIVATION_NOTE}`
+                    ? `Disable. ${PROGRAMME_REACTIVATION_NOTE}`
                     : undefined
                 }
               />

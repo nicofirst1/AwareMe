@@ -110,7 +110,7 @@ describe('StemEditScreen — weight control removal', () => {
 // w2-t4 retires it when the provenance engine lands. Failing-first: the
 // guard and note assertions below fail while toggleArchive is unguarded.
 describe('StemEditScreen — archive guard + programme deactivation note', () => {
-  it('archiving the only active stem is blocked with the notice', () => {
+  it('disabling the only active stem is blocked with the notice', () => {
     mockParams.value = { id: mockStem.id };
     mockRepoState.stems = [
       mockStem,
@@ -118,14 +118,14 @@ describe('StemEditScreen — archive guard + programme deactivation note', () =>
     ];
     render(<StemEditScreen />);
 
-    fireEvent.press(screen.getByText('Archive'));
+    fireEvent.press(screen.getByText('Disable'));
 
     expect(screen.getByText('At least one stem must stay active.')).toBeTruthy();
     expect(mockSetStemActive).not.toHaveBeenCalled();
     expect(mockRouter.back).not.toHaveBeenCalled();
   });
 
-  it('archives when another active stem remains, with no notice', () => {
+  it('disables when another active stem remains, with no notice', () => {
     mockParams.value = { id: mockStem.id };
     mockRepoState.stems = [
       mockStem,
@@ -133,32 +133,32 @@ describe('StemEditScreen — archive guard + programme deactivation note', () =>
     ];
     render(<StemEditScreen />);
 
-    fireEvent.press(screen.getByText('Archive'));
+    fireEvent.press(screen.getByText('Disable'));
 
     expect(mockSetStemActive).toHaveBeenCalledWith(mockStem.id, false);
     expect(mockRouter.back).toHaveBeenCalled();
     expect(screen.queryByText('At least one stem must stay active.')).toBeNull();
   });
 
-  it('never blocks unarchive (activating is always fine)', () => {
+  it('never blocks enabling (activating is always fine)', () => {
     mockParams.value = { id: mockStem.id };
     mockRepoState.stems = [makeStem(mockStem.id, { active: 0 })];
     render(<StemEditScreen />);
 
-    fireEvent.press(screen.getByText('Unarchive'));
+    fireEvent.press(screen.getByText('Enable'));
 
     expect(mockSetStemActive).toHaveBeenCalledWith(mockStem.id, true);
     expect(mockRouter.back).toHaveBeenCalled();
     expect(screen.queryByText('At least one stem must stay active.')).toBeNull();
   });
 
-  it('Archive on a programme stem says deactivation is temporary (visible + a11y label)', () => {
+  it('Disable on a programme stem says deactivation is temporary (visible + a11y label)', () => {
     mockParams.value = { id: mockStem.id };
     // Fixture default: active programme stem (origin seed, weekNumber 1).
     render(<StemEditScreen />);
 
     expect(screen.getByText(PROGRAMME_REACTIVATION_NOTE)).toBeTruthy();
-    expect(screen.getByLabelText(`Archive. ${PROGRAMME_REACTIVATION_NOTE}`)).toBeTruthy();
+    expect(screen.getByLabelText(`Disable. ${PROGRAMME_REACTIVATION_NOTE}`)).toBeTruthy();
   });
 
   it('no reactivation note on a user stem (weekNumber null)', () => {
@@ -169,7 +169,7 @@ describe('StemEditScreen — archive guard + programme deactivation note', () =>
     render(<StemEditScreen />);
 
     expect(screen.queryByText(PROGRAMME_REACTIVATION_NOTE)).toBeNull();
-    expect(screen.getByLabelText('Archive')).toBeTruthy();
+    expect(screen.getByLabelText('Disable')).toBeTruthy();
   });
 });
 
@@ -194,8 +194,10 @@ const PROGRAMME_REACTIVATION_NOTE =
 // in-memory repository (node:sqlite + migrations), not the mocked barrel —
 // the copy's claim is pinned to the live query, not to a mock's behavior.
 // Failing-first: the copy assertions fail while the note is missing.
+// (w1-t7 excursion: the possessive apostrophe is U+2019, byte-identical to
+// the shipped constant in stem-edit.tsx — the t5-audit apostrophe disposition.)
 const TIME_OF_DAY_REREAD_NOTE =
-  "The evening's re-read shows the endings you write today on stems tagged Morning.";
+  "The evening’s re-read shows the endings you write today on stems tagged Morning.";
 
 function freshLiveRepository(): { raw: DatabaseSync; repo: Repository } {
   const raw = new DatabaseSync(':memory:');

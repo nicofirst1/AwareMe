@@ -289,12 +289,20 @@ function main(): void {
   // timer has already elapsed (ADR-0001), so the practice must still be inside
   // its 90s window when the app mounts.
   if (process.argv[3] === '--open') {
-    // The LAST stem in the morning queue (`getActiveStemsForTimeOfDay`'s own
-    // order — uuidv7 ids make list order uncorrelated with seed order, so
-    // this must be computed, not assumed), so a timeout lands on the
-    // practice's final stem — the write screen's completion block (badges,
-    // "Saved.") only renders there, and this audit wants that state too.
-    const queue = repo.getActiveStemsForTimeOfDay('morning');
+    // The LAST stem in the morning queue (uuidv7 ids make list order
+    // uncorrelated with seed order, so this must be computed, not
+    // assumed), so a timeout lands on the practice's final stem — the
+    // write screen's completion block (badges, "Saved.") only renders
+    // there, and this audit wants that state too.
+    // w1-t7 (s1-F7, coordinator-granted excursion): the read is the deleted
+    // time-of-day read's exact set + order — active, non-deleted,
+    // morning-tagged, ORDER BY id — derived from listAllStems. ORDER BY id
+    // in sqlite is BINARY (byte order); JS code-unit compare matches it
+    // for these ASCII uuids.
+    const queue = repo
+      .listAllStems()
+      .filter((s) => s.active !== 0 && s.deleted_at === null && s.time_of_day === 'morning')
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     const openId = queue[queue.length - 1]?.id;
     const stem = stems.find((s) => s.id === openId) ?? queue[queue.length - 1];
     const startedAt = new Date(Date.now() - 30_000).toISOString();

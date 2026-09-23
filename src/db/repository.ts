@@ -224,8 +224,8 @@ export class Repository {
 
       // Evening-review meta-stems (§5.4, minus the weekly one) are a
       // distinct concept from stems (CONTEXT.md: "used only in review..."),
-      // not a category of them — seeded with `active = 0` so they can never
-      // surface via the practice draws or `listActiveStems`, and `origin =
+      // not a category of them — seeded with `active = 0` so no practice
+      // draw or generic active-stem read ever surfaces them, and `origin =
       // 'meta'` so the review/rotation reads can tell them apart. Since
       // issue 06 they carry `time_of_day = 'evening'` and ARE shown in the
       // stem library (§6.6) as resting, evening-tagged rows — the Evening
@@ -397,30 +397,9 @@ export class Repository {
   }
 
   /**
-   * Active, non-deleted stems, for generic session start and stem reads.
-   * Excludes the weekly meta-stem (`is_weekly_meta = 1`, migration 0004):
-   * it is review machinery (§6.5), reached only through its flag — it must
-   * never surface in a practice draw or a generic stem list.
-   */
-  listActiveStems(): StemRow[] {
-    return this.db.getAllSync<StemRow>(
-      "SELECT id, text, origin, category, weight, time_of_day FROM stems WHERE active = 1 AND deleted_at IS NULL AND is_weekly_meta = 0 ORDER BY created_at",
-      [],
-    );
-  }
-
-  /** Active, non-deleted stems tagged for the given time of day (migration 0003), for the two fixed daily notifications. Ordered by `id` (UUIDv7, chronological) for a deterministic draw. */
-  getActiveStemsForTimeOfDay(timeOfDay: TimeOfDay): StemRow[] {
-    return this.db.getAllSync<StemRow>(
-      'SELECT id, text, origin, category, weight, time_of_day FROM stems WHERE active = 1 AND deleted_at IS NULL AND time_of_day = ? ORDER BY id',
-      [timeOfDay],
-    );
-  }
-
-  /**
    * Every stem, including archived and soft-deleted ones, for the stem
-   * library (§6.6) — the library filters/searches client-side over this,
-   * unlike `listActiveStems`'s narrow session-start use. Includes the two
+   * library (§6.6) — the library filters/searches client-side over this.
+   * Includes the two
    * evening meta-stems (issue 06, owner feedback "there are no evening
    * stems"): they surface as resting, evening-tagged rows the Evening
    * filter matches — still `active = 0`, so no practice draw or generic
@@ -746,23 +725,6 @@ export class Repository {
     );
   }
 
-  /**
-   * Recent session starts (stem id, its category, when started), for the
-   * weighted selection's recency/category penalties (§6.2). 14 days covers
-   * the widest window either penalty looks at; the caller doesn't need
-   * anything older.
-   */
-  getRecentStemUsage(): { stemId: string; category: string | null; startedAt: string }[] {
-    return this.db.getAllSync<{ stemId: string; category: string | null; startedAt: string }>(
-      `SELECT s.stem_id as stemId, st.category as category, s.started_at as startedAt
-       FROM sessions s
-       JOIN stems st ON st.id = s.stem_id
-       WHERE s.deleted_at IS NULL AND s.started_at >= ?
-       ORDER BY s.started_at DESC`,
-      [new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()],
-    );
-  }
-
   /** Every non-deleted stem's text, for the "not a verbatim duplicate" check (§6.6). */
   listStemTexts(): string[] {
     return this.db
@@ -774,9 +736,8 @@ export class Repository {
    * Adds a stem the user wrote or pasted (§6.6). Caller validates first
    * (`validateStemText`) — this just persists. `origin` is `'user'` for a
    * single add, `'imported'` for bulk import. `timeOfDay` (morning/evening
-   * pivot, migration 0003) defaults to null — a user stem not tagged to
-   * either period never surfaces in a practice via `getActiveStemsForTimeOfDay`,
-   * same as a pre-pivot row (docs/DECISIONS.md 2026-09-14: no backfill).
+   * pivot, migration 0003) defaults to null — an untagged user stem behaves
+   * like a pre-pivot row (docs/DECISIONS.md 2026-09-14: no backfill).
    */
   addStem(input: {
     text: string;

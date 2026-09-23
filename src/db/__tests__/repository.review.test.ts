@@ -14,8 +14,14 @@ function freshRepository(): { db: DatabaseSync; repo: Repository } {
   return { db: raw, repo };
 }
 
+// w1-t7 (s1-F7): the dead active-stem read is deleted (zero production
+// callers). Fixture reads derive the same set from listAllStems.
+function activeStems(repo: Repository) {
+  return repo.listAllStems().filter((s) => s.active !== 0 && s.deleted_at === null);
+}
+
 function firstStemId(repo: Repository): string {
-  return repo.listActiveStems()[0].id;
+  return activeStems(repo)[0].id;
 }
 
 function sessionWithEnding(repo: Repository, stemId: string, startedAt: string): string {
@@ -70,7 +76,11 @@ describe('Repository.listSessionsForReview', () => {
 describe('Repository.listSessionsForDayMorning (issue 10: deleted stems in the evening reread)', () => {
   it('hides the day’s session on a stem soft-deleted before the evening reflection', () => {
     const { repo } = freshRepository();
-    const [deletedStem, keptStem] = repo.listActiveStems();
+    // The reread's morning filter is what this test exercises, so the two
+    // fixture stems must be morning-tagged actives — selected explicitly
+    // (fixture reads no longer inherit the deleted read's insertion-order
+    // accident, w1-t7).
+    const [deletedStem, keptStem] = activeStems(repo).filter((s) => s.time_of_day === 'morning');
 
     // The morning: two completed practices with endings, inside the day window.
     const deletedSession = sessionWithEnding(repo, deletedStem.id, '2026-09-10T08:00:00.000Z');
@@ -87,7 +97,7 @@ describe('Repository.listSessionsForDayMorning (issue 10: deleted stems in the e
 
   it('still leaves the soft-deleted row visible to the library read (deliberate resting/provenance behavior, untouched)', () => {
     const { repo } = freshRepository();
-    const [victim] = repo.listActiveStems();
+    const [victim] = activeStems(repo);
 
     repo.softDeleteStem(victim.id, '2026-09-10T12:00:00.000Z');
 

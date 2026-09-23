@@ -82,9 +82,9 @@ const BULK_REACTIVATION_NOTE =
 
 /**
  * The stem library (§6.6): every stem, filterable and searchable, with a
- * "write on this now" entry point that bypasses weighted selection
+ * "write on this now" entry point that bypasses the practice queue
  * (`origin='manual'`, Q2 in docs/DECISIONS.md), plus authoring (ticket 08): add,
- * edit, archive, delete, reweight (all on `/stem-edit`), and bulk import
+ * edit, archive, delete (all on `/stem-edit`), and bulk import
  * (`/stem-import`).
  */
 export default function StemsScreen() {
@@ -141,12 +141,26 @@ export default function StemsScreen() {
   const selectionMode = selectedIds.size > 0;
   const [bulkNotice, setBulkNotice] = useState(false);
 
+  // w1-t7 (s2-8 + s2-7 residual): bulk actions apply to the rows the user
+  // can SEE — the current filter result ∩ the selection, with soft-deleted
+  // rows excluded (they are visible for context, never writable, closing
+  // the latent s2-7 write for free). Filters changed after selecting
+  // narrow the applied set instead of silently widening it; the search
+  // query is a filter too, so "clear selection on filter change" was
+  // rejected — it would dump the selection on every keystroke mid-bulk.
+  const effectiveSelection = useMemo(
+    () => filtered.filter((s) => selectedIds.has(s.id) && s.deleted_at === null),
+    [filtered, selectedIds],
+  );
+
   // w1-t6: does the current selection include programme stems (the rows the
   // week-set blanket UPDATE will re-activate)? Drives the Deactivate
-  // affordance's honest note — a read-side caption, nothing else.
+  // affordance's honest note — a read-side caption, nothing else. w1-t7
+  // (s2-8): keyed on the EFFECTIVE selection (filtered ∩ selected) so the
+  // note fires only for rows the press will actually touch.
   const selectionHasProgramme = useMemo(
-    () => stems.some((s) => selectedIds.has(s.id) && s.weekNumber !== null),
-    [stems, selectedIds],
+    () => effectiveSelection.some((s) => s.weekNumber !== null),
+    [effectiveSelection],
   );
 
   const writeNow = useCallback(
@@ -180,7 +194,11 @@ export default function StemsScreen() {
 
   const bulkSetActive = useCallback(
     (active: boolean) => {
-      const ids = Array.from(selectedIds);
+      const ids = effectiveSelection.map((s) => s.id);
+      // Nothing effective to act on (every selected row is filtered out or
+      // soft-deleted): a quiet no-op — no write, no notice, no selection
+      // reset (the press does not validate a reset the user never saw).
+      if (ids.length === 0) return;
       if (!active && !canDeactivateStems(ids, stems)) {
         setBulkNotice(true);
         return;
@@ -190,7 +208,7 @@ export default function StemsScreen() {
       setStems(repo.listAllStems());
       cancelSelection();
     },
-    [selectedIds, stems, cancelSelection],
+    [effectiveSelection, stems, cancelSelection],
   );
 
   const renderStemRow = useCallback(
@@ -275,7 +293,7 @@ export default function StemsScreen() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search"
+            placeholder="Search stem text"
             placeholderTextColor={theme.textSecondary}
             style={[styles.search, { color: theme.text, backgroundColor: theme.backgroundElement }]}
             accessibilityLabel="Search stems"
@@ -496,7 +514,9 @@ const StemRow = memo(function StemRow({
   const label = isDeleted
     ? item.text
     : selectionMode
-      ? `${item.text}. ${selected ? 'Selected' : 'Not selected'}.`
+      ? `${item.text}. ${item.active ? 'Active' : 'Disabled'}.${
+          isMeta ? ' Part of the evening reflection, whether Active or Disabled.' : ''
+        } ${selected ? 'Selected' : 'Not selected'}.`
       : `Write on: ${item.text}. ${item.active ? 'Active' : 'Disabled'}.${
           isMeta ? ' Part of the evening reflection, whether Active or Disabled.' : ''
         }${isProgramme ? ` ${PROGRAMME_REACTIVATION_NOTE}` : ''} Long-press to select.`;
@@ -766,9 +786,11 @@ const styles = StyleSheet.create({
   },
   // Fixed `height` (not `minHeight`): an unbounded horizontal ScrollView
   // beside a flex:1 FlatList sibling collapses to zero height (2026-09-11
-  // regression, commit 375f6b3). Height is FilterChip's own `minHeight:
-  // MinTouchTarget` (44) — this row has no vertical content taller than
-  // its chips, so that's the exact bound, not a guess.
+  // regression, commit 375f6b3). The height sits at theme's `MinTouchTarget`
+  // (44) while FilterChip's own floor is its local `AndroidMinTouchTarget`
+  // (48, filter-chip.tsx), so the strip is 4pt shorter than its chips and
+  // clips them (s6-confirmed) — layout stays untouched this round; the fix
+  // is w2-t4's chrome diet.
   // `marginHorizontal: Spacing.four` (t11, cluster 7 remainder): the strip
   // is a full-width ScrollView, so its chips painted flush to the screen
   // border (packet-2 p2n-25 + t6 FLAG 18:04: non-bg pixels in the last-6-px

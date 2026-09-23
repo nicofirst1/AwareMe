@@ -53,7 +53,8 @@ export function useNotificationScheduler(): void {
  * the tap's silent `data` payload (not stem or user text — §6.4's lock-screen
  * privacy rule) says which fired. The two daily notifications carry
  * `timeOfDay` and push `/write?timeOfDay=<period>&origin=notification` —
- * `/write` loads every active stem for that period itself (§6.2). The weekly
+ * the write flow resolves that period's practice itself (§6.2: the week
+ * queues / reflection flow). The weekly
  * reflection notification (§6.4 2026-09-15 amendment, ADR-0005) carries
  * `period: 'weekly'` and targets c02's weekly route contract exactly:
  * `/write?origin=weekly` — the route loads the weekly review itself; this
