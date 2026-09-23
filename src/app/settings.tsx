@@ -1,10 +1,11 @@
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 
+import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { ScreenHeader } from '@/components/screen-header';
 import { SectionHeader } from '@/components/section-header';
@@ -253,14 +254,24 @@ function TimeField({
  *
  * `program_week_override` (§7, ADR-0005) deliberately has no control here —
  * it belongs to the stem library's week pages ("make this my week"), which
- * own that setting.
+ * own that setting. Since packet-7's D4 re-enable, this screen makes ONE
+ * write to the key without rendering a control for it: turning the
+ * Programme setting on (an off→on transition) pins week 1 with the week
+ * pages' exact `setSetting('program_week_override', 1)` shape and shows
+ * the re-enable dialog (p7 design §7.2) — user input, not a derived value
+ * (§13.7); every transition re-writes the same pin, nothing dialog-related
+ * is persisted, and the override CONTROL still lives only on the week
+ * pages.
  */
 export default function SettingsScreen() {
   const themePreference = useThemePreference();
+  const theme = useTheme();
+  const router = useRouter();
   const repo = useMemo(() => getRepository(), []);
   const [settings, setSettings] = useState<Settings>(() => repo.getSettings());
   const [savedNotice, setSavedNotice] = useState(false);
   const [wiping, setWiping] = useState(false);
+  const [programmeDialogVisible, setProgrammeDialogVisible] = useState(false);
 
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => {
     repo.setSetting(key, value);
@@ -288,6 +299,32 @@ export default function SettingsScreen() {
       if (__DEV__) console.warn('Notification reschedule failed:', error);
     });
   };
+
+  /**
+   * The Programme toggle (packet-7 D1): ONE binary gate over the practice's
+   * composition. Off is D3-inert — this one write is the only state change
+   * (no override clear, no activation, no reschedule: the setting is not
+   * notification-relevant, so the evening toggle's reschedule precedent
+   * does not transfer). The off→on transition is D4's re-enable: it pins
+   * week 1 (the §7 user-input write, the week pages' exact write shape) and
+   * shows the re-enable dialog — on EVERY transition, and nothing about the
+   * dialog is persisted (hub decision 2026-09-23 15:52); pressing the
+   * already-selected pill is not a transition. Mid-session, the running
+   * session keeps its start-time snapshot by design; the gate re-reads the
+   * setting on the next read.
+   */
+  const setProgramme = (enabled: boolean) => {
+    if (!enabled) {
+      set('programme', false);
+      return;
+    }
+    if (settings.programme) return; // already on: no off→on transition
+    set('programme', true);
+    repo.setSetting('program_week_override', 1);
+    setProgrammeDialogVisible(true);
+  };
+
+  const dismissProgrammeDialog = () => setProgrammeDialogVisible(false);
 
   const setWeeklyDay = (day: string) => {
     set('weekly_meta_day', day);
@@ -340,8 +377,29 @@ export default function SettingsScreen() {
         <ScreenHeader title="Settings" />
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <ThemedView style={styles.group}>
-            <SectionHeader label="Session" />
+            {/* The section-label call rides w2-t3 (packet w2-t3 row, design
+                §7.1): the practice-composition section is "Practice" (the
+                base label read "Session"). Display rename only — no setting
+                moved between keys. */}
+            <SectionHeader label="Practice" />
             <Card style={styles.cardGap}>
+              <ThemedView style={styles.setting}>
+                {/* The ONE binary Programme gate (packet-7 D1): no pickers,
+                    no three-way (owner rejected). First row of the section
+                    (design §7.1, owner-approved). The pills read
+                    "Programme: on/off" for screen readers — the map's exact
+                    OptionToggle a11y pattern. */}
+                <OptionToggle
+                  label="Programme"
+                  accessibilityLabel="Programme"
+                  options={['on', 'off'] as const}
+                  value={settings.programme ? 'on' : 'off'}
+                  onChange={(v) => setProgramme(v === 'on')}
+                />
+                <Hint>Adds the official programme’s current week to your morning practice.</Hint>
+                <Hint>Off, your practice is your picks only, and the week stops advancing until you turn it back on.</Hint>
+              </ThemedView>
+
               <ThemedView style={styles.setting}>
                 <StepperRow
                   label="Endings per session"
@@ -551,6 +609,48 @@ export default function SettingsScreen() {
             </Card>
           </ThemedView>
         </ScrollView>
+
+        {/* The D4 re-enable dialog (p7 design §7.2): an in-app dialog at the
+            screen root, the week-picker sheet's Modal idiom (scrim + card).
+            Rendered conditionally — the dialog is a per-transition artifact
+            of the toggle handler, never persisted. */}
+        {programmeDialogVisible && (
+          <Modal transparent animationType="fade" visible onRequestClose={dismissProgrammeDialog}>
+            <Pressable
+              style={styles.dialogScrim}
+              onPress={dismissProgrammeDialog}
+              accessibilityLabel="Dismiss programme dialog"
+            >
+              {/* Absorbs presses on the card's blank area so only the scrim
+                  and the two buttons act — the week-picker sheet's pattern. */}
+              <ThemedView
+                style={[styles.dialogCard, { backgroundColor: theme.backgroundElement }]}
+                onStartShouldSetResponder={() => true}
+              >
+                <ThemedText type="subtitle">Programme on</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Your practice starts at Week 1. You can pick a different week, and your week will advance from
+                  there.
+                </ThemedText>
+                <Button label="Start at Week 1" variant="primary" onPress={dismissProgrammeDialog} />
+                {/* The D4 exit: navigation to the week pages, announced as a
+                    link (the /about-method link convention: role="link" +
+                    explicit label) with the dialog's secondary-button look. */}
+                <Pressable
+                  onPress={() => {
+                    dismissProgrammeDialog();
+                    router.push('/week');
+                  }}
+                  style={[styles.dialogLink, { borderColor: theme.borderStrong, backgroundColor: theme.backgroundElement }]}
+                  accessibilityRole="link"
+                  accessibilityLabel="Pick a different week"
+                >
+                  <ThemedText type="default">Pick a different week</ThemedText>
+                </Pressable>
+              </ThemedView>
+            </Pressable>
+          </Modal>
+        )}
       </SafeAreaView>
     </ThemedView>
   );
@@ -615,6 +715,31 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     minHeight: MinTouchTarget,
     justifyContent: 'center',
+  },
+  // The D4 re-enable dialog: the week-picker sheet's scrim/card shapes
+  // (stems.tsx), sized for a two-button dialog. The link row borrows the
+  // shared secondary-button values (hairline borderStrong outline on a
+  // backgroundElement card, per button.tsx's visibility note) with the
+  // link role the /week affordance carries.
+  dialogScrim: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.five,
+  },
+  dialogCard: {
+    borderRadius: Radius.medium,
+    padding: Spacing.three,
+    gap: Spacing.two,
+  },
+  dialogLink: {
+    minHeight: MinTouchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderRadius: Radius.small,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.four,
   },
   navLink: {
     minHeight: MinTouchTarget,

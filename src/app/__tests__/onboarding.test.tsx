@@ -155,6 +155,38 @@ describe('OnboardingScreen', () => {
     expect(screen.getByText('How many endings you write in one practice.')).toBeTruthy();
   });
 
+  it('states the programme switch on the settings step in D8’s sentence (packet-7 D8, design §7.3)', () => {
+    render(<OnboardingScreen />);
+
+    // One two-sentence line, adjacent to the existing "later in Settings"
+    // line — wording is D8’s decided sentence, verbatim.
+    expect(screen.getByText(/The programme adds guided stems each week\./)).toBeTruthy();
+    expect(screen.getByText(/You can disable the programme in Settings and pick your own stems\./)).toBeTruthy();
+  });
+
+  it('writes exactly the four flow keys on Done and never the programme key (D8 guard: the copy states the switch, the default ships it)', async () => {
+    // Guard pin — green on the pre-w2-t3 tree by design (finish() never
+    // wrote programme before either); it pins the contract against drift.
+    mockRequestPermission.mockResolvedValue(true);
+    render(<OnboardingScreen />);
+
+    fireEvent.press(screen.getByText('Next'));
+    fireEvent.press(screen.getByText('Next')); // Reminders tab
+    fireEvent.press(screen.getByText('Allow reminders'));
+
+    await waitFor(() => expect(screen.getByText('Morning reminder')).toBeTruthy());
+    fireEvent.press(screen.getByText('Skip for now')); // → tab 5
+    fireEvent.press(screen.getByText('Done'));
+
+    expect(mockSetOnboardingComplete).toHaveBeenCalledTimes(1);
+    // Five writes total: the evening card's own skip write
+    // ('evening_practice_enabled', false — v14 issue 05, pre-existing) plus
+    // finish()'s four flow keys. D8: onboarding never writes 'programme' —
+    // the day-one programme-first default is the engine's.
+    expect(mockSetSetting).toHaveBeenCalledTimes(5);
+    expect(mockSetSetting).not.toHaveBeenCalledWith('programme', expect.anything());
+  });
+
   it('pins the committed Reminders ask and drops the old reassurance paragraphs', () => {
     render(<OnboardingScreen />);
 
