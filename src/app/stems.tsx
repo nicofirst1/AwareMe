@@ -62,6 +62,24 @@ const TIME_OF_DAY_HUES: Record<'morning' | 'evening', PaletteName> = {
 };
 const PROGRAMME_ORIGIN_HUE: PaletteName = 'jade';
 
+// w1-t6 (s2-4, D2 interim): until wave 2's activation-provenance rule lands,
+// week-set activation blanket-rewrites `active` for every stem the blanket
+// UPDATE touches — `WHERE week_number IS NOT NULL` (setProgrammeWeekActive,
+// repository.ts) — so a programme stem the user deliberately deactivated
+// comes back on the next weekly reflection completion or 'make this my
+// week' (s5 #2 reproduced it on device: 11→10→11 active around set+clear).
+// Until D2, the screen says so instead of staying silent. Display/a11y
+// only: these constants change no behavior (cross-cycle contract 6).
+// `weekNumber !== null` is the exact per-row predicate of that UPDATE —
+// not `origin === 'seed'` — so the note is true exactly where the
+// re-activation happens, including the pre-backfill weekless-seed edge
+// (which keeps its own flag and gets no note). Copy tone per §13.4:
+// descriptive, calm, no guilt.
+const PROGRAMME_REACTIVATION_NOTE =
+  "Deactivating is temporary: the next weekly reflection or 'Make this my week' brings this stem back.";
+const BULK_REACTIVATION_NOTE =
+  "Deactivated programme stems come back with the next weekly reflection or 'Make this my week'.";
+
 /**
  * The stem library (§6.6): every stem, filterable and searchable, with a
  * "write on this now" entry point that bypasses weighted selection
@@ -122,6 +140,14 @@ export default function StemsScreen() {
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const selectionMode = selectedIds.size > 0;
   const [bulkNotice, setBulkNotice] = useState(false);
+
+  // w1-t6: does the current selection include programme stems (the rows the
+  // week-set blanket UPDATE will re-activate)? Drives the Deactivate
+  // affordance's honest note — a read-side caption, nothing else.
+  const selectionHasProgramme = useMemo(
+    () => stems.some((s) => selectedIds.has(s.id) && s.weekNumber !== null),
+    [stems, selectedIds],
+  );
 
   const writeNow = useCallback(
     (stem: LibraryStemRow) => {
@@ -342,10 +368,26 @@ export default function StemsScreen() {
             </ThemedText>
             <ThemedView style={styles.actionBarButtons}>
               <Button label="Activate" onPress={() => bulkSetActive(true)} variant="secondary" style={styles.actionBarButton} />
-              <Button label="Deactivate" onPress={() => bulkSetActive(false)} variant="secondary" style={styles.actionBarButton} />
+              <Button
+                label="Deactivate"
+                onPress={() => bulkSetActive(false)}
+                variant="secondary"
+                style={styles.actionBarButton}
+                accessibilityLabel={selectionHasProgramme ? `Deactivate. ${BULK_REACTIVATION_NOTE}` : undefined}
+              />
               <Button label="Cancel" onPress={cancelSelection} variant="text" style={styles.actionBarButton} />
             </ThemedView>
           </ThemedView>
+        )}
+
+        {/* w1-t6 (s2-4, D2 interim): the selection bar's deactivation note —
+            shown while a selection including programme stems is open, so the
+            consequence is readable BEFORE the press, not after. Same display-
+            only discipline as the row captions. */}
+        {selectionMode && selectionHasProgramme && (
+          <ThemedText type="small" themeColor="textSecondary" style={styles.notice}>
+            {BULK_REACTIVATION_NOTE}
+          </ThemedText>
         )}
 
         {bulkNotice && (
@@ -416,6 +458,12 @@ const StemRow = memo(function StemRow({
   // (listMetaStems has no active filter), so activating one is never the
   // only path. Its state only ever gates the generic active-stem reads.
   const isMeta = item.origin === 'meta';
+  // w1-t6 (s2-4, D2 interim): programme rows (the exact set the week-set
+  // blanket UPDATE touches — see the note constants above) say that
+  // deactivation is temporary, visibly and in the a11y label. Same honesty
+  // pattern as the meta caption below; state-independent (the risk exists
+  // in both states: activating-then-deactivating, and the silent come-back).
+  const isProgramme = item.weekNumber !== null;
   const reflectionPair = isMeta ? Palette.rose[dark ? 'dark' : 'light'] : null;
   const edgeColor = isDeleted ? 'transparent' : (item.active ? ACTIVE_EDGE : INACTIVE_EDGE)[dark ? 'dark' : 'light'];
   const categoryColors = isCategoryName(item.category) ? CategoryColors[item.category][dark ? 'dark' : 'light'] : null;
@@ -451,7 +499,7 @@ const StemRow = memo(function StemRow({
       ? `${item.text}. ${selected ? 'Selected' : 'Not selected'}.`
       : `Write on: ${item.text}. ${item.active ? 'Active' : 'Disabled'}.${
           isMeta ? ' Part of the evening reflection, whether Active or Disabled.' : ''
-        } Long-press to select.`;
+        }${isProgramme ? ` ${PROGRAMME_REACTIVATION_NOTE}` : ''} Long-press to select.`;
 
   return (
     <ThemedView
@@ -529,6 +577,11 @@ const StemRow = memo(function StemRow({
         {isMeta && !isDeleted && (
           <ThemedText type="small" themeColor="textSecondary">
             Part of the evening reflection, whether Active or Disabled.
+          </ThemedText>
+        )}
+        {isProgramme && !isDeleted && (
+          <ThemedText type="small" themeColor="textSecondary">
+            {PROGRAMME_REACTIVATION_NOTE}
           </ThemedText>
         )}
       </Pressable>
