@@ -42,6 +42,15 @@ function makeStem(i: number): LibraryStemRow {
 
 const mockStems = Array.from({ length: 30 }, (_, i) => makeStem(i));
 
+// w1-t6 (s2-4, D2 interim): the exact words the screen uses to say that
+// deactivating a programme stem is temporary. Pinned as literals on
+// purpose: the assertions hold the screen to the copy a reader and a
+// VoiceOver user actually get.
+const ROW_REACTIVATION_NOTE =
+  "Deactivating is temporary: the next weekly reflection or 'Make this my week' brings this stem back.";
+const BULK_REACTIVATION_NOTE =
+  "Deactivated programme stems come back with the next weekly reflection or 'Make this my week'.";
+
 // v13-feedback issue 07: one test swaps the whole library for a focused
 // fixture (the evening reflection meta-stem). Null = the default 30-stem list.
 let mockStemsOverride: LibraryStemRow[] | null = null;
@@ -110,10 +119,57 @@ describe('StemsScreen', () => {
     render(<StemsScreen />);
 
     expect(screen.getByText('28 active · 1 disabled')).toBeTruthy();
-    expect(screen.getByLabelText('Write on: Stem number 0. Active. Long-press to select.')).toBeTruthy();
+    expect(
+      screen.getByLabelText(`Write on: Stem number 0. Active. ${ROW_REACTIVATION_NOTE} Long-press to select.`),
+    ).toBeTruthy();
     expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(5); // one badge per rendered active row
     // Disabled rows are outside the default State filter — but counted above.
-    expect(screen.queryByLabelText('Write on: Stem number 1. Disabled. Long-press to select.')).toBeNull();
+    expect(
+      screen.queryByLabelText(`Write on: Stem number 1. Disabled. ${ROW_REACTIVATION_NOTE} Long-press to select.`),
+    ).toBeNull();
+  });
+
+  // w1-t6 (s2-4, D2 interim): until wave 2's provenance rule lands, week-set
+  // activation blanket-re-activates programme stems on the next weekly
+  // reflection completion or 'make this my week' (s5 #2 reproduced 11→10→11
+  // around set+clear-my-week). The row must say so — visibly and to
+  // VoiceOver — modelled on the meta caption's honesty pattern. Display/
+  // a11y only: zero behavior change (cross-cycle contract 6).
+  it('says on programme rows that deactivation is temporary: visible caption + a11y label', () => {
+    render(<StemsScreen />);
+
+    // Every fixture row is a programme stem (origin 'seed', weeks 1–3), so
+    // the caption renders on the listed rows.
+    expect(screen.getAllByText(ROW_REACTIVATION_NOTE).length).toBeGreaterThan(0);
+    expect(
+      screen.getByLabelText(`Write on: Stem number 0. Active. ${ROW_REACTIVATION_NOTE} Long-press to select.`),
+    ).toBeTruthy();
+  });
+
+  // w1-t6, library-side deactivation affordance: bulk Deactivate is one of
+  // the two library paths that write active=0 on programme rows (s2-4, s6),
+  // so the selection bar carries the same honest note when the selection
+  // includes programme stems — visibly, and on the Deactivate button's
+  // a11y label. No behavior change: Activate and Cancel are untouched.
+  it('notes on bulk Deactivate that deactivated programme stems come back', () => {
+    render(<StemsScreen />);
+
+    // Long-press enters selection mode and selects that programme row.
+    fireEvent(screen.getByLabelText(/Write on: Stem number 0\./), 'longPress');
+    expect(screen.getByText('1 selected')).toBeTruthy();
+
+    expect(screen.getByText(BULK_REACTIVATION_NOTE)).toBeTruthy();
+    expect(screen.getByLabelText(`Deactivate. ${BULK_REACTIVATION_NOTE}`)).toBeTruthy();
+
+    // A selection without programme stems does not warn: user stems keep
+    // their own active flag through week-set activation (the blanket
+    // UPDATE touches only week_number IS NOT NULL rows), so the note
+    // would be false there.
+    mockStemsOverride = [{ ...makeStem(0), origin: 'user', weekNumber: null }];
+    render(<StemsScreen />);
+    fireEvent(screen.getByLabelText(/Write on: Stem number 0\./), 'longPress');
+    expect(screen.queryByText(BULK_REACTIVATION_NOTE)).toBeNull();
+    expect(screen.getByLabelText('Deactivate')).toBeTruthy();
   });
 
   // Issue 03: switching the State filter surfaces disabled and soft-deleted
@@ -127,7 +183,9 @@ describe('StemsScreen', () => {
     // With the default State filter ('active') no disabled badges exist, so
     // the chip is the only 'Disabled' text on screen.
     fireEvent.press(screen.getByText('Disabled'));
-    expect(screen.getByLabelText('Write on: Stem number 1. Disabled. Long-press to select.')).toBeTruthy();
+    expect(
+      screen.getByLabelText(`Write on: Stem number 1. Disabled. ${ROW_REACTIVATION_NOTE} Long-press to select.`),
+    ).toBeTruthy();
 
     // Four 'All' chips: category row, State, Origin, Time of day — the week
     // filter became a picker in v13-feedback issue 07 and carries no 'All'
@@ -155,7 +213,9 @@ describe('StemsScreen', () => {
     // Fixture weeks cycle 1,2,3: active week-2 stems in the window are
     // stems 4, 7, 10 (stem 1 is the disabled week-2 stem, hidden by the
     // default State filter); week-1/3 stems are gone.
-    expect(screen.getByLabelText('Write on: Stem number 4. Active. Long-press to select.')).toBeTruthy();
+    expect(
+      screen.getByLabelText(`Write on: Stem number 4. Active. ${ROW_REACTIVATION_NOTE} Long-press to select.`),
+    ).toBeTruthy();
     expect(screen.queryByLabelText(/Write on: Stem number 0\./)).toBeNull();
     expect(screen.queryByLabelText(/Write on: Stem number 3\./)).toBeNull();
     // The trigger reflects the selection.
@@ -212,6 +272,10 @@ describe('StemsScreen', () => {
         'Write on: Evening reflection stem. Disabled. Part of the evening reflection, whether Active or Disabled. Long-press to select.',
       ),
     ).toBeTruthy();
+    // w1-t6: the temporary-deactivation note is for programme rows only —
+    // week-set activation never touches meta rows (week_number IS NULL),
+    // so warning here would be false.
+    expect(screen.queryByText(ROW_REACTIVATION_NOTE)).toBeNull();
     // The developer vocabulary never leaks as copy.
     expect(screen.queryByText(/meta/)).toBeNull();
   });
