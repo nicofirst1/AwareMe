@@ -46,27 +46,41 @@ import { rescheduleNotifications } from '@/notifications/scheduler';
  * on the press. Both surfaces mark `intro_completed` on every exit
  * (answer or skip), so no path loops the question back.
  *
+ * p8-t2 (owner-approved mechanics 2026-09-24): the card also renders
+ * inside onboarding's read-only replay (About's "Show introduction");
+ * there the surface passes `disabled`, so the two asks render disabled
+ * (the app's 0.5 disabled step) and can never reach the surface's write
+ * handlers. The standalone card never sets it.
+ *
  * Airplane-mode safe by construction: one DB write per answer, one
  * local-notification reschedule, no network.
  */
 export function EveningPracticeCard({
   onAnswer,
   onSkip,
+  disabled = false,
 }: {
   onAnswer: (include: boolean) => void;
   onSkip: () => void;
+  /** Replay only: renders the two asks disabled — the surface's writes stay inert. */
+  disabled?: boolean;
 }) {
   return (
     <ThemedView style={styles.card}>
       <ThemedText type="title">Include an evening practice?</ThemedText>
       <ThemedText type="default">
         The original method is practised morning and evening, and this app also gives you a weekly
-        reflection. The evening practice adds a short second practice to reflect on your day. 
-        The app works just as well without it.
+        reflection. The evening practice adds a short second practice: reread what you wrote in the
+        morning, then reflect on your day. The app works just as well without it.
       </ThemedText>
       <ThemedView style={styles.buttonRow}>
-        <Button label="Include evening practice" variant="primary" onPress={() => onAnswer(true)} />
-        <Button label="Skip for now" variant="text" onPress={onSkip} />
+        <Button
+          label="Include evening practice"
+          variant="primary"
+          onPress={() => onAnswer(true)}
+          disabled={disabled}
+        />
+        <Button label="Skip for now" variant="text" onPress={onSkip} disabled={disabled} />
       </ThemedView>
       <ThemedText type="small" themeColor="textSecondary">
         Skipping keeps just the morning practice. You can change this anytime in Settings.

@@ -8,8 +8,9 @@ import AboutScreen from '@/app/about';
 // render, so `useRouter`/`BackHeader` need a stub `back`/`push`. The
 // programme link goes through `expo-linking`'s `openURL`, mocked here so
 // the exact URL can be asserted without leaving the test process.
+const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
+  useRouter: () => ({ back: jest.fn(), push: mockPush }),
 }));
 jest.mock('expo-linking', () => ({
   openURL: jest.fn(),
@@ -41,15 +42,30 @@ describe('AboutScreen', () => {
     ).toBeTruthy();
   });
 
-  it('renders the three links as standard link rows (layout audit A1)', () => {
+  it('renders the four links as standard link rows (layout audit A1, p8-t2)', () => {
     render(<AboutScreen />);
 
     // A1: label left, chevron in the reserved right slot — the rows keep
     // `accessibilityRole="link"` with the row label as the accessible name.
+    // p8-t2 adds the replay entry as the first row of the block.
+    expect(screen.getByRole('link', { name: 'Show the introduction from your first launch' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'About the method' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Created by Nicolo\' Brandizzi' })).toBeTruthy();
     // The header's back affordance is the only other link on the screen.
     expect(screen.getByRole('link', { name: 'Back' })).toBeTruthy();
+  });
+
+  it('pushes the read-only onboarding replay from the Show introduction row (p8-t2)', () => {
+    render(<AboutScreen />);
+
+    // p8-t2, owner-approved mechanics: the row is one more link row; the
+    // `replay=1` route param is the whole re-entry mechanism (no new
+    // storage) — onboarding renders the flow read-only and returns here.
+    const row = screen.getByRole('link', { name: 'Show the introduction from your first launch' });
+    fireEvent.press(row);
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/onboarding', params: { replay: '1' } });
   });
 
   it('programme link opens the official URL and announces it opens the website', () => {

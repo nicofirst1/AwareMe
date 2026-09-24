@@ -6,17 +6,23 @@ import { Colors } from '@/constants/theme';
 import OnboardingScreen from '@/app/onboarding';
 
 const mockReplace = jest.fn();
+const mockBack = jest.fn();
+let mockParams: Record<string, string> = {};
 const mockSetOnboardingComplete = jest.fn();
 const mockSetIntroComplete = jest.fn();
 const mockSetSetting = jest.fn();
 const mockRequestPermission = jest.fn();
+const mockReschedule = jest.fn().mockResolvedValue(undefined);
 
 // Same pattern as settings.test.tsx: no real navigation tree in a bare
 // render, so useRouter needs a stub; `Link` renders its children inside the
 // same Text the real native Link uses, forwarding accessibility props so
 // role/label assertions exercise what ships (o11).
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ replace: mockReplace, back: jest.fn() }),
+  useRouter: () => ({ replace: mockReplace, back: mockBack }),
+  // p8-t2 replay: the route param `replay` comes from About's push; tests
+  // point `mockParams` at { replay: '1' } to enter the read-only replay.
+  useLocalSearchParams: () => mockParams,
   Link: (props: { children: ReactNode } & Record<string, unknown>) => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { createElement } = require('react');
@@ -37,7 +43,7 @@ jest.mock('@/db', () => ({
 
 jest.mock('@/notifications/scheduler', () => ({
   requestNotificationPermission: (...args: unknown[]) => mockRequestPermission(...args),
-  rescheduleNotifications: jest.fn().mockResolvedValue(undefined),
+  rescheduleNotifications: (...args: unknown[]) => mockReschedule(...args),
 }));
 
 // Native time pickers, mocked at the module boundary (same pattern as
@@ -71,9 +77,12 @@ function pickerDate(hhmm: string): Date {
 describe('OnboardingScreen', () => {
   beforeEach(() => {
     mockReplace.mockClear();
+    mockBack.mockClear();
+    mockParams = {};
     mockSetOnboardingComplete.mockClear();
     mockSetIntroComplete.mockClear();
     mockSetSetting.mockClear();
+    mockReschedule.mockClear();
     mockRequestPermission.mockReset();
   });
 
@@ -330,5 +339,131 @@ describe('OnboardingScreen', () => {
     expect(mockSetIntroComplete).toHaveBeenCalledTimes(1);
     expect(mockSetSetting).not.toHaveBeenCalled();
     expect(mockReplace).toHaveBeenCalledWith('/');
+  });
+
+  // ------------------------------------------------------------------
+  // p8-t2: read-only replay (About's "Show introduction" row, param
+  // `replay=1`). Owner-approved mechanics: the flow renders as the
+  // ordinary one; the tells are ONLY the disabled controls (steppers,
+  // reminder and evening asks; Done stays enabled) and the exits — Close
+  // instead of Skip, and every exit returns to About, not Home. Every
+  // write path is inert.
+
+  it('replay: renders the ordinary flow with Close instead of Skip, and Close writes nothing on its way back to About', () => {
+    mockParams = { replay: '1' };
+    render(<OnboardingScreen />);
+
+    // Ordinary flow: same counter, same first tab, Next still enabled.
+    expect(screen.getByLabelText('Step 1 of 5')).toBeTruthy();
+    expect(screen.getByText('About the method')).toBeTruthy();
+    expect(screen.getByText('Next')).toBeTruthy();
+    // The standing replay line was REMOVED at the owner's review — its
+    // absence is part of the approved design.
+    expect(screen.queryByText(/viewing the introduction again/i)).toBeNull();
+    expect(screen.queryByText(/Nothing here changes your settings/i)).toBeNull();
+
+    expect(screen.getByText('Close')).toBeTruthy();
+    expect(screen.queryByText('Skip')).toBeNull();
+
+    fireEvent.press(screen.getByText('Close'));
+
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockSetOnboardingComplete).not.toHaveBeenCalled();
+    expect(mockSetIntroComplete).not.toHaveBeenCalled();
+    expect(mockSetSetting).not.toHaveBeenCalled();
+    expect(mockReschedule).not.toHaveBeenCalled();
+  });
+
+  it('replay: Done stays enabled, writes nothing, and returns to About instead of Home', () => {
+    mockParams = { replay: '1' };
+    render(<OnboardingScreen />);
+
+    const done = screen.getByRole('button', { name: 'Done' });
+    expect(done.props.accessibilityState).toMatchObject({ disabled: false });
+
+    fireEvent.press(done);
+
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockSetOnboardingComplete).not.toHaveBeenCalled();
+    expect(mockSetIntroComplete).not.toHaveBeenCalled();
+    expect(mockSetSetting).not.toHaveBeenCalled();
+    expect(mockReschedule).not.toHaveBeenCalled();
+  });
+
+  it('replay: reminder and evening asks render disabled and never reach their write paths', () => {
+    mockParams = { replay: '1' };
+    render(<OnboardingScreen />);
+
+    for (const name of ['Allow reminders', 'Not now', 'Include evening practice', 'Skip for now']) {
+      expect(screen.getByRole('button', { name }).props.accessibilityState).toMatchObject({
+        disabled: true,
+      });
+    }
+
+    // Disabled on the device; the belt guards make inertness hold even
+    // under a press that the test harness manages to deliver.
+    fireEvent.press(screen.getByRole('button', { name: 'Allow reminders' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Include evening practice' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Skip for now' }));
+
+    expect(mockRequestPermission).not.toHaveBeenCalled();
+    expect(mockSetSetting).not.toHaveBeenCalled();
+    expect(mockSetIntroComplete).not.toHaveBeenCalled();
+  });
+
+  it('replay: the step-5 steppers render disabled (inert controls, p8-t2)', () => {
+    mockParams = { replay: '1' };
+    render(<OnboardingScreen />);
+
+    // Both steppers' buttons carry the shared component's disabled state
+    // (the 0.5 step renders on the component; contract pinned there).
+    expect(screen.getByLabelText('Decrease Endings per session').props.accessibilityState).toMatchObject({
+      disabled: true,
+    });
+    expect(screen.getByLabelText('Increase Timer (seconds)').props.accessibilityState).toMatchObject({
+      disabled: true,
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // p8-t2 copy pins: the approved drafts (worksheet "Agent drafts",
+  // owner-approved as rendered 2026-09-24), pinned verbatim.
+
+  it('names the daily shape on tab 1 and states the loop on tab 2 (p8-t2 approved copy)', () => {
+    render(<OnboardingScreen />);
+
+    expect(
+      screen.getByText(
+        /In practice it is small and daily: a few minutes in the morning to write, a moment in the evening to reread\./,
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'A day with the app: in the morning you write your endings. In the evening you reread what you wrote and reflect on it. Once a week, one reflection pulls the week together.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('keeps the D8 promise verbatim and adds the picks-plus-programme sentence (p8-t2 approved copy)', () => {
+    render(<OnboardingScreen />);
+
+    // D8's two sentences stay byte-verbatim; the added sentence names how
+    // the programme and the user's picks combine (the U+2019 is the
+    // worksheet's curly form — copy rules forbid the straight one).
+    expect(screen.getByText(/The programme adds guided stems each week\./)).toBeTruthy();
+    expect(screen.getByText(/You can disable the programme in Settings and pick your own stems\./)).toBeTruthy();
+    expect(
+      screen.getByText(
+        /While the programme is on, your morning practice is your picks plus that week’s guided stems\./,
+      ),
+    ).toBeTruthy();
+  });
+
+  it('names the reread in the evening ask (p8-t2 approved copy, shared card)', () => {
+    render(<OnboardingScreen />);
+
+    expect(screen.getByText(/reread what you wrote in the morning, then reflect on your day\./)).toBeTruthy();
   });
 });

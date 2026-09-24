@@ -46,4 +46,27 @@ describe('StepperRow', () => {
       expect(style.height).toBeGreaterThanOrEqual(48);
     }
   });
+
+  // p8-t2 replay contract: `disabled` renders both buttons disabled at the
+  // app's 0.5 step (the button.tsx idiom) and presses never fire; the
+  // default (prop omitted) stays enabled — settings' sole consumer keeps
+  // its behavior unchanged.
+  it('disabled renders both buttons inert at the 0.5 step; the default stays enabled', () => {
+    const onChange = jest.fn();
+    render(
+      <StepperRow label="Endings per session" value={7} rangeKey="endings_per_session" onChange={onChange} disabled />,
+    );
+
+    for (const label of ['Decrease Endings per session', 'Increase Endings per session']) {
+      const button = screen.getByLabelText(label);
+      expect(button.props.accessibilityState).toMatchObject({ disabled: true });
+      expect(StyleSheet.flatten(button.props.style).opacity).toBe(0.5);
+    }
+    fireEvent.press(screen.getByLabelText('Increase Endings per session'));
+    expect(onChange).not.toHaveBeenCalled();
+
+    render(<StepperRow label="Plain" value={7} rangeKey="endings_per_session" onChange={onChange} />);
+    expect(screen.getByLabelText('Increase Plain').props.accessibilityState).toMatchObject({ disabled: false });
+    expect(StyleSheet.flatten(screen.getByLabelText('Increase Plain').props.style).opacity).toBeUndefined();
+  });
 });

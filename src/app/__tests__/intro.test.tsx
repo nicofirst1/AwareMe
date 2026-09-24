@@ -94,9 +94,19 @@ describe('IntroScreen', () => {
     // REMOVED by owner (paragraph deleted from intro.tsx)
     // REMOVED by owner (paragraph deleted from intro.tsx)
     // The evening explanation: the original method practised morning and
-    // evening, plus what this app adds beyond it.
+    // evening, plus what this app adds beyond it. p8-t2: the middle clause
+    // names the reread (the evening half of the loop) — approved draft.
     expect(screen.getByText(/The original method is practised morning and evening/)).toBeTruthy();
     expect(screen.getByText(/weekly reflection/)).toBeTruthy();
+    expect(screen.getByText(/reread what you wrote in the morning, then reflect on your day/)).toBeTruthy();
+    // The standalone card never renders the replay-disabled state (the
+    // prop defaults false): both asks stay enabled here.
+    expect(screen.getByRole('button', { name: 'Include evening practice' }).props.accessibilityState).toMatchObject({
+      disabled: false,
+    });
+    expect(screen.getByRole('button', { name: 'Skip for now' }).props.accessibilityState).toMatchObject({
+      disabled: false,
+    });
   });
 
   it('persists "include" as evening_practice_enabled, marks the intro done, reschedules, and continues to onboarding', () => {
