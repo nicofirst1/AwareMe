@@ -1,6 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Link, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -26,7 +27,7 @@ const TERMINATORS = ['...', '—'] as const;
 type TimeKey = 'morning_notification_time' | 'evening_notification_time' | 'weekly_meta_time';
 
 /**
- * The weekday list's presentation order (2026-09-18 owner feedback, issue 14):
+ * The weekday menu's presentation order (2026-09-18 owner feedback, issue 14):
  * Monday-first, the week's working rhythm, rather than the scheduler's
  * `WEEKDAY_NAMES` whose index mirrors `Date.getDay()`. Presentation only —
  * the stored `weekly_meta_day` value is the same lowercase weekday name the
@@ -43,13 +44,13 @@ const WEEKDAY_CHOICE_ORDER: readonly WeekdayName[] = [
 ];
 
 /** "monday" → "Monday": the capitalized display the reporter asked for. */
-function capitalizeWeekday(day: WeekdayName): string {
+function capitalizeWeekday(day: string): string {
   return day.charAt(0).toUpperCase() + day.slice(1);
 }
 
 /**
- * The "pick one of a short row of options" control (on/off pairs, the
- * terminator, the theme, and now the weekly reflection day) in the
+ * The "pick one of a short row of options" control (the on/off pairs, the
+ * terminator, the theme) in the
  * screen's unified control anatomy: a pill
  * row with no borders and no fill equal to the surface it sits on, so no
  * option can render as the white square the 2026-09-17 vision audit
@@ -61,9 +62,11 @@ function capitalizeWeekday(day: WeekdayName): string {
  *
  * `accessibilityLabel` (optional) names the group's options for screen
  * readers when the visible label alone is too thin — each pill's
- * accessibility name becomes "<group label>: <option>" (e.g. "Weekly
- * reflection day: Monday"), so a screen-reader user hears which setting
- * a pill belongs to without relying on visual grouping.
+ * accessibility name becomes "<group label>: <option>" (e.g. "Programme:
+ * on"), so a screen-reader user hears which setting a pill belongs to
+ * without relying on visual grouping. The weekly reflection day's menu
+ * field carries the same pattern ("Weekly reflection day: Monday") via
+ * `DayField`.
  */
 function OptionToggle<T extends string>({
   label,
@@ -213,6 +216,85 @@ function TimeField({
 }
 
 /**
+ * The weekly reflection day's compact menu field (p10 settings port,
+ * 2026-09-24 owner feedback + mockup scope 3): one tappable trigger showing
+ * the stored day capitalized, opening the weekday menu — the app's own
+ * WeekPicker pattern (stems.tsx): a centered sheet over a scrim, one row
+ * per day, the selected day checked. Replaces the seven-pill OptionToggle
+ * row (mockup revision 2, scope 3). The trigger uses the screen's value
+ * trigger anatomy (`pillTrigger`) with the picker's trailing chevron.
+ *
+ * Semantics are the weekday list's, unchanged: the menu presents
+ * `WEEKDAY_CHOICE_ORDER` (Monday-first, the presentation-order note at the
+ * top of this file), a pick follows the same `onChange` path (stored
+ * lowercase name + the reschedule-on-change call), and an out-of-range
+ * stored name renders capitalized in the field with NO selected row (the
+ * scheduler's own sunday fallback is untouched) — the next pick writes a
+ * valid name.
+ *
+ * A11y is the WeekPicker's field pattern: the trigger reads
+ * "<group label>: <option>" ("Weekly reflection day: Monday") and carries
+ * `expanded`; menu rows carry the day name and the selected state.
+ */
+function DayField({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const theme = useTheme();
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  const display = capitalizeWeekday(value);
+
+  return (
+    <View>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`Weekly reflection day: ${display}`}
+        accessibilityState={{ expanded: open }}
+        style={[styles.pillTrigger, styles.dayFieldTrigger, { backgroundColor: theme.backgroundSelected }]}
+      >
+        <ThemedText type="default">{display}</ThemedText>
+        <Ionicons name="chevron-down-outline" size={16} color={theme.textSecondary} />
+      </Pressable>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
+        <Pressable style={styles.dialogScrim} onPress={close} accessibilityLabel="Close weekly reflection day picker">
+          {/* Absorbs presses on the sheet's blank area so only the scrim and
+              the options close or change the picker (the WeekPicker idiom). */}
+          <View
+            style={[styles.daySheet, { backgroundColor: theme.backgroundElement }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <ThemedText type="default">Weekly reflection day</ThemedText>
+            <ScrollView style={styles.daySheetScroll}>
+              {WEEKDAY_CHOICE_ORDER.map((day) => {
+                const selected = day === value;
+                return (
+                  <Pressable
+                    key={day}
+                    onPress={() => {
+                      onChange(day);
+                      close();
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={capitalizeWeekday(day)}
+                    accessibilityState={{ selected }}
+                    style={styles.dayOption}
+                  >
+                    <ThemedText type="small" style={selected ? { color: theme.accent } : undefined}>
+                      {capitalizeWeekday(day)}
+                    </ThemedText>
+                    {selected && <Ionicons name="checkmark" size={16} color={theme.accent} />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
+/**
  * Settings (§7): every tunable, its stated range, persisted one key at a
  * time via `Repository.setSetting` (JSON-encoded in the `settings` table,
  * `updated_at` stamped per write — the existing settings-table pattern, no
@@ -226,19 +308,25 @@ function TimeField({
  * feedback) via `@react-native-community/datetimepicker`; the time picker
  * can only emit a Date, and `isValidHHMM` remains the validation boundary
  * at the storage edge (`saveTime`) before any key is written. The weekly
- * reflection day is back to an in-app weekday list (2026-09-18 owner
- * feedback, issue 14: the native picker opens a calendar, and the reporter
- * wants weekday names to pick from, capitalized) — one more row of the
- * screen's `OptionToggle` pills. Its stored value stays the lowercase
- * weekday name the scheduler consumes (docs/spec.md:316); the list only changes
- * which name is picked. An out-of-range stored name renders no selected
- * pill (the scheduler's own sunday fallback is untouched); the reschedule
- * on change contract is untouched.
+ * reflection day is a compact menu field (p10 settings port, 2026-09-24
+ * owner feedback: the seven-pill row gave way to one tappable field
+ * opening the day list — the app's own WeekPicker pattern, `DayField`
+ * below). Its stored value stays the lowercase
+ * weekday name the scheduler consumes (docs/spec.md:316); the menu only changes
+ * which name is picked, in the Monday-first presentation order the
+ * 2026-09-18 feedback set (issue 14). An out-of-range stored name renders
+ * no selected row (the scheduler's own sunday fallback is untouched); the
+ * reschedule on change contract is untouched.
  *
  * Sub-groups are inset cards (2026-09-16 owner feedback: the screen lacked
  * visual separation between groups) using the shared `Card`, with the
  * existing `SectionHeader` per group. Structure only — no setting moved
- * between keys.
+ * between keys. p10 (2026-09-24): the cards stay, and every card carries
+ * ONE uniform fill — the shared `Card`'s `backgroundElement` (#fcebd4 in
+ * light, the mockup's exact cream; no new token). The in-card containers
+ * (`setting`, `section`, `chipRow`, `windowRow`) render transparent so no
+ * block repaints the card with the page cream — the patchy tints the
+ * owner's screenshot pass flagged.
  *
  * Controls share one anatomy (2026-09-17 audit, defect C): pill shapes
  * (`Radius.chip`) with no borders and no fill equal to the surface they
@@ -269,14 +357,12 @@ export default function SettingsScreen() {
   const router = useRouter();
   const repo = useMemo(() => getRepository(), []);
   const [settings, setSettings] = useState<Settings>(() => repo.getSettings());
-  const [savedNotice, setSavedNotice] = useState(false);
   const [wiping, setWiping] = useState(false);
   const [programmeDialogVisible, setProgrammeDialogVisible] = useState(false);
 
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => {
     repo.setSetting(key, value);
     setSettings((prev) => ({ ...prev, [key]: value }));
-    setSavedNotice(true);
   };
 
   /**
@@ -492,13 +578,7 @@ export default function SettingsScreen() {
                 </ThemedText>
                 <Hint>A weekly reminder to sit with the week&apos;s writing, on one day at an exact time.</Hint>
                 <ThemedText type="eyebrow">Day</ThemedText>
-                <OptionToggle
-                  accessibilityLabel="Weekly reflection day"
-                  options={WEEKDAY_CHOICE_ORDER}
-                  value={settings.weekly_meta_day as WeekdayName}
-                  display={capitalizeWeekday}
-                  onChange={setWeeklyDay}
-                />
+                <DayField value={settings.weekly_meta_day} onChange={setWeeklyDay} />
                 <TimeField
                   label="Time"
                   accessibilityLabel="Weekly notification time"
@@ -572,21 +652,20 @@ export default function SettingsScreen() {
             </Card>
           </ThemedView>
 
-          {savedNotice && (
-            <ThemedText type="small" themeColor="textSecondary">
-              Saved.
-            </ThemedText>
-          )}
-
-          {/* accessibilityRole="link" + explicit label: the same Link
-              convention index.tsx's rows use (BackHeader documents it). */}
+          {/* The About row (p10 settings port): the /about-method link as a
+              full-width row affordance — 44pt-min tappable height, trailing
+              chevron, hairline rules — index.tsx's link-row idiom
+              (accessibilityRole="link" + explicit label, BackHeader's
+              convention; the chevron alone carries the affordance, the
+              label stays the visible text). */}
           <Link
             href="/about-method"
-            style={styles.navLink}
+            style={[styles.navLink, { borderColor: theme.border }]}
             accessibilityRole="link"
             accessibilityLabel="About the method"
           >
             <ThemedText type="default">About the method</ThemedText>
+            <Ionicons name="chevron-forward-outline" size={16} color={theme.textSecondary} />
           </Link>
 
           <ThemedView style={styles.group}>
@@ -669,8 +748,13 @@ const styles = StyleSheet.create({
   // One setting = control + its hint, held together by the 4pt
   // label-to-control gap (LC3); sub-blocks inside a card sit 8pt apart
   // (cardGap), groups 24pt apart via scrollContent's gap (section gap).
+  // p10: the in-card containers render transparent — the card owns the
+  // ONE uniform fill (its backgroundElement); a ThemedView's default
+  // background repaint here is the patchy tint the owner's screenshots
+  // showed. Same for chipRow/windowRow/section below.
   setting: {
     gap: Spacing.one,
+    backgroundColor: 'transparent',
   },
   group: {
     gap: Spacing.two,
@@ -680,16 +764,19 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: Spacing.one,
+    backgroundColor: 'transparent',
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.one,
+    backgroundColor: 'transparent',
   },
   windowRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+    backgroundColor: 'transparent',
   },
   // The Android trigger shows the stored "HH:MM" verbatim and opens the
   // system dialog; iOS renders the compact native picker instead. The pill
@@ -703,6 +790,34 @@ const styles = StyleSheet.create({
     borderRadius: Radius.chip,
     minHeight: MinTouchTarget,
     justifyContent: 'center',
+  },
+  // The day field's trigger (p10): the pillTrigger anatomy plus the
+  // WeekPicker's trailing-chevron row shape — a compact, self-sizing
+  // field (the mockup's 150pt-min field), not a full-width bar.
+  dayFieldTrigger: {
+    alignSelf: 'flex-start',
+    minWidth: 150,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  daySheet: {
+    maxHeight: '70%',
+    borderRadius: Radius.medium,
+    padding: Spacing.three,
+    gap: Spacing.one,
+  },
+  daySheetScroll: {
+    flexGrow: 0,
+  },
+  dayOption: {
+    minHeight: MinTouchTarget,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.one,
+    paddingHorizontal: Spacing.two,
   },
   optionPill: {
     minHeight: MinTouchTarget,
@@ -741,8 +856,16 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.four,
   },
+  // The About row (p10): full-width link row with the hairline rules the
+  // mockup draws above and below it — 44pt-min tappable height, label left,
+  // trailing chevron right (borderColor arrives inline from the theme).
   navLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
     minHeight: MinTouchTarget,
-    textAlignVertical: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
 });
