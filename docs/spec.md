@@ -106,7 +106,7 @@ CREATE TABLE stems (
   weight            REAL NOT NULL DEFAULT 1.0, -- vestigial since the 2026-09-14 morning/evening pivot; no longer read by selection (6.2)
   active            INTEGER NOT NULL DEFAULT 1,-- 0 = archived, excluded from selection
   activation_provenance TEXT NOT NULL DEFAULT 'user', -- 'programme' | 'user' (2026-09-23 addition, ADR-0007): who last set `active`; automation activates only never-touched stems
-  time_of_day       TEXT,                      -- 'morning' | 'evening' | NULL (2026-09-14 addition); pre-amendment practice tag; programme selection reads week_number instead (6.2)
+  time_of_day       TEXT,                      -- 'morning' | 'evening' | NULL (2026-09-14 addition); pre-amendment practice tag; programme selection reads week_number instead (6.2); the two evening review meta-stems carry 'evening' (2026-09-17, 5.4); the weekly meta-stem stays NULL (unlisted, 5.4)
   week_number       INTEGER,                   -- 1..30, official programme block (2026-09-15 addition, ADR-0005); NULL for non-programme stems
   is_weekly_meta    INTEGER NOT NULL DEFAULT 0,-- 1 = the official weekly reflection stem (5.4, 6.5) (2026-09-15 addition)
   created_at        TEXT NOT NULL,
@@ -218,7 +218,7 @@ The v1 original list (26 stems) is **retired**: on fresh installs it is seeded s
 
 ### 5.4 Meta-stems for review
 
-Used in review mode (section 6.5), stored with the same terminator handling. Meta-stems carry `time_of_day = NULL`. **2026-09-15 amendment (ADR-0005):** the first stem below is the official weekly reflection stem — migration 0004 tags it `is_weekly_meta = 1` — and it is the stem used by the *scheduled* weekly reflection (§6.5). The other two power the evening reflection practice (§6.2) on a deterministic alternating schedule. All three remain available to on-demand review:
+Used in review mode (section 6.5), stored with the same terminator handling. Meta-stems carry `time_of_day = NULL`, except the two evening reflection meta-stems, which carry `time_of_day = 'evening'` (**2026-09-17 amendment:** they are listed in the stem library, and the Evening filter MUST match them, §6.6). The weekly reflection stem stays `time_of_day = NULL` and is not listed in the stem library. **2026-09-15 amendment (ADR-0005):** the first stem below is the official weekly reflection stem — migration 0004 tags it `is_weekly_meta = 1` — and it is the stem used by the *scheduled* weekly reflection (§6.5). The other two power the evening reflection practice (§6.2) on a deterministic alternating schedule. All three remain available to on-demand review:
 
 - If any of what I wrote this week is true, it might be helpful if I
 - Reading these back, the thing I notice myself circling is
@@ -230,12 +230,13 @@ Used in review mode (section 6.5), stored with the same terminator handling. Met
 
 ### 6.1 Onboarding
 
-Four screens maximum, skippable, shown once:
+Five screens, skippable, shown once (**2026-09-17 amendment:** five tabs in this order; the evening-practice ask folded in as step 4 of 5, not a standalone pre-onboarding card):
 
-1. What sentence completion is, in under 60 words. Emphasise: write fast, do not evaluate, repetition and nonsense are fine.
-2. Credit to Branden and the method.
+1. Credit to Branden and the method: this app is built on his method, part of a larger approach aimed at increasing self-awareness.
+2. What sentence completion is, in under 60 words. Emphasise: write fast, do not evaluate, repetition and nonsense are fine.
 3. Notification permission request, with an honest explanation of the fixed daily times (§6.4). If the user declines, the app MUST remain fully usable in manual mode and MUST NOT nag.
-4. Set the morning/evening notification times (§6.4), endings per session (default 6), and timer (default 90 seconds).
+4. The evening-practice ask ("Include an evening practice?", §7). Any answer or skip completes the ask.
+5. Set the morning/evening notification times (§6.4), endings per session (default 7), and timer (default 90 seconds).
 
 ### 6.2 Stem selection
 
@@ -304,7 +305,7 @@ Three forms (ADR-0005):
 
 | Key                         | Type   | Default   | Notes                                                                                                                                               |
 | --------------------------- | ------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `endings_per_session`       | int    | 6         | Range 6 to 10                                                                                                                                       |
+| `endings_per_session`       | int    | 7         | Range 6 to 10 (default 7, 2026-09-24)                                                                                                              |
 | `timer_seconds`             | int    | 90        | Range 30 to 600                                                                                                                                     |
 | `review_timer_seconds`      | int    | 180       |                                                                                                                                                     |
 | `uncensored_mode`           | bool   | true      |                                                                                                                                                     |
@@ -316,7 +317,7 @@ Three forms (ADR-0005):
 | `stem_timer_seconds`        | int    | 60        | 2026-09-11 addition. Range 20 to 120. Only used when `stem_timer_enabled` is true                                                                   |
 | `morning_notification_time` | string | `"08:00"` | 2026-09-14 addition. Local "HH:MM"                                                                                                                  |
 | `evening_notification_time` | string | `"21:00"` | 2026-09-14 addition. Local "HH:MM"                                                                                                                  |
-| `evening_practice_enabled`  | bool   | `true`    | 2026-09-15 addition (ADR-0005). Asked once at first launch ("Include an evening practice?"); changeable in Settings. Gates the evening reflection practice (§6.2) and the evening notification (§6.4) |
+| `evening_practice_enabled`  | bool   | `true`    | 2026-09-15 addition (ADR-0005). Asked exactly once at first launch ("Include an evening practice?"): onboarding step 4 of 5 (2026-09-17); installs predating the five-tab flow are asked once via the standalone card. Changeable in Settings. Gates the evening reflection practice (§6.2) and the evening notification (§6.4) |
 | `weekly_meta_day`           | string | `"sunday"` | 2026-09-15 addition. Day of the weekly reflection notification (§6.4); any weekday name, lowercase                                                |
 | `weekly_meta_time`          | string | `"21:00"` | 2026-09-15 addition. Local "HH:MM" fire time of the weekly reflection notification                                                                 |
 | `program_week_override`     | int/null | `null`  | 2026-09-15 addition. User-selected current programme week (1–30); null = derive from history (§6.2). Cleared when the selected week's reflection completes |
@@ -428,6 +429,7 @@ Note for scheduling: if publishing to Google Play from a personal developer acco
 6. No evaluation of the user's writing anywhere in the interface. Post-session celebration and badge/streak display are not evaluation: they acknowledge history, never score, interpret, rank, or compare the user's writing itself, and MUST NOT appear during the writing phase.
 7. No stored derived values in the database.
 8. Do not change the schema without a migration and a version bump, even in development.
+9. The smallest supported screen is 320×640 @ 160dp (2026-09-24, owner-ratified support floor). Every screen MUST be fully usable at this size: no clipped controls, no unreachable actions. Overflow at this size is a defect, not a cosmetic issue.
 
 ---
 
