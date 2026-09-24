@@ -70,11 +70,11 @@ const TIME_OF_DAY_HUES: Record<'morning' | 'evening', PaletteName> = {
 };
 const PROGRAMME_ORIGIN_HUE: PaletteName = 'jade';
 
-// The library's base grouping is Active / Deactivated (p8, owner-approved
+// The library's base grouping is Active / Disabled (p8, owner-approved
 // mirror: "you can immediately see what are actives and which one are
 // not"): two group headers with counts and a collapse chevron, no
 // subtitles, Active ordered by the stable flat order (s2-1's learnable
-// sequence now lives INSIDE the Active group), Deactivated in corpus
+// sequence now lives INSIDE the Active group), Disabled in corpus
 // order. Filters narrow INSIDE the grouping and never flatten it —
 // `matchesStemFilters` stays the only predicate, and the State filter is
 // owned by the grouping itself (the sheet has no State row; the default
@@ -225,7 +225,7 @@ export default function StemsScreen() {
 
   // The list data (p8 mirror renderList): the two-group render over the
   // rows the filters already selected. Partition by state identity in the
-  // renderer; Active keeps the stable flat order (s2-1), Deactivated keeps
+  // renderer; Active keeps the stable flat order (s2-1), Disabled keeps
   // corpus order; an empty group's header skips; when both are empty the
   // FlatList's EmptyState takes over. Filters narrow inside the grouping —
   // nothing ever flattens it.
@@ -497,7 +497,7 @@ export default function StemsScreen() {
             Filters button, closed by Done, the scrim, or back. The header
             repeats the live Showing count so the sheet's changes read
             against the number they move. No State row: the Active/
-            Deactivated grouping owns that axis (p8). */}
+            Disabled grouping owns that axis (p8). */}
         <Modal visible={filtersOpen} transparent animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
           <Pressable style={styles.sheetScrim} onPress={() => setFiltersOpen(false)} accessibilityLabel="Close filters">
             <View
@@ -763,7 +763,7 @@ function GroupHeader({
   theme: Theme;
   onToggle: () => void;
 }) {
-  const title = group === 'active' ? 'Active' : 'Deactivated';
+  const title = group === 'active' ? 'Active' : 'Disabled';
   return (
     <Pressable
       onPress={onToggle}

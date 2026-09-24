@@ -49,7 +49,7 @@ const mockStems = Array.from({ length: 30 }, (_, i) => makeStem(i));
 const ROW_REACTIVATION_NOTE =
   "Deactivating is temporary: the next weekly reflection or 'Make this my week' brings this stem back.";
 const BULK_REACTIVATION_NOTE =
-  "Deactivated programme stems come back with the next weekly reflection or 'Make this my week'.";
+  "Disabled programme stems come back with the next weekly reflection or 'Make this my week'.";
 
 // v13-feedback issue 07: one test swaps the whole library for a focused
 // fixture (the evening reflection meta-stem). Null = the default 30-stem list.
@@ -137,12 +137,12 @@ describe('StemsScreen', () => {
     expect(screen.getByText(mockStems[0].text)).toBeTruthy();
   });
 
-  // p8 (owner-approved mirror): the base grouping is Active / Deactivated —
+  // p8 (owner-approved mirror): the base grouping is Active / Disabled —
   // header + count + collapse chevron, no subtitles. Active orders by the
-  // stable flat order (s2-1, now inside the group); Deactivated keeps
+  // stable flat order (s2-1, now inside the group); Disabled keeps
   // corpus order. Fixture rows are built here, never derived from the
   // shipped corpus (the round's corpus-conditional hazard).
-  it('opens on the two-group default view: Active and Deactivated, headers with counts', () => {
+  it('opens on the two-group default view: Active and Disabled, headers with counts', () => {
     mockStemsOverride = [
       makeStem(0), // seed, week 1, morning, active → the Active group (programme bucket in the flat order)
       { ...makeStem(1), origin: 'user', weekNumber: null, time_of_day: 'morning', text: 'User morning pick', active: 1 },
@@ -156,12 +156,12 @@ describe('StemsScreen', () => {
     // The two group headers, with their counts (the a11y labels are unique;
     // the bare words collide with the rows' state badges on purpose).
     expect(screen.getByLabelText('Active group: 5 stems')).toBeTruthy();
-    expect(screen.getByLabelText('Deactivated group: 1 stem')).toBeTruthy();
+    expect(screen.getByLabelText('Disabled group: 1 stem')).toBeTruthy();
     expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Deactivated').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Disabled').length).toBeGreaterThanOrEqual(1);
 
     // Document order: Active first, in the stable flat order (morning picks
-    // → programme rows → evening picks → reflection); Deactivated trails in
+    // → programme rows → evening picks → reflection); Disabled trails in
     // corpus order. No section ever flattens away and no row is dropped.
     const rowTexts = screen
       .getAllByLabelText(/^Write on:/)
@@ -178,14 +178,14 @@ describe('StemsScreen', () => {
 
   // p8: an empty group's header skips — with no deactivated rows the list
   // carries the Active group alone.
-  it('skips the Deactivated header while every row is active', () => {
+  it('skips the Disabled header while every row is active', () => {
     mockStemsOverride = [makeStem(0), { ...makeStem(1), active: 1 }];
     render(<StemsScreen />);
 
     expect(screen.getByLabelText('Active group: 2 stems')).toBeTruthy();
-    expect(screen.queryByLabelText(/^Deactivated group:/)).toBeNull();
+    expect(screen.queryByLabelText(/^Disabled group:/)).toBeNull();
     expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(1); // the header + the rows' badges
-    expect(screen.queryByText('Deactivated')).toBeNull(); // no header text anywhere
+    expect(screen.queryByText('Disabled')).toBeNull(); // no header text anywhere
   });
 
   // p8: the group header's chevron collapses its group — the rows hide,
@@ -304,7 +304,7 @@ describe('StemsScreen', () => {
   // The sheet is the inline panel's replacement (s5 #4): every control
   // renders inside the sheet's own scroll view — presence here,
   // reachability on device (capture scene 2). p8: NO State row — the
-  // Active/Deactivated grouping owns that axis; the sheet keeps Origin /
+  // Active/Disabled grouping owns that axis; the sheet keeps Origin /
   // Time of day / Programme week.
   it('filters sheet carries Origin, Time of day, and the week picker — and no State row', () => {
     render(<StemsScreen />);
@@ -321,19 +321,20 @@ describe('StemsScreen', () => {
   // Issue 03 + p8: state is visible at all times — a per-row badge, the
   // state named in the accessible label. Under the grouping, deactivated
   // rows are first-class: the resting fixture stem renders in the
-  // Deactivated group with its badge and label; a soft-deleted row is
+  // Disabled group with its badge and label; a soft-deleted row is
   // neither active nor disabled (no badge, no write entry point, just the
   // dimmed 'deleted' marker, §4.1).
-  it('shows Disabled rows in the Deactivated group and keeps deleted rows dimmed and unwritable', () => {
+  it('shows Disabled rows in the Disabled group and keeps deleted rows dimmed and unwritable', () => {
     mockStemsOverride = [makeStem(0), makeStem(1), makeStem(2)];
     render(<StemsScreen />);
 
     expect(screen.getByLabelText('Write on: Stem number 0. Active. Long-press to select.')).toBeTruthy();
     expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(1); // the rendered active rows' badges (the deleted row carries none)
-    // The resting row is visible under the Deactivated group, state on the row.
-    expect(screen.getByLabelText('Deactivated group: 1 stem')).toBeTruthy();
+    // The resting row is visible under the Disabled group, state on the row.
+    expect(screen.getByLabelText('Disabled group: 1 stem')).toBeTruthy();
     expect(screen.getByLabelText('Write on: Stem number 1. Disabled. Long-press to select.')).toBeTruthy();
-    expect(screen.getByText('Disabled')).toBeTruthy();
+    // The word is no longer unique (group header + row badge share it since the p8 wording flip).
+    expect(screen.getAllByText('Disabled').length).toBeGreaterThanOrEqual(2);
 
     // Soft-deleted: visible for context, no write entry, 'deleted' marker.
     expect(screen.queryByLabelText('Write on: Stem number 2. Active. Long-press to select.')).toBeNull();
@@ -343,7 +344,7 @@ describe('StemsScreen', () => {
 
   // w1-t7 (s2's folded a11y gap): the selection-mode row label keeps the
   // Active/Disabled state and the meta caption. p8: the resting meta-stem
-  // is visible by default (the Deactivated group), so the flow needs no
+  // is visible by default (the Disabled group), so the flow needs no
   // sheet detour at all.
   it('selection-mode row labels keep the state and the meta caption', () => {
     mockStemsOverride = [makeStem(0), makeEveningMetaStem()];
@@ -389,14 +390,14 @@ describe('StemsScreen', () => {
   it('narrows inside the grouping: a filter keeps both group headers', () => {
     mockStemsOverride = [
       { ...makeStem(0), text: 'Shared active fixture stem' }, // active → Active group
-      { ...makeStem(1), origin: 'user', weekNumber: null, time_of_day: 'morning', text: 'Shared resting fixture stem', active: 0 }, // → Deactivated
+      { ...makeStem(1), origin: 'user', weekNumber: null, time_of_day: 'morning', text: 'Shared resting fixture stem', active: 0 }, // → Disabled
     ];
     render(<StemsScreen />);
 
     fireEvent.changeText(screen.getByLabelText('Search stems'), 'Shared');
     expect(screen.getByLabelText('Active group: 1 stem')).toBeTruthy();
-    expect(screen.getByLabelText('Deactivated group: 1 stem')).toBeTruthy();
-    expect(screen.getAllByText('Deactivated').length).toBeGreaterThanOrEqual(1); // its header text survives narrowing
+    expect(screen.getByLabelText('Disabled group: 1 stem')).toBeTruthy();
+    expect(screen.getAllByText('Disabled').length).toBeGreaterThanOrEqual(1); // its header text survives narrowing
     expect(screen.getByLabelText('Write on: Shared active fixture stem. Active. Long-press to select.')).toBeTruthy();
     expect(screen.getByLabelText('Write on: Shared resting fixture stem. Disabled. Long-press to select.')).toBeTruthy();
   });
@@ -440,12 +441,13 @@ describe('StemsScreen', () => {
     mockStemsOverride = [makeEveningMetaStem()];
     render(<StemsScreen />);
 
-    // p8: first-class under the Deactivated group by default (the row is
+    // p8: first-class under the Disabled group by default (the row is
     // resting; the grouping carries the state axis, so no State detour is
     // needed — or possible — to see it).
     expect(screen.getByText('Evening reflection stem')).toBeTruthy();
     expect(screen.getByText('Reflection')).toBeTruthy();
-    expect(screen.getByText('Disabled')).toBeTruthy(); // the row's badge — the only 'Disabled' text on this fixture
+    // Header + row badge both render the word since the p8 wording flip.
+    expect(screen.getAllByText('Disabled').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('Part of the evening reflection, whether Active or Disabled.')).toBeTruthy();
     expect(
       screen.getByLabelText(
@@ -454,7 +456,7 @@ describe('StemsScreen', () => {
     ).toBeTruthy();
 
     // The Evening time-of-day filter still matches it (the row is
-    // evening-tagged), and the narrowing keeps the Deactivated group —
+    // evening-tagged), and the narrowing keeps the Disabled group —
     // the grouping never flattens (p8).
     openFilters();
     // The row's own chip shares the word; the sheet's Time-of-day chip is
@@ -462,7 +464,7 @@ describe('StemsScreen', () => {
     fireEvent.press(screen.getAllByText('Evening').at(-1)!);
     fireEvent.press(screen.getByText('Done'));
     expect(screen.getByText('Evening reflection stem')).toBeTruthy();
-    expect(screen.getByLabelText('Deactivated group: 1 stem')).toBeTruthy();
+    expect(screen.getByLabelText('Disabled group: 1 stem')).toBeTruthy();
 
     // The developer vocabulary never leaks as copy.
     expect(screen.queryByText(/meta/)).toBeNull();

@@ -4,7 +4,7 @@
  * the screen component so the filter logic is directly unit-testable.
  *
  * p8 (grouping port): the predicate is UNCHANGED — bodies are byte-stable.
- * The UI's State filter row left the sheet (the Active/Deactivated grouping
+ * The UI's State filter row left the sheet (the Active/Disabled grouping
  * owns that axis), so the screen always passes 'all'; 'active'/'archived'
  * remain valid values for the module's other consumers and tests.
  */
@@ -66,7 +66,7 @@ export function matchesStemFilters(stem: FilterableStem, filters: StemLibraryFil
 }
 
 // w2-t4 (design §4.4) + p8: the practice-bucket taxonomy. Its screen
-// render was superseded by the Active/Deactivated grouping (p8), but the
+// render was superseded by the Active/Disabled grouping (p8), but the
 // buckets survive as IDENTITY: `groupForDefaultView` is the practice
 // card's counting engine ("Morning N"/"Evening N" over the active rows)
 // and `orderForFlatView` is the Active group's inner order. Grouping is a
@@ -120,7 +120,7 @@ const GROUP_ORDER: LibraryGroupKey[] = ['morning-picks', 'programme-week', 'even
 // come before the reflection — the design's sequence "morning picks →
 // Programme → evening picks → reflection". 'other' trails so no row is
 // ever dropped. Since p8 this order lives INSIDE the Active group; the
-// Deactivated group keeps corpus order.
+// Disabled group keeps corpus order.
 const FLAT_ORDER: LibraryGroupKey[] = ['morning-picks', 'programme-week', 'evening-picks', 'evening-reflection', 'other'];
 
 /**

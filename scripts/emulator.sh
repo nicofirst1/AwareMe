@@ -4,7 +4,7 @@
 # Usage:
 #   ./scripts/emulator.sh                       # boot Android AVD (awareme-audit)
 #   ./scripts/emulator.sh --fresh               # boot + delete the app's data (fresh start)
-#   ./scripts/emulator.sh --app                 # boot, then adb install the release APK
+#   ./scripts/emulator.sh --install             # boot, then adb install the release APK
 #   ./scripts/emulator.sh --force               # recreate the AVD, then boot
 #   ./scripts/emulator.sh --ios                 # boot an iOS simulator instead
 #   ./scripts/emulator.sh <avd-name> [flags]    # custom AVD name
@@ -61,7 +61,6 @@ command -v emulator >/dev/null 2>&1 || {
 # If an emulator for this AVD is already running, skip straight to post-boot actions.
 if pgrep -f "qemu.*-avd $AVD_NAME" >/dev/null 2>&1; then
   echo "An emulator for '$AVD_NAME' is already running."
-  FRESH=0; INSTALL_APK=0; BOOTED=1
 else
   IMAGE="system-images;android-36;google_apis;arm64-v8a"
   IMAGE_DIR="$ANDROID_HOME/system-images/android-36/google_apis/arm64-v8a"
@@ -95,22 +94,33 @@ else
   fi
 fi
 
+# Target devices: ANDROID_SERIAL wins; otherwise every running device
+# (the audit pool often runs several emulators at once).
+if [ -n "${ANDROID_SERIAL:-}" ]; then
+  SERIALS="$ANDROID_SERIAL"
+else
+  SERIALS="$(adb devices | awk 'NR>1 && $2=="device" {print $1}')"
+fi
+
 # --fresh: remove the app and its data so the next launch starts from scratch.
 if [ "$FRESH" = "1" ]; then
-  echo "Deleting app data ($APP_PACKAGE)..."
-  adb uninstall "$APP_PACKAGE" >/dev/null 2>&1 || echo "(app was not installed - nothing to delete)"
+  for S in $SERIALS; do
+    echo "Deleting app data on $S ($APP_PACKAGE)..."
+    adb -s "$S" uninstall "$APP_PACKAGE" >/dev/null 2>&1 || echo "($S: app was not installed - nothing to delete)"
+  done
 fi
 
 # --install: side-load the release APK if it exists.
 if [ "$INSTALL_APK" = "1" ]; then
   APK="android/app/build/outputs/apk/release/app-release.apk"
-  if [ -f "$APK" ]; then
-    adb install -r "$APK"
-    echo "Installed. Launch the app on the emulator, or run 'npm run android' for the dev build."
-  else
+  if [ ! -f "$APK" ]; then
     echo "No APK at $APK - build one with ./scripts/rebuild-android.sh first." >&2
     exit 1
   fi
+  for S in $SERIALS; do
+    adb -s "$S" install -r "$APK" && echo "Installed on $S."
+  done
+  echo "Launch the app on the emulator, or run 'npm run android' for the dev build."
 else
   echo "Now run: npm run android   (dev build + Metro)  |  --fresh wipes app data, --install side-loads the release APK"
 fi
