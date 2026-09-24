@@ -1,7 +1,7 @@
 ---
 name: mobile-app-ui-design
 description: Mobile app UI/UX design. Trigger when the user asks to design screens, create app mockups, build mobile UI components, improve existing designs, create onboarding flows, design mobile navigation, build React Native/Flutter/SwiftUI interfaces, or mentions app design, mobile UI/UX, wireframes, or screen design.
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Mobile App UI/UX Design Skill
@@ -10,12 +10,19 @@ Design mobile interfaces that are intentional, smooth, and alive — every pixel
 
 ## Project Overlay: AwareMe (this repo)
 
-*(1.1.0 adds this overlay; 1.0.0 is the upstream baseline.)* When designing for AwareMe (the "six endings" app), the repo's published design system wins over this skill's generic guidance wherever they differ:
+*(1.1.0 adds this overlay; 1.0.0 is the upstream baseline. 1.2.0 folds the p7 design-round rules: evidence labeling, state machines, budgets, generator round-trip.)* When designing for AwareMe (the "six endings" app), the repo's published design system wins over this skill's generic guidance wherever they differ:
 
 - Read `docs/design/DESIGN.md` first — the exact tokens (colors, typography, spacing, radius, components) as a Google design.md file. It is a published view: `src/constants/theme.ts` stays normative, so change it first, then re-publish (ADR-0006).
 - Take values from its tokens. Never hardcode a hex outside `theme.ts`, and never build text hierarchy with opacity — the app uses solid AA-safe inks (`textSecondary`, `textMuted`) instead.
 - The generic rules below that conflict with the published tokens (opacity-based text hierarchy, 5%-opacity accent fills, shadow recipes) do not apply to this repo.
 - Before handing design work back, run `npm run design:lint` and keep it at 0 errors.
+- Every design claim cites a research quote or a device measurement; UI with no basis is labeled [proposal], and the whole deliverable is labeled a proposal until the owner approves it.
+- Interactive-state specs state the full machine in words — every vs first transition, what persists, what stays inert — so implementers never infer a dialog's firing rule from tone (p7 w2t3: the re-enable dialog's rule cost a researcher FLAG plus arbitration because the design implied it).
+- A screen spec names which blocks are fixed chrome and which live inside the scroll, and vertical budgets compose from component heights measured in device XML captures (header, cards, strips as built) — never nominal point sizes (p7 w2t4: a ~242pt proposal arithmetic met a 516px reality).
+- Mockups render from one generator script over HTML sources (device viewports plus full-length variants), so an owner revision is one edit plus a deterministic full re-render — never hand-edited PNGs.
+- Mockup rows that display seed text resolve through the content-overlay seam: mockup text never reaches tests, code, docs, or receipts, and seed rows are named structurally ("evening starter row"), never quoted.
+- Design-doc copy bytes are proposals: where a design string's byte form conflicts with the app copy rules, the code convention wins (U+2019, no em dashes), and a verbatim-conformance pass never edits code toward the design doc's byte.
+- Before a design deliverable goes to the owner, run a mechanical compliance pass — every must-honor decision verified, research quotes checked verbatim, renders verified at the stated viewports — and log it; visual quality judgment stays an owner gate, never the coordinator's and never a vision model's.
 
 ## Core Philosophy
 

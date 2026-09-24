@@ -15,7 +15,11 @@ Target YOUR device only, and PROVE the targeting at cycle start. `ANDROID_SERIAL
 
 Before booting another emulator, require all of: free+inactive RAM ≥ 4 GB, swap free ≥ 1.5 GB, fewer than 3 running emulators. Prefer release-APK installs (no Metro) for parallel work.
 
+## Builds
+
+Parallel worktrees share one symlinked `node_modules`: concurrent release builds race the same codegen dir and the loser fails with missing generated headers (p7 t1, 2026-09-23: rnscreens codegen headers vanished mid-compile while a sibling `assembleRelease` ran). Serialize release builds across cycles — claim the build as part of your device-lock work or stagger; retry a codegen-header failure only after the sibling build settles, inside the cap, and disclose the retry.
+
 ## Pool hygiene
 
-- Locks are per device: `LOCK-CLAIM: emulator-5556-lock` (earliest-in-file wins, same discipline as SKILL.md). The coordinator may designate 5554-class shared devices read-only-reserved.
+- Locks are per device: `LOCK-CLAIM: emulator-5556-lock` (earliest-in-file wins, same discipline as SKILL.md; the claim field carries the resource in the pools-file form — resource-in-note variants are naming drift the coordinator folds back into one convention). The coordinator may designate 5554-class shared devices read-only-reserved.
 - `pm clear` the app between occupants of a pooled device, or use ephemeral clones for hard isolation.
