@@ -49,6 +49,10 @@ For color/layout claims: name the palette token from `src/constants/theme.ts` yo
 
 User-visible copy, issue text, reports, hub lines: curly apostrophes, no em dashes, plain words. Commit only original example content (spec §5.1).
 
+## Mockup-first rule (ADR-0008, standing)
+
+Every design change ships an HTML mockup first, and the owner's agreement on the mockup gates any application code. Visual changes: the design.md + HTML mockup pipeline (device-accurate sizes, example data, §5.1 discipline). Logic changes with a visual surface: an HTML mirror page running the real pure functions 1:1 over example data; the owner tries it in the browser; the agreed logic ports back into the one module + tests. Mockups/mirrors live in `.coordination/<round>-design/`.
+
 ## Round protocol (delegated cycles)
 
 The round hub (`.coordination/<round>.md`) is the durable record: timestamped one-line transitions, append-only. Blockers are FLAG lines, never notes. Heartbeat every ~30 min of work. Duration claims (elapsed, budget, lateness) are read from the shell clock (`date`) at post time, never estimated. Check the line count after every append (`wc -l` before and after). The coordinator side (amendment snapshots, hub backup, merge gates, PLAN.md lifecycle) lives in `round-ops.md`.
@@ -70,3 +74,6 @@ Full-app visual audits use the vision audit swarm: `vision-audit-swarm.md`.
 ## Lessons
 
 Appended by the coordinator at round close from methodology-audit findings.
+
+- p7 (2026-09-23): copy checks had a character-form blind spot — every copy pass checked tone (§13.4) and content (§5.1) but none checked character form, and one shipped string carried an ASCII apostrophe. User-visible strings get the byte-level check (curly apostrophes, no em dashes) alongside the tone and content greps. [t5-audit obs 2]
+- p7 (2026-09-23): charter-predicted baseline gate numbers were stale twice in one round (t3, t5); both were saved by implementer discipline. Charters stop carrying predicted gate numbers — label them "expected, verify at your base"; a READY's baseline numbers carry their base commit beside them plus a fresh measurement. [t5-audit obs 1, t4-audit]

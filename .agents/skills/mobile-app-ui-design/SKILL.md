@@ -26,6 +26,8 @@ Great mobile UI is about intentionality. Before designing anything, understand t
 
 ## Design Process
 
+STANDING RULE (ADR-0008): every design change ships an HTML mockup FIRST and the owner's agreement gates any app code. For logic changes with a visual surface, build an HTML mirror running the real pure functions over example data instead of (or alongside) static mockups. Mockups/mirrors live in `.coordination/<round>-design/`.
+
 Follow this sequence for any mobile screen:
 
 ### Step 1: Understand the Context
