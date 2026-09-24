@@ -15,6 +15,7 @@ This file is an index, not the record: each entry points at the authoritative do
 - **ADR-0005** — official Sentence Completion programme adopted (Leigh Branden permission): seeds verbatim from the official list, weekly reflection + third notification, evening toggle at first launch, Android release includes it.
 - **ADR-0006** — `docs/design/DESIGN.md` is a published view of `src/constants/theme.ts`; theme.ts stays normative, re-extract after any theme change; `npm run design:lint` gate.
 - **ADR-0007** — practice composition = user picks + gated programme block; activation provenance retires week-set blanket automation; §13.7 handling of the two write-time columns + the upgrade-time limitation + the unlock-floor gray zone (packet 7 wave 2, D1–D4).
+- **ADR-0008** — mockup-first design workflow: every design change ships an HTML mockup first, owner agreement gates any code; logic changes with a visual surface get an HTML mirror running the real pure functions over example data (owner-confirmed p7 debrief).
 
 ## Resolved open questions (§14)
 
