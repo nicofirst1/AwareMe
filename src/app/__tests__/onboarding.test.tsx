@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import { StyleSheet } from 'react-native';
 import type { ReactNode } from 'react';
 
-import { Colors } from '@/constants/theme';
+import { Colors, Spacing } from '@/constants/theme';
 import OnboardingScreen from '@/app/onboarding';
 
 const mockReplace = jest.fn();
@@ -194,6 +194,29 @@ describe('OnboardingScreen', () => {
     // the day-one programme-first default is the engine's.
     expect(mockSetSetting).toHaveBeenCalledTimes(5);
     expect(mockSetSetting).not.toHaveBeenCalledWith('programme', expect.anything());
+  });
+
+  // Ticket 01 (320x640 floor, p8 t2 review): the settings page is the
+  // flow's densest and its content exceeded the pager viewport at 320x640,
+  // clipping Done to a ~4px sliver at the page bottom (coordinate taps
+  // dead). The page must be a vertical scroll container with a
+  // flexGrow-centered content container: identical centered look when the
+  // content fits, scrollable when it cannot.
+  it('makes the settings page a vertical scroll container so Done survives the 320x640 floor', () => {
+    render(<OnboardingScreen />);
+
+    // Walk up from Done to the page's scroll container (the first node
+    // carrying contentContainerStyle; the horizontal pager has none).
+    let node = screen.getByText('Done');
+    while (node && node.props.contentContainerStyle === undefined) node = node.parent;
+    expect(node).toBeTruthy();
+    // Vertical: the pager's horizontal ScrollView must not be this node.
+    expect(node.props.horizontal).toBeFalsy();
+
+    const content = StyleSheet.flatten(node.props.contentContainerStyle);
+    expect(content.flexGrow).toBe(1);
+    expect(content.justifyContent).toBe('center');
+    expect(content.padding).toBe(Spacing.four);
   });
 
   it('pins the committed Reminders ask and drops the old reassurance paragraphs', () => {

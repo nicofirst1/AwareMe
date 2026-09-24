@@ -652,4 +652,25 @@ describe('StemsScreen', () => {
     const content = StyleSheet.flatten(node.props.contentContainerStyle);
     expect(content.paddingHorizontal).toBeUndefined();
   });
+
+  // Ticket 01 (320x640 floor, p7 w2t4): the bar's contents (label + three
+  // buttons, ~328px) exceed the 320px inner width (256px), which clipped
+  // the trailing Cancel button to a 28px sliver at the screen edge with its
+  // touch center off-screen — coordinate taps dead. The bar must wrap, so
+  // the buttons row moves to its own line instead of clipping off-screen.
+  it('wraps the bulk action bar instead of clipping Cancel at the 320px screen edge', () => {
+    render(<StemsScreen />);
+
+    fireEvent(screen.getByLabelText(/Write on: Stem number 0\./), 'longPress');
+
+    // Ascend from the Cancel label to the bar (the first node carrying a
+    // flexWrap in its flattened style).
+    let node = screen.getByText('Cancel').parent;
+    while (node && StyleSheet.flatten(node.props.style)?.flexWrap === undefined) node = node.parent;
+    expect(node).toBeTruthy();
+
+    const bar = StyleSheet.flatten(node.props.style);
+    expect(bar.flexWrap).toBe('wrap');
+    expect(bar.rowGap).toBe(Spacing.two);
+  });
 });

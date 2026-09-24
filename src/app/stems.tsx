@@ -1060,6 +1060,13 @@ const styles = StyleSheet.create({
   },
   actionBar: {
     flexDirection: 'row',
+    // Ticket 01 (320x640 floor): the bar's contents (label + three buttons,
+    // ~328px) exceed the 320px inner width (256px), which clipped the
+    // trailing Cancel button to a sliver at the screen edge with its touch
+    // center off-screen (p7 w2t4). Wrapping moves the buttons row to its own
+    // line instead of clipping; at widths where everything fits on one line
+    // the layout is unchanged.
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginHorizontal: Spacing.four,
@@ -1067,6 +1074,9 @@ const styles = StyleSheet.create({
     padding: Spacing.two,
     borderRadius: Radius.medium,
     minHeight: MinTouchTarget,
+    // The two wrapped lines' separation when the bar wraps (no-op on one
+    // line).
+    rowGap: Spacing.two,
     flexGrow: 0,
     flexShrink: 0,
   },
