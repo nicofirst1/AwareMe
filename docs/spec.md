@@ -289,7 +289,7 @@ Three forms (ADR-0005):
 - List all stems, filterable by category, origin, and active state; searchable by text. Programme stems are grouped **by week** (Week 1–30); a week's page offers a one-off practice (`origin = 'manual'`, does not move the programme position) and a "make this my week" action (sets `program_week_override`, §6.2).
 - Add: a single text field, plus optional category. Validate: non-empty after trim, under 200 characters, does not already exist verbatim. Warn but permit if it ends with terminal punctuation, since a stem should be an unfinished clause.
 - Edit: permitted. Sessions retain their snapshot (section 4.4).
-- Archive (`active = 0`) rather than delete, as the primary destructive action. Deletion is available but soft, and clearly explains that past sessions remain. Archive is genuinely persistent (2026-09-23, ADR-0007): programme automation activates only stems the user has never touched (§6.2), so a deactivated stem — programme or not — stays deactivated.
+- Archive (`active = 0`) rather than delete, as the primary destructive action. Deletion is available but soft, and clearly explains that past sessions remain. Soft-deleted stems are hidden from the library list by default (2026-09-24, p10 owner pick); a "Show deleted" filter in the filters sheet reveals them as a read-only group — never writable, restore and exports unchanged. Archive is genuinely persistent (2026-09-23, ADR-0007): programme automation activates only stems the user has never touched (§6.2), so a deactivated stem — programme or not — stays deactivated.
 - Bulk import: paste or open a `.txt` file, one stem per line, `origin = 'imported'`. Show a preview and a count before committing.
 
 ### 6.7 History

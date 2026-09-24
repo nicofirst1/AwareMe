@@ -6,13 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
 import { EmptyState } from '@/components/empty-state';
-import { AndroidMinTouchTarget, FilterChip } from '@/components/filter-chip';
+import { FilterChip } from '@/components/filter-chip';
 import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { CategoryColors, MinTouchTarget, Palette, Radius, Spacing, type CategoryName, type PaletteName } from '@/constants/theme';
+import { CategoryColors, MinTouchTarget, Radius, Spacing, type CategoryName, type PaletteName } from '@/constants/theme';
 import { getRepository, LibraryStemRow } from '@/db';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import {
   canDeactivateStems,
@@ -28,19 +27,6 @@ import { PROGRAMME_WEEK_CAP } from '@/session/program';
 function isCategoryName(c: string | null): c is CategoryName {
   return c !== null && c in CategoryColors;
 }
-
-// A distinct glyph per category (2026-09-11, ui-audit-2026-09-11.md cycle 2)
-// alongside `CategoryColors`' hue, so category is legible without relying on
-// color alone (colorblind users). Decorative: the chip's text label is the
-// accessible name, this is a redundant visual cue, not the only one.
-const CATEGORY_ICON: Record<CategoryName, keyof typeof Ionicons.glyphMap> = {
-  awareness: 'eye-outline',
-  self_acceptance: 'heart-outline',
-  responsibility: 'shield-checkmark-outline',
-  assertiveness: 'megaphone-outline',
-  purpose: 'compass-outline',
-  integrity: 'ribbon-outline',
-};
 
 type OriginFilter = 'all' | LibraryStemRow['origin'];
 type CategoryFilter = 'all' | string;
@@ -59,11 +45,10 @@ const WEEK_OPTIONS: { label: string; value: WeekFilter }[] = [
 
 // The hue-bearing filter options (v13-feedback issue 07, owner feedback
 // "morning and programme have no color"): time-of-day and the programme
-// origin carry a Palette hue the way the category chips already do. Neutral
-// options (All, Mine, Imported, Unset, the State row) stay uncolored: the
-// hue marks the dimension, not every choice.
-// Issue 08: the same mapping now also colors the per-stem chips on the
-// library rows, so a tag and its filter can never drift apart.
+// origin carry a Palette hue the way the category chips do. Neutral
+// options (All, Mine, Imported, Unset) stay uncolored: the hue marks the
+// dimension, not every choice. p10 flat port: the hue lives in the filter
+// sheet alone — rows carry no chips.
 const TIME_OF_DAY_HUES: Record<'morning' | 'evening', PaletteName> = {
   morning: 'amber',
   evening: 'indigo',
@@ -82,14 +67,19 @@ const PROGRAMME_ORIGIN_HUE: PaletteName = 'jade';
 // Supersedes the p7 §4.4 practice-first default (see docs/DECISIONS.md,
 // Superseded).
 //
-// Provenance is identity (D2): per-row chips display origin — programme
-// rows read jade "Programme", weekless seed rows are the "Starter set"
-// (D7's relabel; s1-F10's week-on-row dies at the root: the week lives
-// once, in the group header and the weeks browser). Under the engine,
-// deactivating a programme row is the user's own choice that no automation
-// reverses, so the w1-t6 temporary-deactivation note retires everywhere
-// (its caption, its a11y appends, and the interim bulk copy) — the D5
-// at-least-one guard is untouched (contract 1).
+// Provenance is identity (D2): each flat row names its origin once, as the
+// quiet meta line under the text — Programme (weeked seed), Starter set
+// (D7's relabel of weekless seed), Mine, Imported, Reflection. p10 flat
+// port (owner-approved mockup): rows carry NO chips of any kind — category
+// and time of day live in the filter sheet, the group header is the state
+// — and rows separate by hairline dividers, not card fills or edge tints.
+// Soft-deleted rows hide behind the sheet's Show-deleted toggle and render
+// in `textMuted` (the silhouette token, never an opacity dim); they stay
+// non-writable exactly as before.
+// Under the engine, deactivating a programme row is the user's own choice
+// that no automation reverses, so the w1-t6 temporary-deactivation note
+// stays retired everywhere — the D5 at-least-one guard is untouched
+// (contract 1).
 
 // The practice card's copy (p8 owner-approved rounds 1-3): counts only —
 // collapsed one line ("Currently active N"), expanded two plain lines
@@ -104,10 +94,16 @@ const PROGRAMME_ORIGIN_HUE: PaletteName = 'jade';
 const SHEET_MAX_HEIGHT = '70%';
 
 type ListEntry =
-  | { kind: 'header'; key: string; group: 'active' | 'deactivated'; count: number; collapsed: boolean }
-  | { kind: 'stem'; key: string; stem: LibraryStemRow };
+  | { kind: 'header'; key: string; group: GroupName; count: number; collapsed: boolean }
+  | {
+      kind: 'stem';
+      key: string;
+      stem: LibraryStemRow;
+      /** p10: a group's last row drops its hairline divider. */
+      lastInGroup?: boolean;
+    };
 
-type GroupName = 'active' | 'deactivated';
+type GroupName = 'active' | 'deactivated' | 'deleted';
 
 /**
  * The stem library (§6.6): opens on the practice-first default view (the
@@ -140,6 +136,12 @@ export default function StemsScreen() {
   const [weekFilter, setWeekFilter] = useState<WeekFilter>('all');
   // w2-t4 (s5 #4): the filters live in a bottom sheet, not an inline panel.
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // p10 (owner pick): soft-deleted stems hide from the default list; this
+  // single-select chip (not an on/off pill pair) reveals them as a read-only
+  // tail group. Not a badge term: the Filters button counts the five
+  // narrowing filters only — the gate is a view toggle, not a narrowing
+  // filter (the mockup's filtered flag names exactly the five).
+  const [showDeleted, setShowDeleted] = useState(false);
   // The practice card (§4.2, p8 counts-only shape): collapsed by default —
   // one line, never a page.
   const [practiceExpanded, setPracticeExpanded] = useState(false);
@@ -156,15 +158,17 @@ export default function StemsScreen() {
     });
   }, []);
 
-  // s2-12 (w2-t4): the category chips derive from the stems that match all
-  // OTHER active filters (this stem's own category excluded), so a chip can
-  // never AND the list to empty, and a category whose only visible rows are
-  // gone offers no chip.
+  // s2-12 (w2-t4): the category chips derive from the NON-DELETED stems that
+  // match all OTHER active filters (this stem's own category excluded), so a
+  // chip can never AND the list to empty, and a category whose only visible
+  // rows are gone offers no chip. p10: deleted rows never offer chips — the
+  // derivation is showDeleted-independent (the mockup's visibleCategories).
   const categories = useMemo(
     () =>
       Array.from(
         new Set(
           stems
+            .filter((s) => s.deleted_at === null)
             .filter((s) =>
               matchesStemFilters(s, {
                 query,
@@ -182,12 +186,21 @@ export default function StemsScreen() {
     [stems, query, originFilter, timeOfDayFilter, weekFilter],
   );
 
+  // p10: the deleted gate — soft-deleted rows leave the visible universe
+  // unless Show deleted is on. "Showing N of M" counts this universe (the
+  // mockup's 33-of-33 / 36-of-36 derivation): the numbers never promise
+  // rows the list will not show.
+  const universe = useMemo(
+    () => (showDeleted ? stems : stems.filter((s) => s.deleted_at === null)),
+    [stems, showDeleted],
+  );
+
   const filtered = useMemo(
     () =>
-      stems.filter((s) =>
+      universe.filter((s) =>
         matchesStemFilters(s, { query, activeFilter: 'all', originFilter, categoryFilter, timeOfDayFilter, weekFilter }),
       ),
-    [stems, query, originFilter, categoryFilter, timeOfDayFilter, weekFilter],
+    [universe, query, originFilter, categoryFilter, timeOfDayFilter, weekFilter],
   );
 
   // The practice composition's counts (p8): the card counts the active,
@@ -223,28 +236,39 @@ export default function StemsScreen() {
     [query, originFilter, categoryFilter, timeOfDayFilter, weekFilter],
   );
 
-  // The list data (p8 mirror renderList): the two-group render over the
-  // rows the filters already selected. Partition by state identity in the
-  // renderer; Active keeps the stable flat order (s2-1), Disabled keeps
-  // corpus order; an empty group's header skips; when both are empty the
-  // FlatList's EmptyState takes over. Filters narrow inside the grouping —
-  // nothing ever flattens it.
+  // The list data (p8 mirror renderList; p10 flat port): the grouped render
+  // over the rows the filters already selected, plus the p10 tail group —
+  // soft-deleted rows reach the list ONLY through the Show-deleted gate
+  // (they are outside `universe` otherwise). Partition by state identity in
+  // the renderer; Active keeps the stable flat order (s2-1), Disabled and
+  // Deleted keep corpus order; an empty group's header skips; when all are
+  // empty the FlatList's EmptyState takes over. Filters narrow inside the
+  // grouping — nothing ever flattens it.
   const listData = useMemo((): ListEntry[] => {
-    const active = filtered.filter((s) => s.active === 1);
-    const deactivated = filtered.filter((s) => s.active !== 1);
+    const active = filtered.filter((s) => s.active === 1 && s.deleted_at === null);
+    const deactivated = filtered.filter((s) => s.active !== 1 && s.deleted_at === null);
+    const deleted = filtered.filter((s) => s.deleted_at !== null);
     const entries: ListEntry[] = [];
     if (active.length > 0) {
       const collapsed = collapsedGroups.has('active');
       entries.push({ kind: 'header', key: 'hdr-active', group: 'active', count: active.length, collapsed });
       if (!collapsed) {
-        for (const s of orderForFlatView(active)) entries.push({ kind: 'stem', key: s.id, stem: s });
+        const rows = orderForFlatView(active);
+        rows.forEach((s, i) => entries.push({ kind: 'stem', key: s.id, stem: s, lastInGroup: i === rows.length - 1 }));
       }
     }
     if (deactivated.length > 0) {
       const collapsed = collapsedGroups.has('deactivated');
       entries.push({ kind: 'header', key: 'hdr-deactivated', group: 'deactivated', count: deactivated.length, collapsed });
       if (!collapsed) {
-        for (const s of deactivated) entries.push({ kind: 'stem', key: s.id, stem: s });
+        deactivated.forEach((s, i) => entries.push({ kind: 'stem', key: s.id, stem: s, lastInGroup: i === deactivated.length - 1 }));
+      }
+    }
+    if (deleted.length > 0) {
+      const collapsed = collapsedGroups.has('deleted');
+      entries.push({ kind: 'header', key: 'hdr-deleted', group: 'deleted', count: deleted.length, collapsed });
+      if (!collapsed) {
+        deleted.forEach((s, i) => entries.push({ kind: 'stem', key: s.id, stem: s, lastInGroup: i === deleted.length - 1 }));
       }
     }
     return entries;
@@ -346,6 +370,7 @@ export default function StemsScreen() {
           return (
             <StemRow
               item={item.stem}
+              divider={!item.lastInGroup}
               theme={theme}
               router={router}
               selectionMode={selectionMode}
@@ -405,30 +430,11 @@ export default function StemsScreen() {
         </ThemedView>
 
         {/* s2-6: the filtered count, always visible above the list — the
-            one number the library's headline owes the user. */}
+            one number the library's headline owes the user. p10: it counts
+            the visible universe (soft-deleted rows leave it by default). */}
         <ThemedText type="small" themeColor="textSecondary" style={styles.stateSummary}>
-          {`Showing ${filtered.length} of ${stems.length}`}
+          {`Showing ${filtered.length} of ${universe.length}`}
         </ThemedText>
-
-        {categories.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.categoryScrollContainer}
-            contentContainerStyle={styles.categoryScroll}
-          >
-            <FilterChip label="All" selected={categoryFilter === 'all'} onPress={() => setCategoryFilter('all')} />
-            {categories.map((c) => (
-              <FilterChip
-                key={c}
-                label={c}
-                selected={categoryFilter === c}
-                onPress={() => setCategoryFilter(c)}
-                category={isCategoryName(c) ? c : undefined}
-              />
-            ))}
-          </ScrollView>
-        )}
 
         {selectionMode && (
           <ThemedView style={[styles.actionBar, { backgroundColor: theme.backgroundElement }]}>
@@ -449,19 +455,20 @@ export default function StemsScreen() {
           </ThemedText>
         )}
 
-        {/* The practice card is the list scroll's HEADER (design §4: "one
-            scroll with a stable order" — the card is the screen's opening
+        {/* The practice counts row is the list scroll's HEADER (design §4:
+            "one scroll with a stable order" — it is the screen's opening
             view and scrolls away; the list takes the screen for browsing.
             Fixed above the scroll stay only the controls the user needs
-            while browsing: search, the always-visible Showing line (s2-6),
-            and the category strip. */}
+            while browsing: search and the always-visible Showing line
+            (s2-6). p10: the card is a flat tappable row — the hairline
+            divider carries the boundary the fill used to imply. */}
         <FlatList<ListEntry>
           data={listData}
           keyExtractor={(item) => item.key}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={<EmptyState message="No stems match." />}
           ListHeaderComponent={
-            <ThemedView style={[styles.practiceCard, { backgroundColor: theme.backgroundElement }]}>
+            <ThemedView style={[styles.practiceCard, { borderBottomColor: theme.border }]}>
               <Pressable
                 onPress={() => setPracticeExpanded((v) => !v)}
                 accessibilityRole="button"
@@ -496,8 +503,11 @@ export default function StemsScreen() {
             pattern): every filter control in one scroll view, opened by the
             Filters button, closed by Done, the scrim, or back. The header
             repeats the live Showing count so the sheet's changes read
-            against the number they move. No State row: the Active/
-            Disabled grouping owns that axis (p8). */}
+            against the number they move. p10: the sheet is the category
+            chips' ONLY home (the list's strip is retired — its edge-clip
+            defect dies with it), and the Show-deleted row is the deleted
+            gate's toggle. No State row: the Active/Disabled grouping owns
+            that axis (p8). */}
         <Modal visible={filtersOpen} transparent animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
           <Pressable style={styles.sheetScrim} onPress={() => setFiltersOpen(false)} accessibilityLabel="Close filters">
             <View
@@ -506,7 +516,7 @@ export default function StemsScreen() {
             >
               <View style={styles.sheetHeader}>
                 <View style={styles.sheetHeaderTitles}>
-                  <ThemedText type="default">{`Showing ${filtered.length} of ${stems.length}`}</ThemedText>
+                  <ThemedText type="default">{`Showing ${filtered.length} of ${universe.length}`}</ThemedText>
                 </View>
                 <View style={styles.sheetHeaderButtons}>
                   <Button label="Clear filters" onPress={clearAllFilters} variant="text" style={styles.sheetClearButton} />
@@ -514,7 +524,18 @@ export default function StemsScreen() {
                 </View>
               </View>
               <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetScrollContent}>
-                <WeekPicker value={weekFilter} onChange={setWeekFilter} />
+                {/* p10: the category chips' only home. The chips derive from
+                    the non-deleted rows the OTHER filters select (s2-12), so
+                    a chip can never AND the list to empty. */}
+                <FilterRow
+                  label="Categories"
+                  options={[
+                    { value: 'all', label: 'All' },
+                    ...categories.map((c) => ({ value: c, label: c, category: isCategoryName(c) ? c : undefined })),
+                  ]}
+                  value={categoryFilter}
+                  onChange={setCategoryFilter}
+                />
 
                 <FilterRow
                   label="Origin"
@@ -541,6 +562,20 @@ export default function StemsScreen() {
                   value={timeOfDayFilter}
                   onChange={(v) => setTimeOfDayFilter(v as TimeOfDayFilter)}
                 />
+
+                <WeekPicker value={weekFilter} onChange={setWeekFilter} />
+
+                {/* p10: the deleted gate — one selected-state chip, not an
+                    on/off pill pair. On: the read-only "Deleted" tail group
+                    renders under Disabled; rows in textMuted, never
+                    writable. Not reset by Clear filters (the mockup's
+                    clear-filters resets the five narrowing terms only). */}
+                <FilterRow
+                  label="Deleted"
+                  options={[{ value: 'on', label: 'Show deleted' }]}
+                  value={showDeleted ? 'on' : 'off'}
+                  onChange={() => setShowDeleted((v) => !v)}
+                />
               </ScrollView>
             </View>
           </Pressable>
@@ -550,27 +585,13 @@ export default function StemsScreen() {
   );
 }
 
-// Calm active/inactive edge accent (§10: tint, not traffic-light
-// saturation) — a left border only, body text color is untouched so
-// readability never depends on this contrast (it's decorative, not text).
-const ACTIVE_EDGE = { light: '#8FBF93', dark: '#4A7A4E' };
-const INACTIVE_EDGE = { light: '#D9A3A0', dark: '#7A4A48' };
-
-// Issue 03: a state badge on every row, so active/resting is readable as
-// TEXT at all times, never only through the edge tint (which stays as the
-// calm per-row accent). Same hue families as the edges, one step darker
-// for the label (§10: tint, not traffic-light saturation).
-const STATE_BADGE = {
-  active: {
-    light: { bg: '#E4F0E5', text: '#3D6B43' },
-    dark: { bg: '#26372A', text: '#A6CFA9' },
-  },
-  resting: {
-    light: { bg: '#F6EAE9', text: '#7C4B47' },
-    dark: { bg: '#372A29', text: '#D0A09C' },
-  },
-} as const;
-
+// p10 flat row (the approved mockup): no card fill, no 3px edge tint, no
+// chips of any kind — the serif text, the quiet origin meta line, and the
+// reserved action column. The Active/Disabled group header owns the state
+// (its badges retire with the card); the category lives in the filter
+// sheet; origin stays as text (D2). Soft-deleted rows render in textMuted
+// (the silhouette token, never an opacity dim), keep no pencil, and stay
+// non-writable (§6.6) — visible only through the sheet's Show-deleted gate.
 const StemRow = memo(function StemRow({
   item,
   theme,
@@ -581,6 +602,7 @@ const StemRow = memo(function StemRow({
   onLongPress,
   editable = true,
   selectable = true,
+  divider = true,
 }: {
   item: LibraryStemRow;
   theme: Theme;
@@ -593,52 +615,40 @@ const StemRow = memo(function StemRow({
   /** Meaningless while `selectable` is false; the card's rows omit both. */
   selectionMode?: boolean;
   selected?: boolean;
+  /** p10: hairline divider — every row except its group's last. */
+  divider?: boolean;
 }) {
-  const scheme = useColorScheme();
-  const dark = scheme === 'dark';
   const isDeleted = item.deleted_at !== null;
-  // v13-feedback issue 07 (c06 carry-forward): the library now lists the two
-  // evening reflection meta-stems (origin 'meta'), so the row names them:
-  // the meta line's bare 'meta' is developer vocabulary. The tag carries the
-  // identity; the caption below the meta line carries the honesty: the
-  // reflection alternation reads these rows regardless of their state
-  // (listMetaStems has no active filter), so activating one is never the
-  // only path. Its state only ever gates the generic active-stem reads.
+  // v13-feedback issue 07 (c06 carry-forward): the library lists the two
+  // evening reflection meta-stems (origin 'meta'). The flat row names them
+  // on the meta line ('Reflection'), and the caption below carries the
+  // honesty: the reflection alternation reads these rows regardless of
+  // their state (listMetaStems has no active filter), so activating one is
+  // never the only path. Its state only ever gates the generic active-stem
+  // reads.
   const isMeta = item.origin === 'meta';
-  const reflectionPair = isMeta ? Palette.rose[dark ? 'dark' : 'light'] : null;
-  const edgeColor = isDeleted ? 'transparent' : (item.active ? ACTIVE_EDGE : INACTIVE_EDGE)[dark ? 'dark' : 'light'];
-  const categoryColors = isCategoryName(item.category) ? CategoryColors[item.category][dark ? 'dark' : 'light'] : null;
-  const stateBadge = isDeleted ? null : (item.active ? STATE_BADGE.active : STATE_BADGE.resting)[dark ? 'dark' : 'light'];
 
-  // Issue 08: the per-stem time-of-day and programme-origin tags render as
-  // colored chips in the same anatomy as the filter row's chips (issue 07's
-  // hue mechanism, resolved from the same TIME_OF_DAY_HUES mapping the
-  // Time-of-day filter chips read, so the row tag and its filter can never
-  // drift apart). w2-t4 (§4.5 + owner revision): the per-row identity chip
-  // drops the week number — the week lives once, in the group header and
-  // the weeks browser, so a row can never fight its own week label.
-  // Weekless seed rows are the Starter set (D7's relabel; s1-F10 dies at
-  // the root). user/imported origins stay uncolored text, as in the filter
-  // row (the hue marks the dimension, not every choice). Identity, not
-  // state — the chips show on soft-deleted rows too, which stay dimmed.
-  const timeOfDayChip = item.time_of_day
-    ? {
-        ...Palette[TIME_OF_DAY_HUES[item.time_of_day]][dark ? 'dark' : 'light'],
-        label: item.time_of_day === 'morning' ? 'Morning' : 'Evening',
-      }
-    : null;
-  const programmeChip =
-    item.origin === 'seed'
-      ? {
-          ...Palette[PROGRAMME_ORIGIN_HUE][dark ? 'dark' : 'light'],
-          label: item.weekNumber === null ? 'Starter set' : 'Programme',
-        }
-      : null;
+  // The quiet origin word (D2 display, p10 mockup): one meta line per row,
+  // no chips. The raw enums never surface as copy (issue 03's renames).
+  const originWord =
+    item.origin === 'meta'
+      ? 'Reflection'
+      : item.origin === 'seed'
+        ? item.weekNumber === null
+          ? 'Starter set'
+          : 'Programme'
+        : item.origin === 'user'
+          ? 'Mine'
+          : item.origin === 'imported'
+            ? 'Imported'
+            : null;
 
-  // Issue 03: the state is named in the accessible label too, so it never
-  // depends on seeing the badge or the edge tint.
+  // Issue 03: the state is named in the accessible label, so it never
+  // depends on seeing the group header. (Copy unchanged since p8; p10 adds
+  // the Deleted row label — the header alone can't reach a screen reader
+  // mid-list.)
   const label = isDeleted
-    ? item.text
+    ? `${item.text}. Deleted.`
     : selectionMode
       ? `${item.text}. ${item.active ? 'Active' : 'Disabled'}.${
           isMeta ? ' Part of the evening reflection, whether Active or Disabled.' : ''
@@ -651,11 +661,9 @@ const StemRow = memo(function StemRow({
     <ThemedView
       style={[
         styles.row,
-        {
-          backgroundColor: selected ? theme.accentMuted : theme.backgroundElement,
-          opacity: isDeleted ? 0.5 : 1,
-          borderLeftColor: edgeColor,
-        },
+        divider && styles.rowDivider,
+        { borderBottomColor: theme.border },
+        selected ? { backgroundColor: theme.accentMuted } : null,
       ]}
     >
       <Pressable
@@ -667,59 +675,18 @@ const StemRow = memo(function StemRow({
         accessibilityState={{ disabled: isDeleted, selected }}
         style={styles.rowMain}
       >
-        <ThemedText type="stem">{item.text}</ThemedText>
-        <ThemedView style={styles.rowMeta}>
-          {/* Issue 04: programme stems carry their §5.2 category (week→pillar
-              mapping), so this chip now lights up for them too. */}
-          {stateBadge && (
-            <ThemedView style={[styles.stateBadge, { backgroundColor: stateBadge.bg }]}>
-              <ThemedText type="small" style={{ color: stateBadge.text }}>
-                {item.active ? 'Active' : 'Disabled'}
-              </ThemedText>
-            </ThemedView>
-          )}
-          {timeOfDayChip && (
-            <ThemedView style={[styles.categoryChip, { backgroundColor: timeOfDayChip.bg }]}>
-              <ThemedText type="small" style={{ color: timeOfDayChip.text }}>
-                {timeOfDayChip.label}
-              </ThemedText>
-            </ThemedView>
-          )}
-          {reflectionPair && (
-            <ThemedView style={[styles.categoryChip, { backgroundColor: reflectionPair.bg }]}>
-              <ThemedText type="small" style={{ color: reflectionPair.text }}>
-                Reflection
-              </ThemedText>
-            </ThemedView>
-          )}
-          {categoryColors && isCategoryName(item.category) && (
-            <ThemedView style={[styles.categoryChip, { backgroundColor: categoryColors.bg }]}>
-              <Ionicons name={CATEGORY_ICON[item.category]} size={12} color={categoryColors.text} />
-              <ThemedText type="small" style={{ color: categoryColors.text }}>
-                {item.category}
-              </ThemedText>
-            </ThemedView>
-          )}
-          {programmeChip && (
-            <ThemedView style={[styles.categoryChip, { backgroundColor: programmeChip.bg }]}>
-              <ThemedText type="small" style={{ color: programmeChip.text }}>
-                {programmeChip.label}
-              </ThemedText>
-            </ThemedView>
-          )}
-          <ThemedText type="small" themeColor="textSecondary">
-            {[
-              categoryColors ? null : item.category, // shown as a colored chip instead, when we have one
-              // time_of_day and origin 'seed' render as the colored chips
-              // above (issue 08); 'meta' is never shown as copy: the
-              // Reflection tag above names the row (issue 07).
-              item.origin === 'user' ? 'Mine' : item.origin === 'imported' ? 'Imported' : null, // display-only renames (issue 03)
-              isDeleted ? 'deleted' : null,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
+        <ThemedText type="stem" style={isDeleted ? { color: theme.textMuted } : undefined}>
+          {item.text}
+        </ThemedText>
+        {originWord && (
+          <ThemedText
+            type="small"
+            themeColor={isDeleted ? undefined : 'textSecondary'}
+            style={isDeleted ? { color: theme.textMuted } : undefined}
+          >
+            {originWord}
           </ThemedText>
-        </ThemedView>
+        )}
         {isMeta && !isDeleted && (
           <ThemedText type="small" themeColor="textSecondary">
             Part of the evening reflection, whether Active or Disabled.
@@ -747,9 +714,11 @@ const StemRow = memo(function StemRow({
   );
 });
 
-// The two base groups' headers (p8, the owner-approved mirror): title +
-// count + collapse chevron, no subtitles. Tapping the header collapses or
-// expands its group; an empty group renders no header at all.
+// The three groups' headers (p8 anatomy — title + count pill + collapse
+// chevron — flat since p10): on the bare background, no card fill. Tapping
+// the header collapses or expands its group; an empty group renders no
+// header at all. The 'deleted' header exists only under the Show-deleted
+// gate, as the tail group under Disabled.
 function GroupHeader({
   group,
   count,
@@ -763,20 +732,22 @@ function GroupHeader({
   theme: Theme;
   onToggle: () => void;
 }) {
-  const title = group === 'active' ? 'Active' : 'Disabled';
+  const title = group === 'active' ? 'Active' : group === 'deactivated' ? 'Disabled' : 'Deleted';
   return (
     <Pressable
       onPress={onToggle}
       accessibilityRole="button"
       accessibilityLabel={`${title} group: ${count} ${count === 1 ? 'stem' : 'stems'}`}
       accessibilityState={{ expanded: !collapsed }}
-      style={[styles.groupHeader, { backgroundColor: theme.backgroundElement }]}
+      style={styles.groupHeader}
     >
       <ThemedText type="default">{title}</ThemedText>
       <View style={styles.groupHeaderTrailing}>
-        <ThemedText type="small" themeColor="textSecondary">
-          {count}
-        </ThemedText>
+        <ThemedView style={[styles.groupCountPill, { backgroundColor: theme.backgroundElement }]}>
+          <ThemedText type="small" themeColor="textSecondary">
+            {count}
+          </ThemedText>
+        </ThemedView>
         <Ionicons name={collapsed ? 'chevron-forward-outline' : 'chevron-down-outline'} size={18} color={theme.textSecondary} />
       </View>
     </Pressable>
@@ -790,7 +761,7 @@ function FilterRow<T extends string>({
   onChange,
 }: {
   label: string;
-  options: { value: T; label: string; hue?: PaletteName }[];
+  options: { value: T; label: string; hue?: PaletteName; category?: CategoryName }[];
   value: T;
   onChange: (v: T) => void;
 }) {
@@ -805,6 +776,7 @@ function FilterRow<T extends string>({
             key={opt.value}
             label={opt.label}
             hue={opt.hue}
+            category={opt.category}
             selected={opt.value === value}
             onPress={() => onChange(opt.value)}
           />
@@ -907,9 +879,13 @@ const styles = StyleSheet.create({
   // In-scroll header (w2-t4): the card spans the list's content column —
   // the FlatList's own contentContainerStyle padding IS the screen margin;
   // a second horizontal margin here would double-indent the card.
+  // The practice counts row, flat (p10): no fill, no radius — the row and
+  // its hairline divider ARE the card. The FlatList's own
+  // contentContainerStyle padding IS the screen margin; a second horizontal
+  // margin here would double-indent the row.
   practiceCard: {
-    padding: Spacing.three,
-    borderRadius: Radius.medium,
+    paddingVertical: Spacing.three,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   practiceCardHeader: {
     flexDirection: 'row',
@@ -944,32 +920,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.small,
     flexDirection: 'row',
     gap: Spacing.half,
-  },
-  // Fixed `height` (not `minHeight`): an unbounded horizontal ScrollView
-  // beside a flex:1 FlatList sibling collapses to zero height (2026-09-11
-  // regression, commit 375f6b3). s6's measured clip is fixed in this
-  // rebuild (w2-t4's chrome diet): the height now matches FilterChip's own
-  // floor — the chip strip is 48pt tall and its chips no longer clip.
-  // `marginHorizontal: Spacing.four` (t11, cluster 7 remainder): the strip
-  // is a full-width ScrollView, so its chips painted flush to the screen
-  // border (packet-2 p2n-25 + t6 FLAG 18:04: non-bg pixels in the last-6-px
-  // edge column of the chip band at 320dp) instead of respecting the screen
-  // margin every other block on this screen uses. Insetting the strip clips
-  // scrolling chips at the padded content column; the scroll content itself
-  // carries no horizontal padding, so the first chip stays aligned with the
-  // Search input above it (24 from the screen edge) and chips at rest are
-  // unmoved.
-  categoryScrollContainer: {
-    height: AndroidMinTouchTarget,
-    marginHorizontal: Spacing.four,
-    marginTop: Spacing.two,
-    flexGrow: 0,
-    flexShrink: 0,
-  },
-  categoryScroll: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
   },
   weekPickerTrigger: {
     minHeight: MinTouchTarget,
@@ -1024,7 +974,15 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   filterSheet: {
-    maxHeight: SHEET_MAX_HEIGHT,
+    // height (not maxHeight): the sheet's rows must stay reachable, and a
+    // % cap on an auto-height parent never re-bounds its children (measured
+    // on device: the ScrollView kept its content height, overflowed the
+    // cap, and the Show deleted row was unreachable below the clip — no
+    // flexGrow/flexShrink variant re-engaged the scroll). A definite 70%
+    // height against the full-screen scrim makes the ScrollView's flex: 1
+    // bound real: five rows nearly fill it at the 320x640 floor, and the
+    // internal scroll carries any taller content.
+    height: SHEET_MAX_HEIGHT,
     borderTopLeftRadius: Radius.medium,
     borderTopRightRadius: Radius.medium,
     padding: Spacing.four,
@@ -1052,7 +1010,11 @@ const styles = StyleSheet.create({
     minHeight: MinTouchTarget,
   },
   sheetScroll: {
-    flexGrow: 0,
+    // flex: 1 inside the sheet's definite height: the scroll area bounds
+    // itself to the space under the sheet header and scrolls when the
+    // filter rows exceed it (the p10 rows added Categories + Show deleted
+    // to the old three-row sheet). See filterSheet's note.
+    flex: 1,
   },
   sheetScrollContent: {
     gap: Spacing.two,
@@ -1094,32 +1056,39 @@ const styles = StyleSheet.create({
   list: {
     flex: 1,
   },
+  // Flat list (p10): rows sit contiguous inside their group, separated by
+  // hairline dividers — no inter-row gap; the group headers carry the
+  // breathing room (their marginTop). The container padding IS the screen
+  // margin.
   listContent: {
     padding: Spacing.four,
-    gap: Spacing.two,
   },
-  // The two base groups' header rows (p8): same list-row anatomy as the
-  // stems below (backgroundElement fill, screen padding), title + count +
-  // one quiet chevron, no subtitles. The whole row is the collapse toggle.
+  // The groups' header rows (p8 anatomy, p10 flat): title + count pill +
+  // one quiet chevron on the bare background — no fill, no radius. The
+  // whole row is the collapse toggle; marginTop separates the groups.
   groupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: MinTouchTarget,
-    marginTop: Spacing.one,
-    padding: Spacing.three,
-    borderRadius: Radius.medium,
+    marginTop: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  // The mockup's gcount: a small pill over the backgroundElement fill.
+  groupCountPill: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 1,
+    borderRadius: Radius.chip,
   },
   groupHeaderTrailing: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
   },
-  // Same shape as `Card` (backgroundElement fill, `Spacing.three` padding)
-  // plus the active/inactive edge tint `Card` has no slot for, so this stays
-  // a hand-styled `ThemedView` rather than wrapping `Card` (ui-audit-2026-
-  // 09-11.md cycle 2 done-criteria: bespoke is fine when a shared component
-  // doesn't fit, don't force it).
+  // Flat stem row (p10): no card fill, no edge tint, no chips — text, one
+  // quiet origin meta line, the reserved 44pt action column. The hairline
+  // divider (rowDivider) separates rows inside a group; the mockup's 14px
+  // vertical breathing room maps to the scale's nearest token (16).
   // `alignItems: 'flex-start'` (not 'center'): T2's measured wobble was the
   // stem-text first line centering against the row's full height, which
   // varies 48–98pt with 1-line vs 2-line meta — top-anchoring keeps the
@@ -1128,35 +1097,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    padding: Spacing.three,
-    borderRadius: Radius.medium,
-    borderLeftWidth: 3,
+    paddingVertical: Spacing.three,
     gap: Spacing.two,
+  },
+  rowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowMain: {
     flex: 1,
-    gap: Spacing.half,
-  },
-  rowMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
     gap: Spacing.one,
-  },
-  categoryChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: Spacing.one,
-    paddingVertical: 1,
-    borderRadius: Radius.chip,
-  },
-  // Same chip anatomy as `categoryChip`, state-tinted via the caller
-  // (STATE_BADGE), so the two read as one family.
-  stateBadge: {
-    paddingHorizontal: Spacing.one,
-    paddingVertical: 1,
-    borderRadius: Radius.chip,
   },
   stateSummary: {
     paddingHorizontal: Spacing.four,
