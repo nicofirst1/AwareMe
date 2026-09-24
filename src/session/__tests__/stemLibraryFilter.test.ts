@@ -82,8 +82,9 @@ describe('matchesStemFilters', () => {
 
   it('evening meta-stem rows (issue 06): origin=meta, active=0, time_of_day=evening — Evening matches under Resting/All, never under Active', () => {
     const eveningMeta = stem({ origin: 'meta', active: 0, time_of_day: 'evening' });
-    // The library's default State is Active — the meta-stems are resting,
-    // so a user must widen the State (or pick Resting) to see them.
+    // Under an 'active' State value the meta-stems are hidden (since p8 the
+    // screen passes 'all' — the grouping owns the axis — but the predicate
+    // keeps all three values, pinned here).
     expect(matchesStemFilters(eveningMeta, { ...BASE, timeOfDayFilter: 'evening' })).toBe(false);
     expect(matchesStemFilters(eveningMeta, { ...BASE, activeFilter: 'archived', timeOfDayFilter: 'evening' })).toBe(true);
     expect(matchesStemFilters(eveningMeta, { ...BASE, activeFilter: 'all', timeOfDayFilter: 'evening' })).toBe(true);
@@ -108,8 +109,9 @@ describe('matchesStemFilters', () => {
     expect(matchesStemFilters(stem({ weekNumber: 3 }), BASE)).toBe(true);
     expect(matchesStemFilters(stem({ weekNumber: null }), BASE)).toBe(true);
     expect(matchesStemFilters(stem(), BASE)).toBe(true);
-    // Under the default State filter ('active') a selected week still hides
-    // its resting stems — the two filters AND together.
+    // Under an explicit 'active' State value a selected week still hides
+    // its resting stems — the two filters AND together. (The screen passes
+    // 'all' since p8, so on device a week shows its resting rows too.)
     expect(matchesStemFilters(stem({ weekNumber: 3, active: 0 }), { ...BASE, weekFilter: 3 })).toBe(false);
   });
 
@@ -154,10 +156,11 @@ describe('canDeactivateStems', () => {
   });
 });
 
-// w2-t4 (design §4.4): the library's default view groups the practice-first
-// list out of the already-filtered rows — a VIEW, no new read path and no
-// state filtering here (matchesStemFilters stays the only state gate). The
-// helpers are pure so the grouped order is directly unit-testable.
+// w2-t4 (design §4.4) + p8: the helpers are pure so the grouped order is
+// directly unit-testable. Since p8 they are the practice CARD's counting
+// engine (groupForDefaultView) and the Active group's inner order
+// (orderForFlatView); the screen's two-group render partitions by state in
+// the renderer and never flattens.
 //
 // Corpus discipline (the round's live lesson): every fixture below is built
 // row by row in this file — no expectation derives from the shipped seed
@@ -181,7 +184,8 @@ describe('groupForDefaultView (w2-t4, design §4.4)', () => {
     const groups = groupForDefaultView(fixture(), { programmeOn: true, effectiveWeek: 1 });
     // The week-2 block is a programme row of another week: it can't sit
     // under the "Programme · Week 1" header and must not be dropped, so it
-    // trails in the 'other' bucket (headerless on screen).
+    // trails in the 'other' bucket (identity, not a rendered section — the
+    // p8 screen groups by state instead).
     expect(groups.map((g) => g.key)).toEqual(['morning-picks', 'programme-week', 'evening-reflection', 'evening-picks', 'other']);
     expect(groups.map((g) => g.stems.map((s) => s.text))).toEqual([
       ['morning pick'],
@@ -248,10 +252,10 @@ describe('groupForDefaultView (w2-t4, design §4.4)', () => {
   });
 });
 
-// w2-t4 (design §4.4): any non-default filter/query flattens the list to one
-// stable, learnable order — morning picks → programme → evening picks →
-// reflection, then anything unclassifiable. Same identity-only discipline:
-// no state filtering here.
+// w2-t4 (design §4.4) + p8: the stable order — since p8 the Active group's
+// inner sequence inside the two-group render (the screen never flattens the
+// grouping under filters anymore). Same identity-only discipline: no state
+// filtering here.
 describe('orderForFlatView (w2-t4, design §4.4)', () => {
   it('orders morning picks, programme, evening picks, reflection, then other', () => {
     const rows = [

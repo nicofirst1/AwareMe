@@ -72,6 +72,8 @@ This file is an index, not the record: each entry points at the authoritative do
 
 Weighted stem selection, the random-window scheduler, and the 2026-09-11 "fixed mode" addition (tickets 06, 09, 10) were deleted outright by ADR-0004; their entries here are historical.
 
+- **Stems library default view (2026-09-24, p8):** the p7 §4.4 practice-first grouped default ("filters never flatten the grouping" included — filters now narrow INSIDE the Active/Deactivated grouping, which owns the state axis and removed the sheet's State filter; the practice card is counts-only) is superseded by the owner-approved grouping mirror. Full record: `.scratch/stems-grouping-rework/issues/01-port-approved-taxonomy.md` + `.coordination/p8-design/TAXONOMY-PROPOSAL.md` (STATUS: APPROVED, iteration 4, "i like it like this!"); the supersession note sits on p7's `.coordination/p7-design/design.md` §4.4.
+
 - **Evening-practice skip persists the morning default (2026-09-18, v14-feedback c02):** "Skip for now" on the evening question persists `evening_practice_enabled = false` explicitly on every exit - the §7 factory default (enabled) must not survive a no-answer. Supersedes the 2026-09-16 reporter feedback that made the morning button primary; the card now asks exactly two options ("Include evening practice" / "Skip for now"). Full record: `.scratch/v14-feedback/issues/05-evening-question-two-options.md` (Comments + hub ARBITRATION 13:55).
 
 ## Parked owner arbitrations
