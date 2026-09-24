@@ -25,6 +25,8 @@ export interface Settings {
   program_week_override: number | null;
   /** Packet-7 D1 (wave 2): the ONE binary Programme gate. On, the practice is the user's picks plus the programme week block; off is the D3 state — picks only, the week stops advancing, zero automation writes. w2-t2 reads it engine-side (composition, activation funnel, completion gates); w2-t3 ships the Settings surface row. An absent row resolves ON (D8 day-one programme-first) through `getSettings`' defaults merge — and `seedIfEmpty` writes this default like every other key. */
   programme: boolean;
+  /** Packet-10 t4 (owner mockup pick, 2026-09-24): Home's nav dock starts collapsed behind one Menu button; true = the 8-tile dock is expanded. A UI-state preference stored as a plain settings KV row (DECISIONS: new settings are KV rows, not schema changes) so it persists across app opens; an absent row resolves collapsed through `getSettings`' defaults merge. */
+  home_nav_expanded: boolean;
 }
 
 /** Default settings, per docs/spec.md §7 as amended by the morning/evening pivot and the official-programme amendment (ADR-0005). Values are JSON-encoded in the settings table. */
@@ -48,4 +50,6 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   weekly_meta_time: '21:00',
   program_week_override: null,
   programme: true,
+  // Packet-10 t4: the Home dock's expanded state (default collapsed, owner pick).
+  home_nav_expanded: false,
 };

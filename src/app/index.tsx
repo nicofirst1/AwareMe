@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, Link } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Image, Linking, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Image, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
@@ -129,6 +129,12 @@ export default function HomeScreen() {
   const scheme = useColorScheme();
   const resolvedScheme = scheme === 'dark' ? 'dark' : 'light';
   const [status, setStatus] = useState<HomeStatus | null>(null);
+  // Packet-10 t4 (owner mockup pick, 2026-09-24): the nav dock collapses
+  // behind one Menu button, collapsed by DEFAULT, and the expanded state
+  // persists across app opens as a settings KV row (`home_nav_expanded`,
+  // DECISIONS: new settings are KV rows, not schema). Local state only —
+  // the store is read on focus below and written on toggle.
+  const [navExpanded, setNavExpanded] = useState(false);
 
   // Focus-based, not mount-only (2026-09-11 visual-test finding: completing
   // a session and navigating back here left the status block stale, since
@@ -147,8 +153,32 @@ export default function HomeScreen() {
       } catch {
         setStatus(null);
       }
+      // The dock's stored expanded state: re-read on focus so a fresh app
+      // open (and a return from another screen) reflects the persisted
+      // choice. Unreadable settings keep the collapsed default — the dock's
+      // state is the same class of nicety as the status line (§13.4).
+      try {
+        setNavExpanded(getRepository().getSettings().home_nav_expanded);
+      } catch {
+        // keep the default (collapsed)
+      }
     }, []),
   );
+
+  // One toggle for the whole dock (owner pick: collapsing only the
+  // stems/history/review trio would leave five always-up tiles doing the
+  // job the toggle retires — PROPOSAL.md scope 4). The write is best-effort:
+  // if the DB is unavailable the toggle still works for this session and
+  // the next open falls back to the stored/default state (§13.4).
+  const toggleNavDock = useCallback(() => {
+    const next = !navExpanded;
+    setNavExpanded(next);
+    try {
+      getRepository().setSetting('home_nav_expanded', next);
+    } catch {
+      // Session-only toggle; persistence is a nicety, never a blocker (§13.4).
+    }
+  }, [navExpanded]);
 
   const currentPeriod = currentPeriodForRender();
 
@@ -192,6 +222,11 @@ export default function HomeScreen() {
     fontSize: taglineFontSize,
     lineHeight: taglineLineHeight,
   };
+  // The Menu toggle rides the same dock scale as the tiles (fixed-dp chrome
+  // yields below the 320dp floor; mockup menubar: 14px label, 13px chevron).
+  const menuLabelFontSize = Math.round(14 * headerScale * 10) / 10;
+  const menuLabelLineHeight = Math.round(20 * headerScale);
+  const menuChevronSize = Math.round(13 * headerScale);
   // Three 30%-wide tiles plus two gaps must fit the column: gap ≤ 5% of the
   // grid width. At the 320dp floor that bound (13.6dp) sits above the
   // designed 8dp gap, so the rendering is exactly as before; below the floor
@@ -246,12 +281,11 @@ export default function HomeScreen() {
             <ThemedText type="title" style={{ fontSize: titleFontSize, lineHeight: titleLineHeight }}>
               AwareMe
             </ThemedText>
-            {/* Owner feedback 2026-09-16 (v12 issue 02): the old tagline read
-                as "finish sentences" with no stated purpose. This names the
-                practice's aim without hype (§10, §13.4); two alternatives are
-                in the issue Comments for the owner to swap freely. */}
+            {/* Subtitle (packet-10 t4): the owner's wording, picked on the
+                t1 mockup 2026-09-24 — replaces v12 issue 02's
+                "self-esteem, one sentence at a time" line verbatim. */}
             <ThemedText type="default" themeColor="textSecondary" style={{ fontSize: taglineFontSize, lineHeight: taglineLineHeight }}>
-              A daily practice for self-esteem, one sentence at a time.
+              A daily practice for self-awareness
             </ThemedText>
           </View>
 
@@ -483,24 +517,27 @@ export default function HomeScreen() {
         </ScrollView>
 
         {/*
-          The nav dock (packet-3 t2a, packet-2 C1 REPRODUCED): pinned BELOW
-          the scrolling content, not the last block inside it. The grid used
-          to scroll with the home content — on a 320x640 viewport it landed
+          The nav dock (packet-3 t2a, packet-2 C1 REPRODUCED; collapsed by
+          default per packet-10 t4, owner mockup pick): pinned BELOW the
+          scrolling content, not the last block inside it. The grid used to
+          scroll with the home content — on a 320x640 viewport it landed
           below the fold at initial scroll (first row ~83% clipped, a11y
           bounds inverted, 16/16 tap probes dead: p2n-08/09) while reading as
           a fixed tab bar; as a pinned bar it is reachable and tappable at
           any scroll position on any screen size, and it no longer floats
-          mid-content when the page scrolls (packet-2's p2n-24 note). The
-          tiles themselves are unchanged (3-column wrap, 30% width, one-line
-          labels, 44+ targets).
+          mid-content when the page scrolls (packet-2's p2n-24 note). Since
+          packet-10 t4 the whole dock (all eight tiles) collapses behind the
+          Menu toggle — expanded shows the same grid with the same tile
+          anatomy; the hairline top border stays pinned in both states.
 
           Moving it ABOVE the cards was rejected: it would push the day's
           primary action (the week card's Start CTA, §6.2) below the 320px
           fold — trading a secondary-nav defect for a primary-action one.
         */}
         <View style={[styles.dock, { borderColor: theme.border }]}>
-          <View style={[styles.grid, { gap: dockGap }]}>
-            {SECONDARY_LINKS.map(({ href, label, icon, color, colorDark }) => (
+          {navExpanded && (
+            <View style={[styles.grid, styles.dockExpanded, { gap: dockGap }]}>
+              {SECONDARY_LINKS.map(({ href, label, icon, color, colorDark }) => (
               <Link
                 key={href}
                 href={href}
@@ -539,8 +576,33 @@ export default function HomeScreen() {
                   </ThemedText>
                 </View>
               </Link>
-            ))}
-          </View>
+              ))}
+            </View>
+          )}
+          {/* The one Menu toggle (packet-10 t4, owner mockup): collapsed by
+              default, expanded state persisted via `home_nav_expanded`.
+              backgroundElement fill + medium radius per the approved mockup's
+              menubar anatomy; the chevron marks the direction. The expanded
+              state is exposed to assistive tech via accessibilityState. */}
+          <Pressable
+            onPress={toggleNavDock}
+            style={[styles.menuButton, { backgroundColor: theme.backgroundElement }]}
+            accessibilityRole="button"
+            accessibilityLabel="Menu"
+            accessibilityState={{ expanded: navExpanded }}
+            testID="home-nav-menu"
+          >
+            {/* Decorative glyphs: the button's name is its label text (§13.5). */}
+            <Ionicons name="menu-outline" size={dockIconSize} color={theme.text} />
+            <ThemedText type="default" style={[styles.menuLabel, { fontSize: menuLabelFontSize, lineHeight: menuLabelLineHeight }]}>
+              Menu
+            </ThemedText>
+            <Ionicons
+              name={navExpanded ? 'chevron-up-outline' : 'chevron-down-outline'}
+              size={menuChevronSize}
+              color={theme.textSecondary}
+            />
+          </Pressable>
         </View>
       </SafeAreaView>
 
@@ -645,6 +707,26 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.two,
     justifyContent: 'flex-start',
+  },
+  dockExpanded: {
+    // Mockup .tilegrid margin-bottom:8px — the expanded grid sits one grid
+    // gap above the Menu toggle.
+    marginBottom: Spacing.two,
+  },
+  menuButton: {
+    // The approved mockup's menubar: one backgroundElement bar, medium
+    // radius (the tile radius), 44+ touch floor, centered glyph + label +
+    // chevron. Press feedback mirrors Button secondary's pressed step.
+    minHeight: MinTouchTarget,
+    borderRadius: Radius.medium,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.one,
+    paddingVertical: Spacing.two,
+  },
+  menuLabel: {
+    fontWeight: '600',
   },
   tile: {
     minHeight: MinTouchTarget,

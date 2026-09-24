@@ -67,6 +67,7 @@ const mockRepository: {
     time_of_day: string | null;
   }[];
   getSettings?: () => Settings;
+  setSetting?: (key: keyof Settings, value: Settings[keyof Settings]) => void;
 } = {
   listSessionsForHistory: () => [{ id: 'session-1' }],
   getLastReviewAt: () => '2000-01-01T00:00:00.000Z',
@@ -79,6 +80,9 @@ const mockRepository: {
   getHighestUnlockedWeek: () => 0,
   listAllStems: () => [],
   getSettings: () => DEFAULT_SETTINGS,
+  // Packet-10 t4: the dock toggle persists through this upsert; tests read
+  // the recorded calls.
+  setSetting: jest.fn(),
 };
 
 /** A user pick as `listAllStems` returns it — the shape isMorningPick filters on (w2t2's D1 composition). */
@@ -107,6 +111,7 @@ describe('HomeScreen', () => {
     // read-shaped state across tests, so leaked rows from earlier tests (an
     // anchor, a completed reflection) would change the rendered week/count.
     mockRepository.getSettings = () => DEFAULT_SETTINGS;
+    (mockRepository.setSetting as jest.Mock).mockClear();
     mockRepository.listAllStems = () => [];
     mockRepository.getFirstProgrammePractice = () => null;
     mockRepository.listCompletedWeeklyReflections = () => [];
@@ -280,12 +285,13 @@ describe('HomeScreen', () => {
     }
   });
 
-  it('renders the app name and tagline', () => {
+  it('renders the app name and subtitle', () => {
     render(<HomeScreen />);
     expect(screen.getByText('AwareMe')).toBeTruthy();
-    // Tagline (v12 issue 02): states the purpose, in the self-esteem
-    // direction; alternatives live in the issue Comments.
-    expect(screen.getByText('A daily practice for self-esteem, one sentence at a time.')).toBeTruthy();
+    // Subtitle (packet-10 t4, owner's wording on the t1 mockup, 2026-09-24):
+    // replaces v12 issue 02's "self-esteem" line verbatim.
+    expect(screen.getByText('A daily practice for self-awareness')).toBeTruthy();
+    expect(screen.queryByText('A daily practice for self-esteem, one sentence at a time.')).toBeNull();
   });
 
   it('renders the app icon above the title', () => {
@@ -313,6 +319,7 @@ describe('HomeScreen', () => {
 
   it('gives all eight tiles one shared background', () => {
     render(<HomeScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Menu' }));
     const labels = ['Stems', 'History', 'Review', 'Progress', 'Settings', 'Export', 'Import', 'About'];
     const fills = labels.map((label) =>
       StyleSheet.flatten(screen.getByRole('link', { name: label }).props.style).backgroundColor,
@@ -324,6 +331,8 @@ describe('HomeScreen', () => {
 
   it('has a secondary destination group', () => {
     render(<HomeScreen />);
+    // Packet-10 t4: the dock ships collapsed — expand it before reading tiles.
+    fireEvent.press(screen.getByRole('button', { name: 'Menu' }));
     expect(screen.getByText('Stems')).toBeTruthy();
     // o11: the tile grid renders as links with label-pinned names.
     expect(screen.getByRole('link', { name: 'Stems' })).toBeTruthy();
@@ -337,8 +346,72 @@ describe('HomeScreen', () => {
     expect(screen.getByText('About')).toBeTruthy();
   });
 
+  it('collapses the dock behind one Menu button by default (packet-10 t4)', () => {
+    render(<HomeScreen />);
+    // The one toggle is up; none of the eight tiles are.
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    expect(menu).toBeTruthy();
+    expect(menu.props.accessibilityState).toMatchObject({ expanded: false });
+    const labels = ['Stems', 'History', 'Review', 'Progress', 'Settings', 'Export', 'Import', 'About'];
+    labels.forEach((label) => {
+      expect(screen.queryByRole('link', { name: label })).toBeNull();
+      expect(screen.queryByText(label)).toBeNull();
+    });
+  });
+
+  it('expands the eight-tile grid on Menu press and collapses it again (packet-10 t4)', () => {
+    render(<HomeScreen />);
+    const menu = () => screen.getByRole('button', { name: 'Menu' });
+    fireEvent.press(menu());
+    const labels = ['Stems', 'History', 'Review', 'Progress', 'Settings', 'Export', 'Import', 'About'];
+    labels.forEach((label) => {
+      expect(screen.getByRole('link', { name: label })).toBeTruthy();
+    });
+    expect(menu().props.accessibilityState).toMatchObject({ expanded: true });
+    // Second press: back to the one-button bar.
+    fireEvent.press(menu());
+    labels.forEach((label) => {
+      expect(screen.queryByRole('link', { name: label })).toBeNull();
+    });
+    expect(menu().props.accessibilityState).toMatchObject({ expanded: false });
+  });
+
+  it('persists the expanded pick through setSetting (packet-10 t4)', () => {
+    render(<HomeScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Menu' }));
+    expect(mockRepository.setSetting).toHaveBeenCalledWith('home_nav_expanded', true);
+    fireEvent.press(screen.getByRole('button', { name: 'Menu' }));
+    expect(mockRepository.setSetting).toHaveBeenLastCalledWith('home_nav_expanded', false);
+  });
+
+  it('restores a persisted expanded dock on mount (packet-10 t4)', () => {
+    mockRepository.getSettings = () => ({ ...DEFAULT_SETTINGS, home_nav_expanded: true });
+    render(<HomeScreen />);
+    // No press: the stored preference alone opens the grid.
+    expect(screen.getByRole('link', { name: 'Stems' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'About' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Menu' }).props.accessibilityState).toMatchObject({
+      expanded: true,
+    });
+  });
+
+  it('keeps the dock collapsed (and the screen up) when settings cannot be read', () => {
+    // Same contract as the status line (§13.4): an unreadable DB degrades
+    // the nicety to its default, never an error surface.
+    const baseGetSettings = mockRepository.getSettings;
+    delete mockRepository.getSettings;
+    try {
+      render(<HomeScreen />);
+      expect(screen.getByRole('button', { name: 'Menu' })).toBeTruthy();
+      expect(screen.queryByRole('link', { name: 'Stems' })).toBeNull();
+    } finally {
+      mockRepository.getSettings = baseGetSettings;
+    }
+  });
+
   it('keeps every tile label on one line', () => {
     render(<HomeScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Menu' }));
     // v14 issue 12: "Progress" wrapped a lone "s" at narrow widths — the
     // contract is that NO tile label wraps (numberOfLines pinned here; the
     // one-line rendering itself is verified by capture at 320pt).
@@ -364,7 +437,9 @@ describe('HomeScreen', () => {
     // is the mechanism (the tiles must not be scroll-content); the on-device
     // tap-probe captures carry the visual half.
     render(<HomeScreen />);
-    const tileLabels = ['Stems', 'History', 'Review', 'Progress', 'Settings', 'Export', 'Import', 'About'];
+    fireEvent.press(screen.getByRole('button', { name: 'Menu' }));
+    // The Menu toggle rides the same pinned dock as the tiles.
+    const tileLabels = ['Stems', 'History', 'Review', 'Progress', 'Settings', 'Export', 'Import', 'About', 'Menu'];
     const json = screen.toJSON() as { type?: string; children?: unknown[] };
     type Node = { type?: string; children?: unknown[] };
     const findScrollAncestry = (node: Node, inScroll: boolean, visit: (tile: Node, inside: boolean) => void): void => {
@@ -417,6 +492,7 @@ describe('HomeScreen', () => {
     // fontSize x 135/32 within the measured content width.
     setTestWindow(116, 186, 2.75);
     render(<HomeScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Menu' }));
     const title = screen.getByText('AwareMe');
     const flattened = StyleSheet.flatten(title.props.style) as { fontSize?: number };
     const contentWidth = 116 - Spacing.four * 2;
@@ -440,6 +516,7 @@ describe('HomeScreen', () => {
     // floor and every larger viewport the header renders exactly as before.
     setTestWindow(320, 640);
     render(<HomeScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Menu' }));
     const flattened = StyleSheet.flatten(screen.getByText('AwareMe').props.style) as {
       fontSize?: number;
       lineHeight?: number;
