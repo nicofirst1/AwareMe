@@ -137,132 +137,145 @@ describe('StemsScreen', () => {
     expect(screen.getByText(mockStems[0].text)).toBeTruthy();
   });
 
-  // w2-t4 (design §4.4, s2-1): the default Active view is grouped
-  // practice-first — Morning (your picks, then the programme week block)
-  // before Evening (the reflection, then your evening picks, starters
-  // included). Fixture rows are built here, never derived from the shipped
-  // corpus (the round's corpus-conditional hazard).
-  it('opens on the grouped practice-first default view', () => {
+  // p8 (owner-approved mirror): the base grouping is Active / Deactivated —
+  // header + count + collapse chevron, no subtitles. Active orders by the
+  // stable flat order (s2-1, now inside the group); Deactivated keeps
+  // corpus order. Fixture rows are built here, never derived from the
+  // shipped corpus (the round's corpus-conditional hazard).
+  it('opens on the two-group default view: Active and Deactivated, headers with counts', () => {
     mockStemsOverride = [
-      makeStem(0), // seed, week 1, morning → the effective week's programme group
-      // makeStem(1) rests and makeStem(2) is soft-deleted by the fixture —
-      // these overrides restore them to active rows.
+      makeStem(0), // seed, week 1, morning, active → the Active group (programme bucket in the flat order)
       { ...makeStem(1), origin: 'user', weekNumber: null, time_of_day: 'morning', text: 'User morning pick', active: 1 },
       { ...makeStem(2), origin: 'meta', weekNumber: null, active: 1, deleted_at: null, text: 'Meta fixture stem' },
-      { ...makeStem(3), origin: 'user', weekNumber: null, time_of_day: 'evening', text: 'User evening pick' },
-      { ...makeStem(4), origin: 'seed', weekNumber: null, time_of_day: 'evening', text: 'Starter fixture stem' },
+      { ...makeStem(3), origin: 'user', weekNumber: null, time_of_day: 'evening', text: 'User evening pick', active: 1 },
+      { ...makeStem(4), origin: 'seed', weekNumber: null, time_of_day: 'evening', text: 'Starter fixture stem', active: 1 },
+      { ...makeStem(5), origin: 'user', weekNumber: null, time_of_day: 'morning', text: 'Resting fixture stem', active: 0 },
     ];
     render(<StemsScreen />);
 
-    // Section headers, in the design's anatomy. The eyebrows share their
-    // labels with the per-row time-of-day chips (the chip rule — same words
-    // on purpose), so these read as "present", not "unique".
-    expect(screen.getAllByText('Morning').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Evening').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Your picks')).toHaveLength(2); // morning + evening sub-groups
-    expect(screen.getByText('Programme · Week 1')).toBeTruthy(); // the group header carries the week (owner revision)
-    expect(screen.getAllByText('Reflection').length).toBeGreaterThanOrEqual(2); // sub-header + the meta row's tag
+    // The two group headers, with their counts (the a11y labels are unique;
+    // the bare words collide with the rows' state badges on purpose).
+    expect(screen.getByLabelText('Active group: 5 stems')).toBeTruthy();
+    expect(screen.getByLabelText('Deactivated group: 1 stem')).toBeTruthy();
+    expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Deactivated').length).toBeGreaterThanOrEqual(1);
 
-    // The row document order follows the groups: morning picks, programme
-    // week, reflection, evening picks (input order within a group).
+    // Document order: Active first, in the stable flat order (morning picks
+    // → programme rows → evening picks → reflection); Deactivated trails in
+    // corpus order. No section ever flattens away and no row is dropped.
     const rowTexts = screen
       .getAllByLabelText(/^Write on:/)
       .map((node) => node.props.accessibilityLabel?.match(/^Write on: (.*?)\. /)?.[1]);
     expect(rowTexts).toEqual([
       'User morning pick',
       'Stem number 0',
-      'Meta fixture stem',
       'User evening pick',
       'Starter fixture stem',
+      'Meta fixture stem',
+      'Resting fixture stem',
     ]);
   });
 
-  // w2-t4 (design §4.1/§4.4): the pilot "Official programme" row is gone;
-  // its week door lives in the programme group header (this test) and the
-  // practice card's week link. Replaces the pilot-row navigation pin.
-  it('opens the weeks screen from the programme group header link', () => {
+  // p8: an empty group's header skips — with no deactivated rows the list
+  // carries the Active group alone.
+  it('skips the Deactivated header while every row is active', () => {
+    mockStemsOverride = [makeStem(0), { ...makeStem(1), active: 1 }];
     render(<StemsScreen />);
 
-    fireEvent.press(screen.getByLabelText('Programme Week 1. Opens the programme weeks.'));
-    expect(mockRouter.push).toHaveBeenCalledWith('/week');
+    expect(screen.getByLabelText('Active group: 2 stems')).toBeTruthy();
+    expect(screen.queryByLabelText(/^Deactivated group:/)).toBeNull();
+    expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(1); // the header + the rows' badges
+    expect(screen.queryByText('Deactivated')).toBeNull(); // no header text anywhere
   });
 
-  // w2-t4 (D3, mockup 07): Programme off — the grouped default is picks-only,
-  // no programme group header anywhere, and the practice card names picks
-  // alone. The identity chips still say Programme (origin identity, D2
-  // display), so the absence pin targets the group header, not the chips.
-  it('shows a picks-only default view while Programme is off', () => {
-    mockProgrammeOn = false;
-    mockStemsOverride = [makeStem(0)]; // a seed week-1 stem: not a pick, block off
-    render(<StemsScreen />);
-
-    expect(screen.getAllByText('Morning').length).toBeGreaterThan(0); // eyebrow + the row's own chip
-    expect(screen.getByText('No picks yet. Activate stems below or add your own.')).toBeTruthy();
-    expect(screen.queryByText('Programme · Week 1')).toBeNull(); // no group header
-    expect(screen.queryByText('Evening')).toBeNull(); // nothing to group — the section stays away
-    // The card states the off shape.
-    expect(screen.getByText('Morning · 0 picks')).toBeTruthy();
-  });
-
-  // w2-t4 (design §4.2): the practice summary card names the composition
-  // with counts read from the engine's composed queue (one composition, two
-  // views), and expands in place to the actual stems + the two quiet links.
-  it('practice summary card names counts from the composed queue and expands to the practice', () => {
-    mockStemsOverride = [
-      makeStem(0), // seed, week 1, morning → programme block (counted by the queue)
-      { ...makeStem(1), origin: 'user', weekNumber: null, time_of_day: 'morning', text: 'User morning pick', active: 1 },
-      { ...makeStem(2), origin: 'meta', weekNumber: null, active: 1, deleted_at: null, text: 'Meta fixture stem' },
-      { ...makeStem(3), origin: 'user', weekNumber: null, time_of_day: 'evening', text: 'User evening pick' },
-      { ...makeStem(4), origin: 'seed', weekNumber: null, time_of_day: 'evening', text: 'Starter fixture stem' },
-    ];
-    render(<StemsScreen />);
-
-    // Collapsed, Programme on: 1 pick + the week-1 block (1 seed row).
-    expect(screen.getByText('Morning · 2 stems: 1 pick + Programme Week 1 (1)')).toBeTruthy();
-    // Evening: reread + the reflection + 2 evening picks (starter included).
-    expect(screen.getByText('Evening · reread + reflection + 2 picks')).toBeTruthy();
-
-    fireEvent.press(screen.getByLabelText('Practice summary'));
-    // The actual stems, morning queue first, then the evening practice.
-    expect(screen.getAllByText('User morning pick').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Stem number 0').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Meta fixture stem').length).toBeGreaterThan(0);
-    // The quiet links: the second week door + the marked way back to the list.
-    expect(screen.getByLabelText('Week 1. Opens the programme weeks.')).toBeTruthy();
-    fireEvent.press(screen.getByLabelText('Week 1. Opens the programme weeks.'));
-    expect(mockRouter.push).toHaveBeenCalledWith('/week');
-  });
-
-  // w2-t4 (design §4.2, C4): "Pick more stems" is the card's marked exit —
-  // it clears every filter (the query included) and collapses the card.
-  it("'Pick more stems' clears the filters and collapses the card", () => {
+  // p8: the group header's chevron collapses its group — the rows hide,
+  // the header stays, the other group is untouched.
+  it('collapses and re-expands a group from its header', () => {
     mockStemsOverride = [
       makeStem(0),
-      { ...makeStem(1), origin: 'user', weekNumber: null, time_of_day: 'morning', text: 'User morning pick', active: 1 },
+      { ...makeStem(1), origin: 'user', weekNumber: null, time_of_day: 'morning', text: 'Resting fixture stem', active: 0 },
     ];
     render(<StemsScreen />);
 
-    fireEvent.changeText(screen.getByLabelText('Search stems'), 'User morning');
-    expect(screen.getByText('Showing 1 of 2')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Active group: 1 stem'));
+    expect(screen.queryByLabelText('Write on: Stem number 0. Active. Long-press to select.')).toBeNull();
+    expect(screen.getByLabelText('Active group: 1 stem')).toBeTruthy(); // header stays
+    expect(screen.getByLabelText('Write on: Resting fixture stem. Disabled. Long-press to select.')).toBeTruthy();
 
-    fireEvent.press(screen.getByLabelText('Practice summary'));
-    fireEvent.press(screen.getByText('Pick more stems'));
-
-    expect(screen.getByLabelText('Search stems').props.value).toBe('');
-    expect(screen.getByText('Showing 2 of 2')).toBeTruthy();
-    expect(screen.queryByText('Pick more stems')).toBeNull(); // card collapsed again
+    fireEvent.press(screen.getByLabelText('Active group: 1 stem'));
+    expect(screen.getByLabelText('Write on: Stem number 0. Active. Long-press to select.')).toBeTruthy();
   });
 
-  // w2-t4 (s2-6): the filter state is always visible — "Showing X of Y"
+  // p8: Programme off drops the week block from the card's Morning count
+  // (D3: off reads no programme state). The list's two-group structure does
+  // not depend on the setting at all — the identity chips still say
+  // Programme (origin identity, D2 display).
+  it('drops the programme block from the Morning count while Programme is off', () => {
+    mockStemsOverride = [makeStem(0)]; // a seed week-1 stem: the week block on, nothing off
+    const on = render(<StemsScreen />);
+
+    fireEvent.press(on.getByLabelText('Practice summary'));
+    expect(on.getByText('Morning 1')).toBeTruthy();
+    expect(on.getByText('Evening 0')).toBeTruthy();
+    on.unmount();
+
+    mockProgrammeOn = false;
+    const off = render(<StemsScreen />);
+    fireEvent.press(off.getByLabelText('Practice summary'));
+    expect(off.getByText('Morning 0')).toBeTruthy(); // the block is gated off, not counted
+    expect(off.getByText('Evening 0')).toBeTruthy();
+    off.unmount();
+  });
+
+  // p8 (rounds 1-3): the practice card is counts only — collapsed one line
+  // ("Currently active N", the library's active-stem count), expanded two
+  // plain lines ("Morning N" / "Evening N"). Never stem lists, never
+  // links. Counts read the practice composition (active, non-deleted rows
+  // through groupForDefaultView) whatever the list filters show.
+  it('practice card counts the active composition and expands to the counts only', () => {
+    mockStemsOverride = [
+      makeStem(0), // seed, week 1, morning → programme block (counted while Programme is on)
+      { ...makeStem(1), origin: 'user', weekNumber: null, time_of_day: 'morning', text: 'User morning pick', active: 1 },
+      { ...makeStem(2), origin: 'meta', weekNumber: null, active: 1, deleted_at: null, text: 'Meta fixture stem' },
+      { ...makeStem(3), origin: 'user', weekNumber: null, time_of_day: 'evening', text: 'User evening pick', active: 1 },
+      { ...makeStem(4), origin: 'seed', weekNumber: null, time_of_day: 'evening', text: 'Starter fixture stem', active: 1 },
+      // Not counted: a resting row and a soft-deleted row are outside the
+      // practice composition (active, non-deleted) whatever the list shows.
+      { ...makeStem(5), origin: 'user', weekNumber: null, time_of_day: 'morning', text: 'Resting fixture stem', active: 0 },
+      { ...makeStem(6), origin: 'user', weekNumber: null, time_of_day: 'morning', text: 'Deleted fixture stem', deleted_at: '2026-01-02T00:00:00.000Z' },
+    ];
+    render(<StemsScreen />);
+
+    // Collapsed: one line, the active-stem count (5 active rows of 7).
+    expect(screen.getByText('Currently active 5')).toBeTruthy();
+    expect(screen.queryByText('Morning 2')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Practice summary'));
+    // Expanded: two plain lines — picks + block for Morning (2), the
+    // evening picks incl. the starter for Evening (2). The reflection
+    // meta-stem is no one's pick.
+    expect(screen.getByText('Morning 2')).toBeTruthy();
+    expect(screen.getByText('Evening 2')).toBeTruthy();
+    // Nothing else: no stem lists, no links. Each fixture text renders
+    // exactly once — in the list below, never repeated by the card.
+    expect(screen.getAllByText('User morning pick')).toHaveLength(1);
+    expect(screen.getAllByText('Meta fixture stem')).toHaveLength(1);
+    expect(screen.queryByText('Pick more stems')).toBeNull();
+    expect(screen.queryByLabelText('Week 1. Opens the programme weeks.')).toBeNull();
+  });
+
+  // w2-t4 (s2-6) + p8: the filter state is always visible — "Showing X of Y"
   // above the list, the Filters button carrying the non-default count, and
-  // the sheet header repeating the live count plus the global active/
-  // disabled counts (the old summary line's new home). "Clear filters" is
-  // the marked exit (C4) and clears the query too (it is a filter — w1-t7c).
+  // the sheet header repeating the live count. "Clear filters" is the
+  // marked exit (C4) and clears the query too (it is a filter — w1-t7c).
+  // p8: the default State is 'all' (the grouping owns the axis), so every
+  // row shows by default and the sheet carries no state counts line.
   it('shows the filtered count everywhere: Showing line, badge, sheet header — and Clear filters resets all', () => {
     render(<StemsScreen />);
 
-    // 30 fixture rows, one resting + one soft-deleted: 28 shown of 30.
-    expect(screen.getByText('Showing 28 of 30')).toBeTruthy();
+    // 30 fixture rows, one resting + one soft-deleted: the 'all' default
+    // shows every row of them (deactivated rows are first-class now).
+    expect(screen.getByText('Showing 30 of 30')).toBeTruthy();
     expect(screen.getByLabelText('Filters')).toBeTruthy(); // no badge while everything is default
 
     fireEvent.changeText(screen.getByLabelText('Search stems'), 'number 11');
@@ -273,66 +286,68 @@ describe('StemsScreen', () => {
     // The sheet header repeats the live count — the same number the
     // always-visible line above the list shows (s2-6), so read as "shown".
     expect(screen.getAllByText('Showing 1 of 30').length).toBeGreaterThan(0);
-    expect(screen.getByText('28 active · 1 disabled')).toBeTruthy(); // global counts live in the sheet
+    expect(screen.queryByText('28 active · 1 disabled')).toBeNull(); // no state counts line (p8)
 
     fireEvent.press(screen.getByText('Morning')); // a second non-default filter
     expect(screen.getAllByText('Showing 0 of 30').length).toBeGreaterThan(0);
 
     fireEvent.press(screen.getByText('Clear filters'));
-    expect(screen.getAllByText('Showing 28 of 30').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Showing 30 of 30').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('Search stems').props.value).toBe('');
-    expect(screen.getByText('28 active · 1 disabled')).toBeTruthy(); // global counts stay in the sheet
+    expect(screen.queryByText('28 active · 1 disabled')).toBeNull();
     expect(screen.getByLabelText('Filters')).toBeTruthy(); // badge gone again
 
     fireEvent.press(screen.getByText('Done'));
     expect(screen.queryByLabelText('Close filters')).toBeNull(); // sheet closed
-    expect(screen.getByText('Showing 28 of 30')).toBeTruthy();
+    expect(screen.getByText('Showing 30 of 30')).toBeTruthy();
   });
-  // The sheet is the inline panel's replacement (s5 #4: the State buttons
-  // were clipped unreachable at the screen bottom): every control renders
-  // inside the sheet's own scroll view — presence here, reachability on
-  // device (capture scene 2).
-  it('filters sheet carries every control: week picker, State, Origin, Time of day', () => {
+  // The sheet is the inline panel's replacement (s5 #4): every control
+  // renders inside the sheet's own scroll view — presence here,
+  // reachability on device (capture scene 2). p8: NO State row — the
+  // Active/Deactivated grouping owns that axis; the sheet keeps Origin /
+  // Time of day / Programme week.
+  it('filters sheet carries Origin, Time of day, and the week picker — and no State row', () => {
     render(<StemsScreen />);
 
     openFilters();
-    expect(screen.getByText('State')).toBeTruthy();
+    expect(screen.queryByText('State')).toBeNull();
     expect(screen.getByText('Origin')).toBeTruthy();
     expect(screen.getByText('Time of day')).toBeTruthy();
     expect(screen.getByLabelText('Programme week: All weeks')).toBeTruthy();
-    // 'Disabled' is unique here (no disabled badges render under the default
-    // State filter); 'Active' is not (row badges carry it too), so the
-    // State row's presence is pinned via its label + the Disabled chip.
-    expect(screen.getByText('Disabled')).toBeTruthy();
     expect(screen.getByText('Imported')).toBeTruthy();
     expect(screen.getByText('Unset')).toBeTruthy();
   });
 
-  // Issue 03: state is visible at all times — a per-row badge, the state
-  // named in the accessible label. The default State filter is 'active',
-  // so disabled/deleted rows surface only under another State choice.
-  it('shows an Active badge on every listed row and names the state in the label', () => {
+  // Issue 03 + p8: state is visible at all times — a per-row badge, the
+  // state named in the accessible label. Under the grouping, deactivated
+  // rows are first-class: the resting fixture stem renders in the
+  // Deactivated group with its badge and label; a soft-deleted row is
+  // neither active nor disabled (no badge, no write entry point, just the
+  // dimmed 'deleted' marker, §4.1).
+  it('shows Disabled rows in the Deactivated group and keeps deleted rows dimmed and unwritable', () => {
+    mockStemsOverride = [makeStem(0), makeStem(1), makeStem(2)];
     render(<StemsScreen />);
 
     expect(screen.getByLabelText('Write on: Stem number 0. Active. Long-press to select.')).toBeTruthy();
-    expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(5); // one badge per rendered active row
-    // Disabled rows are outside the default State filter.
-    expect(screen.queryByLabelText('Write on: Stem number 1. Disabled. Long-press to select.')).toBeNull();
+    expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(1); // the rendered active rows' badges (the deleted row carries none)
+    // The resting row is visible under the Deactivated group, state on the row.
+    expect(screen.getByLabelText('Deactivated group: 1 stem')).toBeTruthy();
+    expect(screen.getByLabelText('Write on: Stem number 1. Disabled. Long-press to select.')).toBeTruthy();
+    expect(screen.getByText('Disabled')).toBeTruthy();
+
+    // Soft-deleted: visible for context, no write entry, 'deleted' marker.
+    expect(screen.queryByLabelText('Write on: Stem number 2. Active. Long-press to select.')).toBeNull();
+    expect(screen.queryByLabelText('Write on: Stem number 2. Disabled. Long-press to select.')).toBeNull();
+    expect(screen.getAllByText(/deleted/).length).toBeGreaterThan(0); // the meta marker, not a state badge
   });
 
   // w1-t7 (s2's folded a11y gap): the selection-mode row label keeps the
-  // Active/Disabled state and the meta caption. Flow now goes through the
-  // filters sheet.
+  // Active/Disabled state and the meta caption. p8: the resting meta-stem
+  // is visible by default (the Deactivated group), so the flow needs no
+  // sheet detour at all.
   it('selection-mode row labels keep the state and the meta caption', () => {
     mockStemsOverride = [makeStem(0), makeEveningMetaStem()];
     render(<StemsScreen />);
-
-    openFilters();
-    // The State row's 'All': with a category present there are four 'All'
-    // chips (category strip, State, Origin, Time of day); document order
-    // makes index 1 the State row's.
-    fireEvent.press(screen.getAllByText('All')[1]);
-    fireEvent.press(screen.getByText('Done'));
 
     fireEvent(screen.getByLabelText(/Write on: Evening reflection stem\./), 'longPress');
     expect(
@@ -343,37 +358,11 @@ describe('StemsScreen', () => {
     expect(screen.getByLabelText('Stem number 0. Active. Not selected.')).toBeTruthy();
   });
 
-  // Issue 03: switching the State filter surfaces disabled and soft-deleted
-  // rows, still with their state on the row — 'Disabled' as a badge; a
-  // soft-deleted row is neither active nor disabled (no badge, no write
-  // entry point, just the dimmed 'deleted' marker, §4.1).
-  it('shows Disabled and deleted rows with their state once the State filter includes them', () => {
-    render(<StemsScreen />);
-
-    openFilters();
-    // With the default State filter ('active') no disabled badges exist, so
-    // the chip is the only 'Disabled' text on screen.
-    fireEvent.press(screen.getByText('Disabled'));
-    expect(screen.getByLabelText('Write on: Stem number 1. Disabled. Long-press to select.')).toBeTruthy();
-
-    // Four 'All' chips: category strip, State, Origin, Time of day — the
-    // week filter carries no 'All' chip (it is a picker). Document order
-    // makes index 1 the State row's. The length guard turns any structural
-    // drift into a loud failure instead of a wrong press.
-    const allChips = screen.getAllByText('All');
-    expect(allChips).toHaveLength(4);
-    fireEvent.press(allChips[1]);
-    fireEvent.press(screen.getByText('Done'));
-    expect(screen.getByText('Stem number 2')).toBeTruthy(); // soft-deleted: visible for context
-    expect(screen.queryByLabelText('Write on: Stem number 2. Active. Long-press to select.')).toBeNull();
-    expect(screen.queryByLabelText('Write on: Stem number 2. Disabled. Long-press to select.')).toBeNull();
-    expect(screen.getAllByText(/deleted/).length).toBeGreaterThan(0); // the meta marker, not a state badge
-  });
-
   // Issue 03's week filter, rebuilt as a picker (v13-feedback issue 07):
   // selecting a week from the menu filters the list exactly as before —
   // the picker now lives inside the filters sheet; the filter semantics
-  // are byte-stable (matchesStemFilters untouched).
+  // are byte-stable (matchesStemFilters untouched). p8: the narrowing
+  // happens INSIDE the grouping.
   it('filters the list to a chosen programme week via the picker in the sheet', () => {
     render(<StemsScreen />);
 
@@ -385,12 +374,31 @@ describe('StemsScreen', () => {
     expect(screen.getByLabelText('Programme week: Week 2')).toBeTruthy();
     fireEvent.press(screen.getByText('Done'));
 
-    // Fixture weeks cycle 1,2,3: active week-2 stems in the window are
-    // stems 4, 7, 10 (stem 1 is the disabled week-2 stem, hidden by the
-    // default State filter); week-1/3 stems are gone.
+    // Fixture weeks cycle 1,2,3: the week-2 actives (stems 4, 7, 10, …)
+    // render under the Active header; week-1/3 stems are gone.
+    expect(screen.getByLabelText('Active group: 9 stems')).toBeTruthy();
     expect(screen.getByLabelText('Write on: Stem number 4. Active. Long-press to select.')).toBeTruthy();
     expect(screen.queryByLabelText(/Write on: Stem number 0\./)).toBeNull();
     expect(screen.queryByLabelText(/Write on: Stem number 3\./)).toBeNull();
+  });
+
+  // p8, the mirror's core rule: filters narrow INSIDE the grouping and
+  // never flatten it — a narrowed list keeps both group headers, each over
+  // its own surviving rows. (A group the filter empties loses its header —
+  // the empty-group skip.)
+  it('narrows inside the grouping: a filter keeps both group headers', () => {
+    mockStemsOverride = [
+      { ...makeStem(0), text: 'Shared active fixture stem' }, // active → Active group
+      { ...makeStem(1), origin: 'user', weekNumber: null, time_of_day: 'morning', text: 'Shared resting fixture stem', active: 0 }, // → Deactivated
+    ];
+    render(<StemsScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('Search stems'), 'Shared');
+    expect(screen.getByLabelText('Active group: 1 stem')).toBeTruthy();
+    expect(screen.getByLabelText('Deactivated group: 1 stem')).toBeTruthy();
+    expect(screen.getAllByText('Deactivated').length).toBeGreaterThanOrEqual(1); // its header text survives narrowing
+    expect(screen.getByLabelText('Write on: Shared active fixture stem. Active. Long-press to select.')).toBeTruthy();
+    expect(screen.getByLabelText('Write on: Shared resting fixture stem. Disabled. Long-press to select.')).toBeTruthy();
   });
 
   // Issue 03: origin 'seed' surfaces as "Programme" — display only, the
@@ -412,9 +420,11 @@ describe('StemsScreen', () => {
     openFilters();
     // With Origin narrowed to Programme the category strip is gone (s2-12:
     // its chips derive from rows matching all OTHER filters — the user-only
-    // fixture matches nothing), so the sheet's three 'All' chips are State,
-    // Origin, Time of day. Index 1 = Origin.
-    fireEvent.press(screen.getAllByText('All')[1]);
+    // fixture matches nothing), so the sheet's two 'All' chips are Origin,
+    // Time of day — no State row since p8. Index 0 = Origin.
+    const allChips = screen.getAllByText('All');
+    expect(allChips).toHaveLength(2);
+    fireEvent.press(allChips[0]);
     fireEvent.press(screen.getByText('Done'));
     expect(screen.getByText('User-owned fixture stem')).toBeTruthy();
   });
@@ -430,34 +440,30 @@ describe('StemsScreen', () => {
     mockStemsOverride = [makeEveningMetaStem()];
     render(<StemsScreen />);
 
-    // Hidden under the default 'active' State filter (the row is resting);
-    // the summary counts live in the sheet now.
-    expect(screen.queryByText('Evening reflection stem')).toBeNull();
-
-    openFilters();
-    // The Evening time-of-day filter matches it — but the 'active' State
-    // filter still hides the resting row, so the list stays empty.
-    fireEvent.press(screen.getByText('Evening'));
-    expect(screen.queryByText('Evening reflection stem')).toBeNull();
-
-    // State 'All': with no categories in this fixture there is no category
-    // chip row, so the State row's 'All' is the first of three.
-    const allChips = screen.getAllByText('All');
-    expect(allChips).toHaveLength(3);
-    fireEvent.press(allChips[0]);
-
-    // Visible: the stem, its Reflection tag (replacing a bare 'meta'), the
-    // Disabled badge any row would carry, and the caption that says state
-    // is not what gates the reflection.
+    // p8: first-class under the Deactivated group by default (the row is
+    // resting; the grouping carries the state axis, so no State detour is
+    // needed — or possible — to see it).
     expect(screen.getByText('Evening reflection stem')).toBeTruthy();
     expect(screen.getByText('Reflection')).toBeTruthy();
-    expect(screen.getAllByText('Disabled').length).toBeGreaterThanOrEqual(2); // State chip + row badge
+    expect(screen.getByText('Disabled')).toBeTruthy(); // the row's badge — the only 'Disabled' text on this fixture
     expect(screen.getByText('Part of the evening reflection, whether Active or Disabled.')).toBeTruthy();
     expect(
       screen.getByLabelText(
         'Write on: Evening reflection stem. Disabled. Part of the evening reflection, whether Active or Disabled. Long-press to select.',
       ),
     ).toBeTruthy();
+
+    // The Evening time-of-day filter still matches it (the row is
+    // evening-tagged), and the narrowing keeps the Deactivated group —
+    // the grouping never flattens (p8).
+    openFilters();
+    // The row's own chip shares the word; the sheet's Time-of-day chip is
+    // the last match in document order (the Modal renders after the list).
+    fireEvent.press(screen.getAllByText('Evening').at(-1)!);
+    fireEvent.press(screen.getByText('Done'));
+    expect(screen.getByText('Evening reflection stem')).toBeTruthy();
+    expect(screen.getByLabelText('Deactivated group: 1 stem')).toBeTruthy();
+
     // The developer vocabulary never leaks as copy.
     expect(screen.queryByText(/meta/)).toBeNull();
   });
@@ -483,9 +489,9 @@ describe('StemsScreen', () => {
     // assertion walks up from the text node until a fill-bearing style —
     // the first hit IS the chip pill (its Text carries only a color).
     const chipBackground = (label: string) => {
-      // Group eyebrows share their words with row chips (the chip rule);
-      // eyebrows render before their sections' rows, so the LAST match is
-      // always a row chip — the fill under test.
+      // Row chips are the only bearers of these words (p8: no section
+      // eyebrows, and the collapsed card carries no text) — but take the
+      // LAST match anyway, so a future header can never flip the pin.
       let node = screen.getAllByText(label).at(-1)!;
       let flat = StyleSheet.flatten(node.props.style);
       while (typeof flat?.backgroundColor === 'undefined' && node.parent) {
@@ -500,8 +506,8 @@ describe('StemsScreen', () => {
     expect(chipBackground('Evening')).toBe(Palette.indigo.light.bg);
     // The owner revision: the row's week number renders nowhere — this
     // fixture's programme row is a week-7 stem and no text says "Week 7"
-    // (the group header says the EFFECTIVE week 1; the card's block count
-    // likewise). The week lives in the group header and the weeks browser.
+    // (since p8 no group header carries a week either; the card is counts
+    // only). The week lives in the weeks browser alone.
     expect(screen.queryByText(/Week 7/)).toBeNull();
     // user/imported stay uncolored display text, renamed from the raw enum.
     expect(screen.getByText('Mine')).toBeTruthy();
@@ -513,24 +519,28 @@ describe('StemsScreen', () => {
     expect(screen.queryByText(/seed/)).toBeNull();
   });
 
-  // w2-t4 (s2-12, design §4.6): category chips derive from non-deleted
-  // stems matching all OTHER active filters — a chip can never AND the list
-  // to empty, and a category whose only rows are soft-deleted offers no
-  // chip at all.
+  // w2-t4 (s2-12, design §4.6) + p8: category chips derive from the stems
+  // matching all OTHER filters — a chip can never AND the list to empty.
+  // p8: the 'all' default shows soft-deleted rows for context, so their
+  // categories offer chips too (the derivation predicate is unchanged; no
+  // filter excludes the rows anymore).
   it('derives category chips from visible stems only, so a chip can never empty the list', () => {
     mockStemsOverride = [
       makeStem(0), // active, category awareness
-      { ...makeStem(1), category: 'purpose', deleted_at: '2026-01-02T00:00:00.000Z' }, // soft-deleted
+      { ...makeStem(1), category: 'purpose', deleted_at: '2026-01-02T00:00:00.000Z' }, // soft-deleted, visible for context
     ];
     render(<StemsScreen />);
 
-    expect(screen.queryByText('purpose')).toBeNull(); // its only row is deleted — no chip
+    expect(screen.getAllByText('purpose').length).toBeGreaterThan(0); // strip chip + the row's own chip
     expect(screen.getAllByText('awareness').length).toBeGreaterThan(0); // strip chip + the row's own chip
 
-    // Selecting the only offered chip can never produce an empty AND-result.
+    // Selecting a chip can never produce an empty AND-result: every
+    // offered chip's category has at least one row among the visible ones.
     // The strip renders above the list, so index 0 is the strip's chip.
     fireEvent.press(screen.getAllByText('awareness')[0]);
     expect(screen.getByText('Stem number 0')).toBeTruthy();
+    fireEvent.press(screen.getAllByText('purpose')[0]);
+    expect(screen.getByText('Stem number 1')).toBeTruthy(); // its deleted row: visible for context
   });
 
   // w1-t7 (s2-8 + s2-7 residual): bulk actions apply to the rows the user

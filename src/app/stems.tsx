@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -19,11 +19,10 @@ import {
   groupForDefaultView,
   matchesStemFilters,
   orderForFlatView,
-  type ActiveFilter,
   type LibraryGroupKey,
   type TimeOfDayFilter,
 } from '@/session/stemLibraryFilter';
-import { readMorningPracticeQueue, readProgrammeWeek } from '@/session/programRead';
+import { readProgrammeWeek } from '@/session/programRead';
 import { PROGRAMME_WEEK_CAP } from '@/session/program';
 
 function isCategoryName(c: string | null): c is CategoryName {
@@ -71,13 +70,17 @@ const TIME_OF_DAY_HUES: Record<'morning' | 'evening', PaletteName> = {
 };
 const PROGRAMME_ORIGIN_HUE: PaletteName = 'jade';
 
-// The library's default view is the practice itself (w2-t4, design §4):
-// the Morning practice (your picks, plus the programme week block while
-// Programme is on) before the Evening practice (the reflection, then your
-// evening picks, starters included). Grouping is a VIEW over the rows the
-// filters already selected — `matchesStemFilters` stays the only state
-// gate, and any non-default filter or query flattens the list to one
-// stable, learnable order (s2-1) for browsing the full pool.
+// The library's base grouping is Active / Deactivated (p8, owner-approved
+// mirror: "you can immediately see what are actives and which one are
+// not"): two group headers with counts and a collapse chevron, no
+// subtitles, Active ordered by the stable flat order (s2-1's learnable
+// sequence now lives INSIDE the Active group), Deactivated in corpus
+// order. Filters narrow INSIDE the grouping and never flatten it —
+// `matchesStemFilters` stays the only predicate, and the State filter is
+// owned by the grouping itself (the sheet has no State row; the default
+// State is 'all' and the grouping makes deactivated rows first-class).
+// Supersedes the p7 §4.4 practice-first default (see docs/DECISIONS.md,
+// Superseded).
 //
 // Provenance is identity (D2): per-row chips display origin — programme
 // rows read jade "Programme", weekless seed rows are the "Starter set"
@@ -88,10 +91,12 @@ const PROGRAMME_ORIGIN_HUE: PaletteName = 'jade';
 // (its caption, its a11y appends, and the interim bulk copy) — the D5
 // at-least-one guard is untouched (contract 1).
 
-// The practice card's copy (§4.2): one composition, two views. Counts are
-// read-time display values (§13.7: nothing stored), derived from the
-// engine's composed morning queue and the stems list.
-const EMPTY_MORNING_LINE = 'No picks yet. Activate stems below or add your own.';
+// The practice card's copy (p8 owner-approved rounds 1-3): counts only —
+// collapsed one line ("Currently active N"), expanded two plain lines
+// ("Morning N" / "Evening N"). Never stem lists, never links. Counts are
+// read-time display values (§13.7: nothing stored) over the practice
+// composition (active, non-deleted rows through groupForDefaultView),
+// whatever the list filters show.
 
 // The filters bottom sheet (s5 #4: the inline panel's State buttons were
 // clipped unreachable at the screen bottom on small screens). The sheet is
@@ -99,10 +104,10 @@ const EMPTY_MORNING_LINE = 'No picks yet. Activate stems below or add your own.'
 const SHEET_MAX_HEIGHT = '70%';
 
 type ListEntry =
-  | { kind: 'header'; key: string; header: 'morning' | 'evening' | 'reflection' | 'evening-picks' }
-  | { kind: 'header'; key: string; header: 'programme'; week: number }
-  | { kind: 'note'; key: string; text: string }
+  | { kind: 'header'; key: string; group: 'active' | 'deactivated'; count: number; collapsed: boolean }
   | { kind: 'stem'; key: string; stem: LibraryStemRow };
+
+type GroupName = 'active' | 'deactivated';
 
 /**
  * The stem library (§6.6): opens on the practice-first default view (the
@@ -128,7 +133,6 @@ export default function StemsScreen() {
   );
 
   const [query, setQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('active');
   const [originFilter, setOriginFilter] = useState<OriginFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [timeOfDayFilter, setTimeOfDayFilter] = useState<TimeOfDayFilter>('all');
@@ -136,13 +140,21 @@ export default function StemsScreen() {
   const [weekFilter, setWeekFilter] = useState<WeekFilter>('all');
   // w2-t4 (s5 #4): the filters live in a bottom sheet, not an inline panel.
   const [filtersOpen, setFiltersOpen] = useState(false);
-  // The practice card (§4.2): collapsed by default — a summary, not a page.
+  // The practice card (§4.2, p8 counts-only shape): collapsed by default —
+  // one line, never a page.
   const [practiceExpanded, setPracticeExpanded] = useState(false);
-  // §4.2: the card is the list scroll's HEADER (design §4: "one scroll with
-  // a stable order" — the card scrolls away and the list takes the screen).
-  // The card link scrolls past it; its height is measured, not assumed.
-  const listRef = useRef<FlatList<ListEntry>>(null);
-  const cardHeightRef = useRef(0);
+  // p8: per-group collapse state (the mirror's collapsedGroups). A group
+  // header's chevron hides its rows; the header itself always renders while
+  // the group is non-empty.
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<GroupName>>(new Set());
+  const toggleGroup = useCallback((group: GroupName) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(group)) next.delete(group);
+      else next.add(group);
+      return next;
+    });
+  }, []);
 
   // s2-12 (w2-t4): the category chips derive from the stems that match all
   // OTHER active filters (this stem's own category excluded), so a chip can
@@ -154,145 +166,89 @@ export default function StemsScreen() {
         new Set(
           stems
             .filter((s) =>
-              matchesStemFilters(s, { query, activeFilter, originFilter, categoryFilter: 'all', timeOfDayFilter, weekFilter }),
+              matchesStemFilters(s, {
+                query,
+                activeFilter: 'all',
+                originFilter,
+                categoryFilter: 'all',
+                timeOfDayFilter,
+                weekFilter,
+              }),
             )
             .map((s) => s.category)
             .filter((c): c is string => c !== null),
         ),
       ).sort(),
-    [stems, query, activeFilter, originFilter, timeOfDayFilter, weekFilter],
+    [stems, query, originFilter, timeOfDayFilter, weekFilter],
   );
 
   const filtered = useMemo(
     () =>
       stems.filter((s) =>
-        matchesStemFilters(s, { query, activeFilter, originFilter, categoryFilter, timeOfDayFilter, weekFilter }),
+        matchesStemFilters(s, { query, activeFilter: 'all', originFilter, categoryFilter, timeOfDayFilter, weekFilter }),
       ),
-    [stems, query, activeFilter, originFilter, categoryFilter, timeOfDayFilter, weekFilter],
+    [stems, query, originFilter, categoryFilter, timeOfDayFilter, weekFilter],
   );
 
-  // Issue 03's at-a-glance state counts (§13.7: computed at read time,
-  // nothing stored). Deleted stems are neither active nor disabled — they
-  // are out of the pool entirely and render with their own 'deleted'
-  // marker. The counts live in the sheet's header now (s2-6's "the filter
-  // state is always visible" owns the always-visible line above the list).
-  const { activeCount, disabledCount } = useMemo(
-    () => ({
-      activeCount: stems.filter((s) => s.active && s.deleted_at === null).length,
-      disabledCount: stems.filter((s) => !s.active && s.deleted_at === null).length,
-    }),
-    [stems],
-  );
-
-  // The practice composition (w2-t4): the card and the grouped default view
-  // both derive from ONE engine read (§4.2's "one composition, two views").
-  // `readMorningPracticeQueue` gives the morning queue (picks, then the
-  // programme week block while Programme is on — D3: while off, programme
-  // state is never read); the effective week comes from the engine's
-  // `readProgrammeWeek`. Derived on `stems`' identity: every focus and
-  // every write refreshes the card for free.
-  const practice = useMemo(() => {
+  // The practice composition's counts (p8): the card counts the active,
+  // non-deleted rows through the verbatim groupForDefaultView — whatever
+  // the list filters show. Morning = the picks plus the programme week
+  // block while Programme is on (D3: while off, programme state is never
+  // read); Evening = the evening picks (starters included; the reflection
+  // meta-stems are no one's picks).
+  const practiceCounts = useMemo(() => {
     const repo = getRepository();
     const programmeOn = repo.getSettings().programme;
     const effectiveWeek = programmeOn ? readProgrammeWeek(repo).currentWeek : null;
-    // The queue rows are engine `StemRow`s; join them back to the library
-    // rows this screen already holds (one DB, one id space) so the card's
-    // rows render with the same anatomy as the list's.
-    const byId = new Map(stems.map((s) => [s.id, s]));
-    const queue = readMorningPracticeQueue(repo).flatMap((q) => {
-      const row = byId.get(q.id);
-      return row ? [row] : [];
-    });
-    return { programmeOn, effectiveWeek, queue };
+    const practiceRows = stems.filter((s) => s.active === 1 && s.deleted_at === null);
+    const groups = groupForDefaultView(practiceRows, { programmeOn, effectiveWeek });
+    const countOf = (key: LibraryGroupKey) => groups.find((g) => g.key === key)?.stems.length ?? 0;
+    return {
+      activeTotal: practiceRows.length,
+      morning: countOf('morning-picks') + (programmeOn ? countOf('programme-week') : 0),
+      evening: countOf('evening-picks'),
+    };
   }, [stems]);
-  const { programmeOn, effectiveWeek, queue: practiceQueue } = practice;
-
-  // The card's collapsed lines (§4.2). Morning: picks + the week block,
-  // partitioned by origin (the queue is `picks first, block second` by D1's
-  // own composition — the count split needs no second read). Evening: the
-  // reread + the reflection stem, then the evening picks (active evening-
-  // tagged picks and starters; seed programme rows belong to their week
-  // block, not to the picks).
-  const morningPickCount = practiceQueue.filter((s) => s.origin === 'user' || s.origin === 'imported').length;
-  const morningBlockCount = practiceQueue.length - morningPickCount;
-  const eveningPickCount = stems.filter(
-    (s) => s.active && s.deleted_at === null && s.time_of_day === 'evening' && s.origin !== 'meta' && !(s.origin === 'seed' && s.weekNumber !== null),
-  ).length;
-  const morningLine = programmeOn
-    ? `Morning · ${practiceQueue.length} ${practiceQueue.length === 1 ? 'stem' : 'stems'}: ${morningPickCount} ${
-        morningPickCount === 1 ? 'pick' : 'picks'
-      } + Programme Week ${effectiveWeek} (${morningBlockCount})`
-    : `Morning · ${morningPickCount} ${morningPickCount === 1 ? 'pick' : 'picks'}`;
-  const eveningLine =
-    eveningPickCount > 0
-      ? `Evening · reread + reflection + ${eveningPickCount} ${eveningPickCount === 1 ? 'pick' : 'picks'}`
-      : 'Evening · reread + reflection';
+  const { activeTotal, morning: morningCount, evening: eveningCount } = practiceCounts;
 
   // s2-6: the filter state is always visible — the count line above the
   // list, the Filters button carrying the non-default count, and the sheet
-  // repeating the live count.
-  const isDefaultView =
-    query === '' &&
-    activeFilter === 'active' &&
-    originFilter === 'all' &&
-    categoryFilter === 'all' &&
-    timeOfDayFilter === 'all' &&
-    weekFilter === 'all';
+  // repeating the live count. The State axis has no filter term: the
+  // grouping owns it (p8).
   const filtersActiveCount = useMemo(
     () =>
-      [
-        query !== '',
-        activeFilter !== 'active',
-        originFilter !== 'all',
-        categoryFilter !== 'all',
-        timeOfDayFilter !== 'all',
-        weekFilter !== 'all',
-      ].filter(Boolean).length,
-    [query, activeFilter, originFilter, categoryFilter, timeOfDayFilter, weekFilter],
+      [query !== '', originFilter !== 'all', categoryFilter !== 'all', timeOfDayFilter !== 'all', weekFilter !== 'all'].filter(
+        Boolean,
+      ).length,
+    [query, originFilter, categoryFilter, timeOfDayFilter, weekFilter],
   );
 
-  // The list data (§4.4): the default view groups the practice; any other
-  // filter or query flattens to one stable order. Grouping never drops a
-  // row: rows outside every named group (e.g. programme rows of weeks other
-  // than the effective one) trail, headerless.
+  // The list data (p8 mirror renderList): the two-group render over the
+  // rows the filters already selected. Partition by state identity in the
+  // renderer; Active keeps the stable flat order (s2-1), Deactivated keeps
+  // corpus order; an empty group's header skips; when both are empty the
+  // FlatList's EmptyState takes over. Filters narrow inside the grouping —
+  // nothing ever flattens it.
   const listData = useMemo((): ListEntry[] => {
-    if (!isDefaultView) {
-      return orderForFlatView(filtered).map((s) => ({ kind: 'stem' as const, key: s.id, stem: s }));
-    }
-    const groups = groupForDefaultView(filtered, { programmeOn, effectiveWeek });
-    const rowsOf = (key: LibraryGroupKey) => groups.find((g) => g.key === key)?.stems ?? [];
+    const active = filtered.filter((s) => s.active === 1);
+    const deactivated = filtered.filter((s) => s.active !== 1);
     const entries: ListEntry[] = [];
-    // Morning practice — always rendered (the practice's front door), with
-    // an honest empty line while no picks are active.
-    const morning = rowsOf('morning-picks');
-    entries.push({ kind: 'header', key: 'hdr-morning', header: 'morning' });
-    if (morning.length === 0) entries.push({ kind: 'note', key: 'note-morning', text: EMPTY_MORNING_LINE });
-    for (const s of morning) entries.push({ kind: 'stem', key: s.id, stem: s });
-    // The programme week door (s5 #3, replaces the pilot row): while
-    // Programme is on and the week is known, the group header renders even
-    // when the week block is empty — the door must not vanish with the rows.
-    if (programmeOn && effectiveWeek !== null) {
-      entries.push({ kind: 'header', key: 'hdr-programme', header: 'programme', week: effectiveWeek });
-      for (const s of rowsOf('programme-week')) entries.push({ kind: 'stem', key: s.id, stem: s });
+    if (active.length > 0) {
+      const collapsed = collapsedGroups.has('active');
+      entries.push({ kind: 'header', key: 'hdr-active', group: 'active', count: active.length, collapsed });
+      if (!collapsed) {
+        for (const s of orderForFlatView(active)) entries.push({ kind: 'stem', key: s.id, stem: s });
+      }
     }
-    // Evening practice — eyebrow once, the reflection sub-section (when its
-    // rows exist), then the evening picks.
-    const reflection = rowsOf('evening-reflection');
-    const picks = rowsOf('evening-picks');
-    if (reflection.length > 0 || picks.length > 0) {
-      entries.push({ kind: 'header', key: 'hdr-evening', header: 'evening' });
+    if (deactivated.length > 0) {
+      const collapsed = collapsedGroups.has('deactivated');
+      entries.push({ kind: 'header', key: 'hdr-deactivated', group: 'deactivated', count: deactivated.length, collapsed });
+      if (!collapsed) {
+        for (const s of deactivated) entries.push({ kind: 'stem', key: s.id, stem: s });
+      }
     }
-    if (reflection.length > 0) {
-      entries.push({ kind: 'header', key: 'hdr-reflection', header: 'reflection' });
-      for (const s of reflection) entries.push({ kind: 'stem', key: s.id, stem: s });
-    }
-    if (picks.length > 0) {
-      entries.push({ kind: 'header', key: 'hdr-evening-picks', header: 'evening-picks' });
-      for (const s of picks) entries.push({ kind: 'stem', key: s.id, stem: s });
-    }
-    for (const s of rowsOf('other')) entries.push({ kind: 'stem', key: s.id, stem: s });
     return entries;
-  }, [isDefaultView, filtered, programmeOn, effectiveWeek]);
+  }, [filtered, collapsedGroups]);
 
   // Selection mode (2026-09-11, replaces long-press-instant-toggle — see
   // docs/DECISIONS.md): long-press enters it and selects that row; while active,
@@ -361,36 +317,30 @@ export default function StemsScreen() {
     [effectiveSelection, stems, cancelSelection],
   );
 
-  // C4's marked exit (w2-t4): the card's "Pick more stems" clears every
-  // filter — the query included (w1-t7c: the query is a filter) — collapses
-  // the card, and scrolls past the card to the browsable list (design §4.2:
-  // "clears filters, scrolls to the list").
+  // C4's marked exit lives in the sheet's "Clear filters" now (the card's
+  // "Pick more stems" link died with the counts-only card): every filter —
+  // the query included (w1-t7c: the query is a filter) — resets. There is
+  // no State term: the grouping owns that axis (p8).
   const clearAllFilters = useCallback(() => {
     setQuery('');
-    setActiveFilter('active');
     setOriginFilter('all');
     setCategoryFilter('all');
     setTimeOfDayFilter('all');
     setWeekFilter('all');
-    setPracticeExpanded(false);
   }, []);
-  const pickMoreStems = useCallback(() => {
-    clearAllFilters();
-    requestAnimationFrame(() => {
-      listRef.current?.scrollToOffset({ offset: cardHeightRef.current, animated: true });
-    });
-  }, [clearAllFilters]);
 
   const renderEntry = useCallback(
     ({ item }: { item: ListEntry }) => {
       switch (item.kind) {
         case 'header':
-          return <GroupHeader header={item.header} week={'week' in item ? item.week : null} theme={theme} router={router} />;
-        case 'note':
           return (
-            <ThemedText type="small" themeColor="textSecondary" style={styles.groupEmpty}>
-              {item.text}
-            </ThemedText>
+            <GroupHeader
+              group={item.group}
+              count={item.count}
+              collapsed={item.collapsed}
+              theme={theme}
+              onToggle={() => toggleGroup(item.group)}
+            />
           );
         case 'stem':
           return (
@@ -406,7 +356,7 @@ export default function StemsScreen() {
           );
       }
     },
-    [theme, router, selectionMode, selectedIds, onRowPress, toggleSelected],
+    [theme, router, selectionMode, selectedIds, onRowPress, toggleSelected, toggleGroup],
   );
 
   return (
@@ -506,18 +456,12 @@ export default function StemsScreen() {
             while browsing: search, the always-visible Showing line (s2-6),
             and the category strip. */}
         <FlatList<ListEntry>
-          ref={listRef}
           data={listData}
           keyExtractor={(item) => item.key}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={<EmptyState message="No stems match." />}
           ListHeaderComponent={
-            <ThemedView
-              style={[styles.practiceCard, { backgroundColor: theme.backgroundElement }]}
-              onLayout={(e) => {
-                cardHeightRef.current = e.nativeEvent.layout.height;
-              }}
-            >
+            <ThemedView style={[styles.practiceCard, { backgroundColor: theme.backgroundElement }]}>
               <Pressable
                 onPress={() => setPracticeExpanded((v) => !v)}
                 accessibilityRole="button"
@@ -525,15 +469,7 @@ export default function StemsScreen() {
                 accessibilityState={{ expanded: practiceExpanded }}
                 style={styles.practiceCardHeader}
               >
-                <View style={styles.practiceCardTitles}>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.groupEyebrow}>
-                    In practice
-                  </ThemedText>
-                  <ThemedText type="default">{morningLine}</ThemedText>
-                  <ThemedText type="default" themeColor="textSecondary">
-                    {eveningLine}
-                  </ThemedText>
-                </View>
+                <ThemedText type="default">{`Currently active ${activeTotal}`}</ThemedText>
                 <Ionicons
                   name={practiceExpanded ? 'chevron-up-outline' : 'chevron-down-outline'}
                   size={18}
@@ -542,78 +478,12 @@ export default function StemsScreen() {
               </Pressable>
               {practiceExpanded && (
                 <View style={styles.practiceCardBody}>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    Morning
+                  <ThemedText type="default" themeColor="textSecondary">
+                    {`Morning ${morningCount}`}
                   </ThemedText>
-                  {practiceQueue.map((stem) => (
-                    <StemRow
-                      key={stem.id}
-                      item={stem}
-                      theme={theme}
-                      router={router}
-                      editable={false}
-                      selectable={false}
-                      onPress={writeNow}
-                      onLongPress={toggleSelected}
-                    />
-                  ))}
-                  <ThemedText type="small" themeColor="textSecondary">
-                    Evening
+                  <ThemedText type="default" themeColor="textSecondary">
+                    {`Evening ${eveningCount}`}
                   </ThemedText>
-                  {stems
-                    .filter((s) => s.origin === 'meta' && s.time_of_day === 'evening' && s.deleted_at === null)
-                    .map((stem) => (
-                      <StemRow
-                        key={stem.id}
-                        item={stem}
-                        theme={theme}
-                        router={router}
-                        editable={false}
-                        selectable={false}
-                        onPress={writeNow}
-                        onLongPress={toggleSelected}
-                      />
-                    ))}
-                  {stems
-                    .filter(
-                      (s) =>
-                        s.active &&
-                        s.deleted_at === null &&
-                        s.time_of_day === 'evening' &&
-                        s.origin !== 'meta' &&
-                        !(s.origin === 'seed' && s.weekNumber !== null),
-                    )
-                    .map((stem) => (
-                      <StemRow
-                        key={stem.id}
-                        item={stem}
-                        theme={theme}
-                        router={router}
-                        editable={false}
-                        selectable={false}
-                        onPress={writeNow}
-                        onLongPress={toggleSelected}
-                      />
-                    ))}
-                  <View style={styles.practiceCardLinks}>
-                    <Button
-                      label="Pick more stems"
-                      onPress={pickMoreStems}
-                      variant="text"
-                      style={styles.practiceCardLinkButton}
-                    />
-                    {programmeOn && effectiveWeek !== null && (
-                      <Pressable
-                        onPress={() => router.push('/week')}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Week ${effectiveWeek}. Opens the programme weeks.`}
-                        style={styles.practiceWeekLink}
-                      >
-                        <ThemedText type="default">{`Week ${effectiveWeek}`}</ThemedText>
-                        <Ionicons name="chevron-forward-outline" size={16} color={theme.textSecondary} />
-                      </Pressable>
-                    )}
-                  </View>
                 </View>
               )}
             </ThemedView>
@@ -625,8 +495,9 @@ export default function StemsScreen() {
         {/* The filters bottom sheet (s5 #4; the app's own WeekPicker Modal
             pattern): every filter control in one scroll view, opened by the
             Filters button, closed by Done, the scrim, or back. The header
-            repeats the live counts so the sheet's changes read against the
-            numbers they move. */}
+            repeats the live Showing count so the sheet's changes read
+            against the number they move. No State row: the Active/
+            Deactivated grouping owns that axis (p8). */}
         <Modal visible={filtersOpen} transparent animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
           <Pressable style={styles.sheetScrim} onPress={() => setFiltersOpen(false)} accessibilityLabel="Close filters">
             <View
@@ -636,9 +507,6 @@ export default function StemsScreen() {
               <View style={styles.sheetHeader}>
                 <View style={styles.sheetHeaderTitles}>
                   <ThemedText type="default">{`Showing ${filtered.length} of ${stems.length}`}</ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {`${activeCount} active · ${disabledCount} disabled`}
-                  </ThemedText>
                 </View>
                 <View style={styles.sheetHeaderButtons}>
                   <Button label="Clear filters" onPress={clearAllFilters} variant="text" style={styles.sheetClearButton} />
@@ -647,20 +515,6 @@ export default function StemsScreen() {
               </View>
               <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetScrollContent}>
                 <WeekPicker value={weekFilter} onChange={setWeekFilter} />
-
-                <FilterRow
-                  label="State"
-                  options={[
-                    { value: 'active', label: 'Active' },
-                    // Display-only rename (v13-feedback issue 07, owner feedback
-                    // "instead of restive use disabled"): the filter VALUE stays
-                    // 'archived' in storage, exports, and the filter module.
-                    { value: 'archived', label: 'Disabled' },
-                    { value: 'all', label: 'All' },
-                  ]}
-                  value={activeFilter}
-                  onChange={(v) => setActiveFilter(v as ActiveFilter)}
-                />
 
                 <FilterRow
                   label="Origin"
@@ -893,70 +747,40 @@ const StemRow = memo(function StemRow({
   );
 });
 
-// The grouped default view's section headers (§4.4). The 'programme' header
-// is the week door (s5 #3): the pilot rows' navigation lives here now.
+// The two base groups' headers (p8, the owner-approved mirror): title +
+// count + collapse chevron, no subtitles. Tapping the header collapses or
+// expands its group; an empty group renders no header at all.
 function GroupHeader({
-  header,
-  week,
+  group,
+  count,
+  collapsed,
   theme,
-  router,
+  onToggle,
 }: {
-  header: 'morning' | 'programme' | 'evening' | 'reflection' | 'evening-picks';
-  week: number | null;
+  group: GroupName;
+  count: number;
+  collapsed: boolean;
   theme: Theme;
-  router: Router;
+  onToggle: () => void;
 }) {
-  switch (header) {
-    case 'morning':
-      return (
-        <View style={styles.groupHeader}>
-          <ThemedText type="small" themeColor="textSecondary" style={styles.groupEyebrow}>
-            Morning
-          </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            Your picks, plus the programme’s current week while Programme is on.
-          </ThemedText>
-          <ThemedText type="default" style={styles.groupTitle}>
-            Your picks
-          </ThemedText>
-        </View>
-      );
-    case 'programme':
-      return (
-        <Pressable
-          onPress={() => router.push('/week')}
-          accessibilityRole="button"
-          accessibilityLabel={`Programme Week ${week}. Opens the programme weeks.`}
-          style={[styles.groupWeekLink, { backgroundColor: theme.backgroundElement }]}
-        >
-          <ThemedText type="default">{`Programme · Week ${week}`}</ThemedText>
-          <Ionicons name="chevron-forward-outline" size={18} color={theme.textSecondary} />
-        </Pressable>
-      );
-    case 'evening':
-      return (
-        <View style={styles.groupHeader}>
-          <ThemedText type="small" themeColor="textSecondary" style={styles.groupEyebrow}>
-            Evening
-          </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            Rereads today’s endings, then the reflection stem, then your evening picks.
-          </ThemedText>
-        </View>
-      );
-    case 'reflection':
-      return (
-        <ThemedText type="default" style={styles.groupTitle}>
-          Reflection
+  const title = group === 'active' ? 'Active' : 'Deactivated';
+  return (
+    <Pressable
+      onPress={onToggle}
+      accessibilityRole="button"
+      accessibilityLabel={`${title} group: ${count} ${count === 1 ? 'stem' : 'stems'}`}
+      accessibilityState={{ expanded: !collapsed }}
+      style={[styles.groupHeader, { backgroundColor: theme.backgroundElement }]}
+    >
+      <ThemedText type="default">{title}</ThemedText>
+      <View style={styles.groupHeaderTrailing}>
+        <ThemedText type="small" themeColor="textSecondary">
+          {count}
         </ThemedText>
-      );
-    case 'evening-picks':
-      return (
-        <ThemedText type="default" style={styles.groupTitle}>
-          Your picks
-        </ThemedText>
-      );
-  }
+        <Ionicons name={collapsed ? 'chevron-forward-outline' : 'chevron-down-outline'} size={18} color={theme.textSecondary} />
+      </View>
+    </Pressable>
+  );
 }
 
 function FilterRow<T extends string>({
@@ -1094,30 +918,9 @@ const styles = StyleSheet.create({
     minHeight: MinTouchTarget,
     gap: Spacing.two,
   },
-  practiceCardTitles: {
-    flex: 1,
-    gap: Spacing.half,
-    backgroundColor: 'transparent',
-  },
   practiceCardBody: {
-    gap: Spacing.one,
+    gap: Spacing.half,
     marginTop: Spacing.one,
-  },
-  practiceCardLinks: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: Spacing.one,
-  },
-  practiceCardLinkButton: {
-    minHeight: MinTouchTarget,
-  },
-  practiceWeekLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-    minHeight: MinTouchTarget,
-    paddingHorizontal: Spacing.two,
   },
   controlsRow: {
     flexDirection: 'row',
@@ -1285,29 +1088,22 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     gap: Spacing.two,
   },
+  // The two base groups' header rows (p8): same list-row anatomy as the
+  // stems below (backgroundElement fill, screen padding), title + count +
+  // one quiet chevron, no subtitles. The whole row is the collapse toggle.
   groupHeader: {
-    gap: Spacing.half,
-    marginTop: Spacing.one,
-  },
-  groupEyebrow: {
-    textTransform: 'uppercase',
-  },
-  groupTitle: {
-    marginTop: Spacing.half,
-  },
-  // The programme group header IS the week door (s5 #3): same list-row
-  // anatomy as the stems below, one quiet chevron — the pilot rows'
-  // destination without the chrome.
-  groupWeekLink: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: MinTouchTarget,
+    marginTop: Spacing.one,
     padding: Spacing.three,
     borderRadius: Radius.medium,
   },
-  groupEmpty: {
-    marginTop: Spacing.half,
+  groupHeaderTrailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
   },
   // Same shape as `Card` (backgroundElement fill, `Spacing.three` padding)
   // plus the active/inactive edge tint `Card` has no slot for, so this stays
