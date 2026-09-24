@@ -764,8 +764,8 @@ export default function WriteScreen() {
                   {/* Packet-3 t9 (routed from the t5 verdict via the t10 row,
                       packet-2 C8): the acknowledgment names its object — the
                       bare "Saved." said nothing. Quiet, no evaluation
-                      (§13.4); settings' own saved notice keeps "Saved."
-                      (different object, not this item). */}
+                      (§13.4). (The settings screen's own "Saved." notice was
+                      retired in p10 t3 — this row is a different object.) */}
                   <ThemedText type="default" themeColor="textSecondary">
                     Session saved.
                   </ThemedText>
