@@ -283,7 +283,17 @@ export default function OnboardingScreen() {
             <EveningPracticeCard onAnswer={answerEvening} onSkip={skipEvening} disabled={isReplay} />
           </ThemedView>
 
-          <ThemedView style={[styles.page, { width }]}>
+          {/* Step 5 (ticket 01, 320x640 floor): the flow's densest page —
+              its content exceeds the pager viewport at the floor, which
+              clipped the Done button to a sliver at the page bottom. The
+              page itself is a vertical scroll container: the flexGrow
+              content container keeps the p8 centered look whenever the
+              content fits, and scrolls when it cannot. */}
+          <ScrollView
+            style={[styles.pageScroll, { width }]}
+            contentContainerStyle={styles.pageContent}
+            showsVerticalScrollIndicator={false}
+          >
             <ThemedText type="title">Choose your settings</ThemedText>
             <ThemedText type="default" themeColor="textSecondary">
               You can change any of this later in Settings.
@@ -341,7 +351,7 @@ export default function OnboardingScreen() {
             )}
 
             <Button label="Done" onPress={finish} />
-          </ThemedView>
+          </ScrollView>
         </ScrollView>
 
         <ThemedView style={styles.footer}>
@@ -490,6 +500,18 @@ const styles = StyleSheet.create({
   pageForCard: {
     gap: 0,
     padding: 0,
+  },
+  // Step 5's scroll container (ticket 01): the page fills the pager
+  // viewport; centering and padding live on the content container, so the
+  // centered p8 look is unchanged while the content can scroll at 320x640.
+  pageScroll: {
+    flexGrow: 0,
+  },
+  pageContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    gap: Spacing.three,
+    padding: Spacing.four,
   },
   dots: {
     flexDirection: 'row',
