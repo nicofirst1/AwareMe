@@ -17,7 +17,10 @@
         "backgroundColor": "#fef5e8",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      }
+      },
+      "permissions": [
+        "android.permission.USE_EXACT_ALARM"
+      ]
     },
     "plugins": [
       "expo-router",
