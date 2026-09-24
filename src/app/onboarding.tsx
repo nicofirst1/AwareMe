@@ -1,4 +1,4 @@
-import { Link, useRouter } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import {
   NativeScrollEvent,
@@ -68,6 +68,20 @@ const STEP_COUNT = 5;
  * `PrefRow` is retired in favor of the shared `StepperRow` (cycle 5's
  * component — one stepper anatomy app-wide, identical prop contract), and
  * form field labels (Morning/Evening) use the `eyebrow` role per LC6.
+ *
+ * p8-t2 (owner-approved mockups + mechanics 2026-09-24): the flow doubles
+ * as the read-only replay behind About's "Show introduction" row. The
+ * whole mechanism is the `replay=1` route param (no new storage): the
+ * `onboarding_completed` flag's contract and the `_layout.tsx` gate are
+ * untouched, and in replay every write path below is inert — no
+ * `setOnboardingComplete`, no `setIntroComplete`, no setting or
+ * notification-time writes, no permission prompt. Replay renders as the
+ * ordinary flow; the tells are only the disabled interactive controls
+ * (steppers, reminder and evening asks — the app's 0.5 disabled step;
+ * "Done" stays enabled) and the exits: the footer reads "Close" instead
+ * of "Skip", and both Close and Done return to About (`router.back()`,
+ * the app's Close idiom) instead of Home. The param is written only by
+ * about.tsx's row; replay mode is presentation-only by construction.
  */
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -83,7 +97,21 @@ export default function OnboardingScreen() {
   const [eveningTime, setEveningTime] = useState('21:00');
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean | null>(null);
 
+  // p8-t2: `replay=1` (written only by about.tsx's row) marks the read-only
+  // replay; see the docblock above. No storage is read or written for it.
+  const { replay } = useLocalSearchParams<{ replay?: string }>();
+  const isReplay = replay === '1';
+
+  // Replay's one exit action: pop back to About — the flow was pushed from
+  // there, and back() is the app's Close idiom (write.tsx, review.tsx).
+  const exitReplay = () => router.back();
+
   const finish = () => {
+    // Replay: Done stays enabled but writes nothing — it returns to About.
+    if (isReplay) {
+      exitReplay();
+      return;
+    }
     repo.setOnboardingComplete();
     // Every exit marks the evening question asked (the once-marker), so no
     // path — early skip included — loops the question back afterwards.
@@ -101,6 +129,11 @@ export default function OnboardingScreen() {
   };
 
   const skip = () => {
+    // Replay: the footer's Close — no writes, back to About.
+    if (isReplay) {
+      exitReplay();
+      return;
+    }
     repo.setOnboardingComplete();
     repo.setIntroComplete();
     router.replace('/');
@@ -119,6 +152,7 @@ export default function OnboardingScreen() {
   };
 
   const askForNotifications = async () => {
+    if (isReplay) return; // Disabled in replay; belt for a freak invocation.
     const granted = await requestNotificationPermission();
     setNotificationsEnabled(granted);
     goToStep(3);
@@ -127,6 +161,7 @@ export default function OnboardingScreen() {
   // Tab 4's answer (the card calls one of these): persist exactly like the
   // standalone card does, then continue to the last tab.
   const answerEvening = (include: boolean) => {
+    if (isReplay) return; // Disabled in replay; belt for a freak invocation.
     repo.setSetting('evening_practice_enabled', include);
     repo.setIntroComplete();
     // §6.4: reschedule on a notification-relevant setting change. No-op
@@ -138,6 +173,7 @@ export default function OnboardingScreen() {
   };
 
   const skipEvening = () => {
+    if (isReplay) return; // Disabled in replay; belt for a freak invocation.
     // No answer = the morning default (v14 issue 05): pinned explicitly, so
     // the §7 factory default (enabled) never survives the question.
     repo.setSetting('evening_practice_enabled', false);
@@ -170,7 +206,9 @@ export default function OnboardingScreen() {
             <ThemedText type="title">About the method</ThemedText>
             <ThemedText type="default">
               This app is built on the sentence completion method, developed by the psychologist
-              Nathaniel Branden. The method is part of a larger approach aimed at increasing self-awareness.
+              Nathaniel Branden. The method is part of a larger approach aimed at increasing
+              self-awareness. In practice it is small and daily: a few minutes in the morning to
+              write, a moment in the evening to reread.
             </ThemedText>
             {/* accessibilityRole="link" + explicit label: the link convention
                 BackHeader documents (index.tsx's Link rows); the label keeps
@@ -201,6 +239,11 @@ export default function OnboardingScreen() {
               The quickness is the point. Endings written before you can polish them tend to surface how you
               actually respond. The value is in the pattern across many endings, not in any single one.
             </ThemedText>
+            {/* p8-t2 draft: the loop — write, reread, reflect — stated once, plainly. */}
+            <ThemedText type="default">
+              A day with the app: in the morning you write your endings. In the evening you reread
+              what you wrote and reflect on it. Once a week, one reflection pulls the week together.
+            </ThemedText>
           </ThemedView>
 
           <ThemedView style={[styles.page, { width }]}>
@@ -214,10 +257,16 @@ export default function OnboardingScreen() {
                 "Not now" stays the quiet alternative. The hint states what
                 allowing does, honestly: decline and nothing is lost. */}
             <ThemedView style={styles.buttonRow}>
-              <Button label="Allow reminders" variant="primary" onPress={askForNotifications} />
+              <Button
+                label="Allow reminders"
+                variant="primary"
+                onPress={askForNotifications}
+                disabled={isReplay}
+              />
               <Button
                 label="Not now"
                 variant="text"
+                disabled={isReplay}
                 onPress={() => {
                   setNotificationsEnabled(false);
                   goToStep(3);
@@ -231,7 +280,7 @@ export default function OnboardingScreen() {
           </ThemedView>
 
           <ThemedView style={[styles.page, styles.pageForCard, { width }]}>
-            <EveningPracticeCard onAnswer={answerEvening} onSkip={skipEvening} />
+            <EveningPracticeCard onAnswer={answerEvening} onSkip={skipEvening} disabled={isReplay} />
           </ThemedView>
 
           <ThemedView style={[styles.page, { width }]}>
@@ -245,7 +294,8 @@ export default function OnboardingScreen() {
                 from DEFAULT_SETTINGS' default (the engine's). */}
             <ThemedText type="default" themeColor="textSecondary">
               The programme adds guided stems each week. You can disable the programme in Settings and pick your own
-              stems.
+              stems. While the programme is on, your morning practice is your picks plus that week’s
+              guided stems.
             </ThemedText>
 
             <StepperRow
@@ -253,6 +303,7 @@ export default function OnboardingScreen() {
               value={endingsPerSession}
               rangeKey="endings_per_session"
               onChange={setEndingsPerSession}
+              disabled={isReplay}
             />
             {/* v14 issue 06: the label names a setting, not a meaning — one
                 dim line does that job (settings.tsx's Hint pattern, LC3). */}
@@ -265,6 +316,7 @@ export default function OnboardingScreen() {
               rangeKey="timer_seconds"
               step={10}
               onChange={setTimerSeconds}
+              disabled={isReplay}
             />
 
             {notificationsEnabled && (
@@ -313,7 +365,7 @@ export default function OnboardingScreen() {
             )}
             <Pressable onPress={skip} style={styles.textButton} accessibilityRole="button">
               <ThemedText type="small" themeColor="textSecondary">
-                Skip
+                {isReplay ? 'Close' : 'Skip'}
               </ThemedText>
             </Pressable>
           </ThemedView>

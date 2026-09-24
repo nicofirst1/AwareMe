@@ -31,6 +31,9 @@ const AndroidMinTouchTarget = 48;
  *   buttons simply stop moving at the bounds).
  * - `step` — amount per press (default 1; settings' timer uses 10).
  * - `onChange` — called with the clamped next value; callers persist.
+ * - `disabled` — p8-t2 replay: renders both buttons disabled
+ *   (`accessibilityState.disabled` + the app's 0.5 opacity step, the
+ *   button.tsx idiom) so replay writes nothing; default false.
  *
  * Layout contract (LC3): render inside a section with the 8pt row gap;
  * the caller owns anything above/below — settings puts its explanatory
@@ -42,12 +45,15 @@ export function StepperRow({
   rangeKey,
   step = 1,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: number;
   rangeKey: keyof typeof SETTINGS_RANGES;
   step?: number;
   onChange: (next: number) => void;
+  /** Inert rendering (p8-t2 replay): both buttons disabled at the app's 0.5 step. */
+  disabled?: boolean;
 }) {
   const theme = useTheme();
   return (
@@ -58,9 +64,15 @@ export function StepperRow({
       <View style={styles.stepper}>
         <Pressable
           onPress={() => onChange(clampSetting(rangeKey, value - step))}
-          style={[styles.stepperButton, { backgroundColor: theme.backgroundSelected }]}
+          disabled={disabled}
           accessibilityRole="button"
           accessibilityLabel={`Decrease ${label}`}
+          accessibilityState={{ disabled }}
+          style={[
+            styles.stepperButton,
+            { backgroundColor: theme.backgroundSelected },
+            disabled && styles.stepperButtonDisabled,
+          ]}
         >
           <ThemedText type="subtitle">−</ThemedText>
         </Pressable>
@@ -69,9 +81,15 @@ export function StepperRow({
         </ThemedText>
         <Pressable
           onPress={() => onChange(clampSetting(rangeKey, value + step))}
-          style={[styles.stepperButton, { backgroundColor: theme.backgroundSelected }]}
+          disabled={disabled}
           accessibilityRole="button"
           accessibilityLabel={`Increase ${label}`}
+          accessibilityState={{ disabled }}
+          style={[
+            styles.stepperButton,
+            { backgroundColor: theme.backgroundSelected },
+            disabled && styles.stepperButtonDisabled,
+          ]}
         >
           <ThemedText type="subtitle">+</ThemedText>
         </Pressable>
@@ -101,6 +119,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.chip,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // The app's disabled step (button.tsx's 0.5 opacity), applied to the two
+  // −/+ buttons only — approved mockup 03 dims the controls, not the label.
+  stepperButtonDisabled: {
+    opacity: 0.5,
   },
   stepperValue: {
     minWidth: 40,

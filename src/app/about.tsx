@@ -35,6 +35,14 @@ import { useTheme } from '@/hooks/use-theme';
  * user-initiated hop to the website), and the permission attribution
  * crediting Leigh Branden — a §5.1 MUST. No new dependencies: expo-linking
  * was already a hard runtime peer of expo-router (see docs/DECISIONS.md).
+ *
+ * p8-t2 (owner-approved mockup 2026-09-24): the links block gains a first
+ * row, "Show introduction", re-entering the five-step onboarding flow as a
+ * read-only replay. The route param `replay=1` is the whole mechanism (no
+ * new storage): onboarding.tsx keeps every write path inert in replay and
+ * every replay exit returns here, while `onboarding_completed` and the
+ * `_layout.tsx` gate keep their existing meaning. Row order runs in-app
+ * action → background → external: the introduction is the app's how-to.
  */
 
 const OFFICIAL_PROGRAMME_URL = 'https://nathanielbranden.com/sentence-completion-i/';
@@ -64,6 +72,16 @@ export default function AboutScreen() {
           </ThemedText>
 
           <ThemedView style={styles.links}>
+            <Pressable
+              style={styles.linkRow}
+              onPress={() => router.push({ pathname: '/onboarding', params: { replay: '1' } })}
+              accessibilityRole="link"
+              accessibilityLabel="Show the introduction from your first launch"
+            >
+              <ThemedText type="default">Show introduction</ThemedText>
+              <Ionicons name="chevron-forward-outline" size={16} color={theme.accent} />
+            </Pressable>
+
             <Pressable
               style={styles.linkRow}
               onPress={() => router.push('/about-method')}
