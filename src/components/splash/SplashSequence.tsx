@@ -24,6 +24,12 @@ import { useTheme } from '@/hooks/use-theme';
  *   quote — the quote fades in
  *   exit  — the whole overlay fades away, then unmounts
  *
+ * Both text slots (wordmark, quote) are reserved from the overlay's first
+ * frame: their Views render immediately with opacity 0 and animate to 1 at
+ * their beats, so the centered column's layout is stable from frame one and
+ * only opacity changes. (Owner report 2026-09-25: mounting each text element
+ * re-centered the overlay column and hopped the logo upwards — twice.)
+ *
  * The native splash (app.json, expo-splash-screen plugin) hands off to
  * this overlay seamlessly: the overlay's background is the theme's
  * `background` token — the same cream (#fef5e8, `Palette.cream.base`) the
@@ -79,13 +85,6 @@ const TIMING = {
 } as const;
 
 type Phase = 'logo' | 'name' | 'quote' | 'exit' | 'done';
-
-/**
- * Phase rank drives mount gating below: the wordmark joins from the `name`
- * phase onward, the quote from `quote` onward; earlier elements stay
- * mounted, so the sequence reads as one composition assembling itself.
- */
-const PHASE_RANK: Record<Phase, number> = { logo: 0, name: 1, quote: 2, exit: 3, done: 4 };
 
 export function SplashSequence() {
   const theme = useTheme();
@@ -160,9 +159,6 @@ export function SplashSequence() {
     return null;
   }
 
-  const showWordmark = reduceMotion === true || PHASE_RANK[phase] >= PHASE_RANK.name;
-  const showQuote = reduceMotion === true || PHASE_RANK[phase] >= PHASE_RANK.quote;
-
   return (
     <Animated.View
       testID="splash-overlay"
@@ -192,19 +188,19 @@ export function SplashSequence() {
         />
       </Animated.View>
 
-      {showWordmark && (
-        <Animated.View testID="splash-wordmark" style={[styles.wordmark, { opacity: nameAnim }]}>
-          <ThemedText type="title">{WORDMARK}</ThemedText>
-        </Animated.View>
-      )}
+      {/* Reserved slots: rendered from mount with opacity 0 (the animated
+          values' start), so the column never re-flows mid-sequence. The
+          phase machine drives only their opacity; the reduce-motion path
+          sets every value to 1, so the slots show with the final state. */}
+      <Animated.View testID="splash-wordmark" style={[styles.wordmark, { opacity: nameAnim }]}>
+        <ThemedText type="title">{WORDMARK}</ThemedText>
+      </Animated.View>
 
-      {showQuote && (
-        <Animated.View testID="splash-quote" style={[styles.quote, { opacity: quoteAnim }]}>
-          <ThemedText type="default" themeColor="textSecondary">
-            {SPLASH_QUOTE_PLACEHOLDER}
-          </ThemedText>
-        </Animated.View>
-      )}
+      <Animated.View testID="splash-quote" style={[styles.quote, { opacity: quoteAnim }]}>
+        <ThemedText type="default" themeColor="textSecondary">
+          {SPLASH_QUOTE_PLACEHOLDER}
+        </ThemedText>
+      </Animated.View>
     </Animated.View>
   );
 }
