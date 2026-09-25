@@ -204,13 +204,15 @@ describe('HomeScreen', () => {
   // honest caption on the week card, always present, true in both programme
   // states (the D3 counting rule in user words: only reflections completed
   // while the programme is on advance the week).
-  it('states the week-advancement rule on the week card (s1-F5, packet-7 w2-t6)', () => {
+  // s1-F5's week-advancement line was removed 2026-09-24 (owner call);
+  // the footer keeps only the session counters.
+  it('keeps the week footer to session counters (s1-F5 line removed, owner 2026-09-24)', () => {
     render(<HomeScreen />);
     expect(
-      screen.getByText(
+      screen.queryByText(
         'Your week advances when you complete its weekly reflection while the programme is on. It never moves on its own.',
       ),
-    ).toBeTruthy();
+    ).toBeNull();
   });
 
   it('reads the ready count from the composed practice: picks + programme block while on (design §6.1)', () => {
@@ -235,10 +237,10 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Week 1 of 30')).toBeTruthy();
     expect(screen.getByText('Start morning practice')).toBeTruthy();
     expect(
-      screen.getByText(
+      screen.queryByText(
         'Your week advances when you complete its weekly reflection while the programme is on. It never moves on its own.',
       ),
-    ).toBeTruthy();
+    ).toBeNull();
   });
 
   it('under Programme off, the chosen-week line drops the completion-clear promise (no automation promises while off)', () => {

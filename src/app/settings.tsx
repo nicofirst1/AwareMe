@@ -652,21 +652,9 @@ export default function SettingsScreen() {
             </Card>
           </ThemedView>
 
-          {/* The About row (p10 settings port): the /about-method link as a
-              full-width row affordance — 44pt-min tappable height, trailing
-              chevron, hairline rules — index.tsx's link-row idiom
-              (accessibilityRole="link" + explicit label, BackHeader's
-              convention; the chevron alone carries the affordance, the
-              label stays the visible text). */}
-          <Link
-            href="/about-method"
-            style={[styles.navLink, { borderColor: theme.border }]}
-            accessibilityRole="link"
-            accessibilityLabel="About the method"
-          >
-            <ThemedText type="default">About the method</ThemedText>
-            <Ionicons name="chevron-forward-outline" size={16} color={theme.textSecondary} />
-          </Link>
+          {/* The About row was removed 2026-09-24 (owner: "remove about
+              the method"); /about-method stays reachable from the About
+              screen and the intro (about.tsx:87, onboarding.tsx:217). */}
 
           <ThemedView style={styles.group}>
             <SectionHeader label="Data" />

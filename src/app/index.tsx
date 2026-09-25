@@ -360,15 +360,10 @@ export default function HomeScreen() {
 
             {status && (
               <View style={styles.statusFooter}>
-                {/* s1-F5 (packet-7 w2-t6, design §6.1): the week-advancement
-                    rule becomes visible — one honest line, always present,
-                    true in both programme states (only reflections completed
-                    while the programme is on advance the week; D3's counting
-                    rule in user words). */}
-                <ThemedText type="small" themeColor="textSecondary">
-                  Your week advances when you complete its weekly reflection while the programme is on. It never
-                  moves on its own.
-                </ThemedText>
+                {/* s1-F5's week-advancement line removed 2026-09-24 (owner:
+                    "remove 'your week advances when… on its own'") — the
+                    rule stays in the method docs, the Home footer keeps
+                    only the session counters. */}
                 {status.weekCount > 0 && (
                   <ThemedText type="small" themeColor="textSecondary">
                     {status.weekCount === 1 ? '1 session this week' : `${status.weekCount} sessions this week`}

@@ -108,9 +108,9 @@ describe('SettingsScreen', () => {
     expect(screen.getByText('Writing')).toBeTruthy();
     expect(screen.getByText('App')).toBeTruthy();
     expect(screen.getByText('Data')).toBeTruthy();
-    expect(screen.getByText('About the method')).toBeTruthy();
-    // o11 layout/a11y cycle: the nav link carries the link role + label.
-    expect(screen.getByRole('link', { name: 'About the method' })).toBeTruthy();
+    // The About row was removed 2026-09-24 (owner call); /about-method
+    // stays reachable from the About screen and the intro.
+    expect(screen.queryByText('About the method')).toBeNull();
     expect(screen.getByText('Delete all data')).toBeTruthy();
   });
 
@@ -463,7 +463,7 @@ describe('SettingsScreen', () => {
     render(<SettingsScreen />);
 
     fireEvent.press(screen.getByRole('button', { name: 'Programme: on' }));
-    // The /about-method link convention (role="link" + explicit label).
+    // The /week link convention (role="link" + explicit label).
     fireEvent.press(screen.getByRole('link', { name: 'Pick a different week' }));
 
     expect(mockPush).toHaveBeenCalledWith('/week');
