@@ -11,10 +11,15 @@ import { Colors } from '@/constants/theme';
 configure({ defaultIncludeHiddenElements: true });
 
 // The sequence is choreographed by setTimeout transitions, so tests drive it
-// with fake timers and assert PHASE GATING (which elements are mounted at
-// which point) plus the final self-dismissal — never interpolation values
-// (the Animated opacities themselves are not meaningfully assertable in the
-// jest environment, and the contract lives in the phase machine).
+// with fake timers and assert the RESERVED-SLOT contract: both text slots are
+// mounted from the first frame with opacity 0 (the centered column's layout
+// never re-flows), the phase machine drives only their opacity, and the
+// overlay still dismisses itself — never interpolation values mid-animation
+// (the Animated driver does not run meaningfully in the jest environment).
+// Rendered styles carry the animated values' snapshot at the latest render,
+// so pre-beat slots read a deterministic 0; the reduce-motion path's
+// setValue(1) happens without a re-render, so only presence is asserted
+// there (visibility on-device comes from the setValue, not the render).
 //
 // `isReduceMotionEnabled` is spied per test: the component reads it once on
 // mount, so the spy's resolved value decides which path runs (animated vs.
@@ -39,29 +44,46 @@ async function settle(): Promise<void> {
   await act(async () => {});
 }
 
+/**
+ * The rendered opacity snapshot of a reserved slot: the animated value's
+ * value at the latest render. Deterministic for slots no animation has
+ * touched yet (the constructor's start value, 0); mid-animation and
+ * post-setValue values are not asserted (stale snapshot / driver-dependent).
+ */
+function slotOpacity(testId: string): number {
+  const style = StyleSheet.flatten(screen.getByTestId(testId).props.style);
+  return style.opacity as number;
+}
+
 describe('SplashSequence', () => {
-  it('mounts the wordmark and the quote in sequence, then dismisses itself', async () => {
+  it('reserves both text slots from mount, animates their opacity in sequence, then dismisses itself', async () => {
     render(<SplashSequence />);
     await settle();
 
-    // Phase 1: the logo alone, over the full-screen overlay.
+    // Phase 1: the logo alone over the full-screen overlay — but BOTH text
+    // slots are already mounted (reserved from frame one) and transparent,
+    // so the centered column's layout is stable and never re-flows when a
+    // slot becomes visible (the owner's 2026-09-25 logo-hop report).
     expect(screen.getByTestId('splash-overlay')).toBeTruthy();
     expect(screen.getByTestId('splash-logo')).toBeTruthy();
-    expect(screen.queryByTestId('splash-wordmark')).toBeNull();
-    expect(screen.queryByTestId('splash-quote')).toBeNull();
-
-    // Phase 2: the AwareMe wordmark joins (560ms into the sequence).
-    act(() => {
-      jest.advanceTimersByTime(560);
-    });
-    expect(screen.getByText('AwareMe')).toBeTruthy();
-    expect(screen.queryByTestId('splash-quote')).toBeNull();
-
-    // Phase 3: the quote joins (1120ms).
-    act(() => {
-      jest.advanceTimersByTime(560);
-    });
+    expect(screen.getByTestId('splash-wordmark')).toBeTruthy();
     expect(screen.getByTestId('splash-quote')).toBeTruthy();
+    expect(screen.getByText('AwareMe')).toBeTruthy();
+    expect(slotOpacity('splash-wordmark')).toBe(0);
+    expect(slotOpacity('splash-quote')).toBe(0);
+
+    // Phase 2: the wordmark's beat (560ms into the sequence) — its opacity
+    // is now animating (not asserted mid-flight); the quote slot is still
+    // untouched by any animation, so its value is deterministic.
+    act(() => {
+      jest.advanceTimersByTime(560);
+    });
+    expect(slotOpacity('splash-quote')).toBe(0);
+
+    // Phase 3: the quote's beat (1120ms).
+    act(() => {
+      jest.advanceTimersByTime(560);
+    });
     expect(screen.getByText(SPLASH_QUOTE_PLACEHOLDER)).toBeTruthy();
 
     // 2450ms: the exit fade begins; 380ms later the overlay is gone and the
@@ -111,7 +133,9 @@ describe('SplashSequence', () => {
     await settle();
 
     // No intermediate phases: logo, wordmark and quote are all mounted at
-    // once — the composed final state, reached without any animation.
+    // once — the composed final state, reached without any animation. (The
+    // setValue(1) that makes the reserved slots visible happens without a
+    // re-render, so the rendered opacity snapshot is not asserted here.)
     expect(screen.getByTestId('splash-logo')).toBeTruthy();
     expect(screen.getByText('AwareMe')).toBeTruthy();
     expect(screen.getByTestId('splash-quote')).toBeTruthy();
