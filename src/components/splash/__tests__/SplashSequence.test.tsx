@@ -12,8 +12,8 @@ configure({ defaultIncludeHiddenElements: true });
 
 // The sequence is choreographed by setTimeout transitions, so tests drive it
 // with fake timers and assert the RESERVED-SLOT contract: both text slots are
-// mounted from the first frame with opacity 0 (the centered column's layout
-// never re-flows), the phase machine drives only their opacity, and the
+// mounted from the first frame with opacity 0 (the text stack's layout never
+// re-flows), the phase machine drives only their opacity, and the
 // overlay still dismisses itself — never interpolation values mid-animation
 // (the Animated driver does not run meaningfully in the jest environment).
 // Rendered styles carry the animated values' snapshot at the latest render,
@@ -62,7 +62,7 @@ describe('SplashSequence', () => {
 
     // Phase 1: the logo alone over the full-screen overlay — but BOTH text
     // slots are already mounted (reserved from frame one) and transparent,
-    // so the centered column's layout is stable and never re-flows when a
+    // so the text stack's layout is stable and never re-flows when a
     // slot becomes visible (the owner's 2026-09-25 logo-hop report).
     expect(screen.getByTestId('splash-overlay')).toBeTruthy();
     expect(screen.getByTestId('splash-logo')).toBeTruthy();
@@ -110,8 +110,37 @@ describe('SplashSequence', () => {
       jest.advanceTimersByTime(560);
     });
     // The quote stub must render exactly the exported constant — a guard
-    // against programme/Branden text ever drifting in (spec §5.1).
+    // against programme/Branden text ever drifting in (spec §5.1) — and the
+    // constant itself is pinned to the owner-picked stub (Telegram,
+    // 2026-09-25, t7-fixes; the Home tagline's line, index.tsx).
+    expect(SPLASH_QUOTE_PLACEHOLDER).toBe('A daily practice for self-awareness');
     expect(screen.getByText(SPLASH_QUOTE_PLACEHOLDER)).toBeTruthy();
+  });
+
+  it('pins the logo slot dead-center and the text stack absolute (t7-fixes handoff contract)', async () => {
+    render(<SplashSequence />);
+    await settle();
+
+    // The owner's second splash report (2026-09-25): centering the
+    // logo+text column as one in-flow stack put the logo half the text
+    // stack above screen center, so the native→JS handoff read as the logo
+    // jumping up. The contract now: the logo's slot is absolute and pinned
+    // to the screen's exact center (top 50%, pulled up half its own
+    // LOGO_SIZE — a position independent of the text slots' sizes), and the
+    // text slots live in their own absolute stack below it, so no text
+    // mount or size can ever move the logo.
+    const logo = StyleSheet.flatten(screen.getByTestId('splash-logo').props.style);
+    expect(logo.position).toBe('absolute');
+    expect(logo.top).toBe('50%');
+    expect(logo.marginTop).toBe(-140); // -LOGO_SIZE/2; LOGO_SIZE matches app.json imageWidth 280
+
+    const stack = StyleSheet.flatten(screen.getByTestId('splash-text-stack').props.style);
+    expect(stack.position).toBe('absolute');
+    expect(stack.top).toBe('50%');
+    // center + 110: the shipped wordmark border-box position (column top
+    // center-186 + logo 280 + marginTop 16), preserved when only the logo
+    // moved to dead-center (measured pre-fix: wordmark glyphs y440-463).
+    expect(stack.marginTop).toBe(110);
   });
 
   it('paints the overlay with the theme background token (native-splash handoff)', async () => {

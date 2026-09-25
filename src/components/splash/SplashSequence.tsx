@@ -26,9 +26,18 @@ import { useTheme } from '@/hooks/use-theme';
  *
  * Both text slots (wordmark, quote) are reserved from the overlay's first
  * frame: their Views render immediately with opacity 0 and animate to 1 at
- * their beats, so the centered column's layout is stable from frame one and
- * only opacity changes. (Owner report 2026-09-25: mounting each text element
+ * their beats. (Owner report 2026-09-25: mounting each text element
  * re-centered the overlay column and hopped the logo upwards — twice.)
+ *
+ * The logo sits in its OWN absolutely-positioned slot pinned to the
+ * screen's exact center, and the text stack is a separate absolute slot
+ * below it — nothing is in-flow, so no child's size or mount can move the
+ * logo. (Owner report 2026-09-25, second pass: centering the logo+text
+ * column as one in-flow stack still hopped the logo at the native→JS
+ * handoff — the column's center sat half the text stack (46px) above the
+ * screen center, so the handoff read as the logo jumping up. Measured on
+ * the owner's delivered APK: native splash logo top y=259 → overlay
+ * y=214, before any text is visible; banked with cycle t7-fixes.)
  *
  * The native splash (app.json, expo-splash-screen plugin) hands off to
  * this overlay seamlessly: the overlay's background is the theme's
@@ -36,8 +45,9 @@ import { useTheme } from '@/hooks/use-theme';
  * native splash paints in light mode, the same black
  * (`Colors.dark.background`) in dark — and the logo is the same
  * transparent-background artwork (`android-icon-foreground.png`) at the
- * same effective size, so launcher → native splash → animated sequence
- * read as one continuous identity.
+ * same effective size AND the same position (dead-center, matching the
+ * native splash's centered `imageWidth: 280` render), so launcher →
+ * native splash → animated sequence read as one continuous identity.
  *
  * Reduced motion (house pattern from `write.tsx`'s settle animation): when
  * the OS says reduce motion, every animation is skipped with
@@ -48,12 +58,13 @@ import { useTheme } from '@/hooks/use-theme';
 
 /**
  * PLACEHOLDER QUOTE (v14 issue 01: the owner asked for "any stub" for now).
- * The app's main quote is an owner decision; this stub is original text
- * written for this ticket — never programme or Branden content (spec §5.1).
- * This constant is the only place the quote lives; swap its value when the
+ * Owner-picked stub 2026-09-25 (Telegram, packet-11 t7): "A daily practice
+ * for self-awareness" — the Home tagline's line (index.tsx), original text,
+ * never programme or Branden content (spec §5.1). This constant is the only
+ * place the quote lives; it stays the placeholder — swap its value when the
  * owner picks the real one.
  */
-export const SPLASH_QUOTE_PLACEHOLDER = 'Meet yourself on the page.';
+export const SPLASH_QUOTE_PLACEHOLDER = 'A daily practice for self-awareness';
 
 /** The AwareMe wordmark, sequenced between the logo and the quote. */
 const WORDMARK = 'AwareMe';
@@ -162,7 +173,7 @@ export function SplashSequence() {
   return (
     <Animated.View
       testID="splash-overlay"
-      style={[styles.overlay, styles.fill, { backgroundColor: theme.background }, { opacity: overlayAnim }]}
+      style={[styles.fill, { backgroundColor: theme.background }, { opacity: overlayAnim }]}
       // The entrance beat is decorative: the home screen behind already
       // carries the accessible name ("AwareMe" title), so the overlay hides
       // its subtree from screen readers instead of announcing a duplicate —
@@ -171,6 +182,8 @@ export function SplashSequence() {
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
+      {/* The logo's slot is absolute and screen-centered (see docblock):
+          its position never depends on the text slots. */}
       <Animated.View
         testID="splash-logo"
         style={[
@@ -188,28 +201,31 @@ export function SplashSequence() {
         />
       </Animated.View>
 
-      {/* Reserved slots: rendered from mount with opacity 0 (the animated
-          values' start), so the column never re-flows mid-sequence. The
-          phase machine drives only their opacity; the reduce-motion path
-          sets every value to 1, so the slots show with the final state. */}
-      <Animated.View testID="splash-wordmark" style={[styles.wordmark, { opacity: nameAnim }]}>
-        <ThemedText type="title">{WORDMARK}</ThemedText>
-      </Animated.View>
+      {/* Reserved text slots in their own absolute stack below the logo's
+          slot: rendered from mount with opacity 0 (the animated values'
+          start), so nothing re-flows mid-sequence. The phase machine drives
+          only their opacity; the reduce-motion path sets every value to 1,
+          so the slots show with the final state. The stack's offset (110 =
+          center + 110) preserves the shipped composition's wordmark
+          position exactly (border-box top at screen center + 110, measured
+          in the t7-fixes pre-fix bank); only the logo moved, down to the
+          native splash's dead-center. */}
+      <Animated.View testID="splash-text-stack" style={styles.textStack}>
+        <Animated.View testID="splash-wordmark" style={[{ opacity: nameAnim }]}>
+          <ThemedText type="title">{WORDMARK}</ThemedText>
+        </Animated.View>
 
-      <Animated.View testID="splash-quote" style={[styles.quote, { opacity: quoteAnim }]}>
-        <ThemedText type="default" themeColor="textSecondary">
-          {SPLASH_QUOTE_PLACEHOLDER}
-        </ThemedText>
+        <Animated.View testID="splash-quote" style={[styles.quote, { opacity: quoteAnim }]}>
+          <ThemedText type="default" themeColor="textSecondary">
+            {SPLASH_QUOTE_PLACEHOLDER}
+          </ThemedText>
+        </Animated.View>
       </Animated.View>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   fill: {
     position: 'absolute',
     top: 0,
@@ -217,8 +233,16 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
+  // Dead-center on the screen: the native splash renders the same artwork
+  // at `imageWidth: 280` centered, so the handoff shows no logo movement.
+  // Half-size negative margins (not a transform) keep the logoIn scale
+  // animation free to own `transform` alone.
   logoWrap: {
-    width: LOGO_SIZE,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '50%',
+    marginTop: -LOGO_SIZE / 2,
     height: LOGO_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
@@ -227,8 +251,16 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  wordmark: {
-    marginTop: Spacing.three,
+  // The text slots' own absolute layer below the logo slot; 110 preserves
+  // the shipped wordmark position (center + 110 = the in-flow column's
+  // wordmark border-box top: column top center-186 + logo 280 + margin 16).
+  textStack: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '50%',
+    marginTop: 110,
+    alignItems: 'center',
   },
   quote: {
     marginTop: Spacing.two,

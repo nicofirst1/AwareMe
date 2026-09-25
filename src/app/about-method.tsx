@@ -19,6 +19,20 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
  * link (c04), with accessible labels stating the row opens the website.
  * The app itself stays offline. No new dependency: expo-linking was
  * already a hard runtime peer of expo-router (see docs/DECISIONS.md).
+ *
+ * p11 t7-fixes (owner instruction on Telegram 2026-09-25, rescoping the
+ * original About-screen steer): the intro's three content sections live
+ * HERE. The ported "About the method" section is the screen's opening
+ * prose — no section title, the page title already says it — superseding
+ * the two old opening paragraphs (same duplication class the owner
+ * flagged on the About screen); "How it works" and "Include an evening
+ * practice?" follow with their titles. Copy is verbatim from the shipped
+ * post-t4 intro copy (onboarding.tsx tabs 1–2 + the shared
+ * EveningPracticeCard — the p11-t4 normalizations already applied; the
+ * why-same-stems section is deliberately not ported, owner's list). The
+ * no-interpretation paragraph and the Branden books paragraph stay (spec
+ * §5.1; the books links stay). Titles use the app's in-page section-title
+ * idiom (subtitle); body stays in this screen's default-text tone.
  */
 
 const BRANDEN_URL = 'https://nathanielbranden.com/';
@@ -31,17 +45,51 @@ export default function AboutMethodScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <ThemedText type="title">About the method</ThemedText>
 
+          {/* p11 t7-fixes: the intro's "About the method" section as the
+              screen's opening prose — verbatim from the shipped intro copy
+              (see docblock), no section title (the page title above). */}
           <ThemedText type="default">
-            This app is built around sentence completion, a self-reflection technique developed by the psychologist
-            Nathaniel Branden. You are given the start of a sentence and asked to finish it, quickly, several times
-            in a row, without pausing to judge what comes out.
+            Without self-awareness, we often run on autopilot, reacting to life out of habit,
+            repeating the same mistakes, and feeling confused about why we feel stuck.
+          </ThemedText>
+          <ThemedText type="default">
+            This app uses the sentence completion method, developed by psychologist Nathaniel
+            Branden, to break that cycle. Actively practicing self-awareness has a profound
+            impact: it shifts you from being a passenger in your life to the driver. It helps
+            you uncover hidden motivations, make better daily decisions, and live with
+            intention rather than confusion.
+          </ThemedText>
+          <ThemedText type="default">
+            The practice is small but powerful. Just a few minutes in the morning to write, and
+            a brief moment in the evening to reflect.
           </ThemedText>
 
-          <ThemedText type="default">
-            The value is in the pattern across many endings, not in any single one. Fast, repeated, unedited writing
-            tends to surface things a slower, more careful answer would filter out. Repetition and nonsense along
-            the way are expected, not a sign you are doing it wrong.
-          </ThemedText>
+          <ThemedView style={styles.section}>
+            <ThemedText type="subtitle">How it works</ThemedText>
+            <ThemedText type="default">
+              You’ll get the start of a sentence (a &quot;stem&quot;) and finish it several times, as
+              quickly as possible. Write whatever comes to mind first, without judging it.
+            </ThemedText>
+            <ThemedText type="default">
+              Don’t polish. Don’t overthink. Just write.
+            </ThemedText>
+          </ThemedView>
+
+          <ThemedView style={styles.section}>
+            <ThemedText type="subtitle">Include an evening practice?</ThemedText>
+            <ThemedText type="default">
+              The morning practice brings your hidden thoughts to the surface; the evening practice
+              grounds them in reality.
+            </ThemedText>
+            <ThemedText type="default">
+              By adding the evening routine, you take a short moment to reread what you wrote that
+              morning and reflect on your day. Did your actions align with your morning insights? Did
+              you notice the patterns you wrote about?
+            </ThemedText>
+            <ThemedText type="default">
+              The app works just as well without it, but the evening practice closes the loop.
+            </ThemedText>
+          </ThemedView>
 
           <ThemedText type="default">
             This app does not interpret, score, or comment on what you write. It only gives you a quiet place to
@@ -99,5 +147,11 @@ const styles = StyleSheet.create({
   linkText: {
     fontStyle: 'italic',
     textDecorationLine: 'underline',
+  },
+  // The ported intro sections (t7-fixes): title + body paragraphs at the
+  // tight internal rhythm, inside the screen's 16pt scroll gap.
+  section: {
+    backgroundColor: 'transparent',
+    gap: Spacing.two,
   },
 });

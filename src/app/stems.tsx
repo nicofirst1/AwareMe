@@ -1037,16 +1037,27 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
     paddingHorizontal: Spacing.two,
   },
+  // Transparent on purpose: the row containers sit INSIDE the filterSheet's
+  // one backgroundElement cream, and a bare ThemedView would paint the pale
+  // theme `background` over it — the white-on-tint bands the owner reported
+  // on the stems filter sheet (t7-fixes 2026-09-25; the settings round's
+  // same lesson). Shared by FilterRow and WeekPicker's trigger row.
   filterRow: {
     gap: Spacing.one,
+    backgroundColor: 'transparent',
   },
   filterLabel: {
     marginBottom: Spacing.half,
   },
+  // Same transparency rule as filterRow (see its note): this is the chips'
+  // wrap container INSIDE each row — a bare ThemedView here painted the
+  // pale background over the sheet cream even after the row itself went
+  // transparent (measured post-fix: the y372-574 block stayed #fef5e8).
   filterOptions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.one,
+    backgroundColor: 'transparent',
   },
   sheetScrim: {
     flex: 1,
