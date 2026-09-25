@@ -34,12 +34,11 @@ import { rescheduleNotifications } from '@/notifications/scheduler';
  * 0004) applies only to rows the question has never reached. The default
  * is never clock-sensitive — deliberately nothing here reads the time.
  *
- * The card carries the method's purpose, not just the mechanics (owner
- * feedback 2026-09-16): the exercise exists to increase self-awareness,
- * and self-esteem is the method's stated purpose — stated factually, no
- * outcome promises (§10). It also says what the method asks and what the
- * app adds: the original method is practised morning and evening, and
- * this app also gives a weekly reflection.
+ * The card's copy is the owner's intro-final-copy.md (2026-09-25),
+ * ported verbatim to the shared component (p11-t4 pre-grant; supersedes
+ * the 2026-09-16 purpose-framing body) — tab 4 and this standalone route
+ * render the same component, so the two surfaces ask the identical
+ * question by construction.
  *
  * The card itself writes nothing: every marker write belongs to the
  * surface that renders it, because "shown once" keys on the marker, not
@@ -69,9 +68,16 @@ export function EveningPracticeCard({
     <ThemedView style={styles.card}>
       <ThemedText type="title">Include an evening practice?</ThemedText>
       <ThemedText type="default">
-        The original method is practised morning and evening, and this app also gives you a weekly
-        reflection. The evening practice adds a short second practice: reread what you wrote in the
-        morning, then reflect on your day. The app works just as well without it.
+        The morning practice brings your hidden thoughts to the surface; the evening practice
+        grounds them in reality.
+      </ThemedText>
+      <ThemedText type="default">
+        By adding the evening routine, you take a short moment to reread what you wrote that
+        morning and reflect on your day. Did your actions align with your morning insights? Did
+        you notice the patterns you wrote about?
+      </ThemedText>
+      <ThemedText type="default">
+        The app works just as well without it, but the evening practice closes the loop.
       </ThemedText>
       <ThemedView style={styles.buttonRow}>
         <Button
