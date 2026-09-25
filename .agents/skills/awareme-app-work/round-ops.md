@@ -27,6 +27,7 @@ One artifact class per commit: skill text, registry rows, and snapshots never sh
 
 - A scope-changing STEER lands its delta on the receiving ticket's packet row (or the hub row records the row as amended-by-steer) before the receiver implements or reviews — superseded scope must be unreadable as current (p7 10:20: the Archive note reassigned t6 → t3 lived only in hub prose until the audit flagged it).
 - Charters pre-declare anticipated out-of-map necessities and judgment calls as numbered scoped grants at dispatch (surface, rationale, declined alternatives) so cycles consume them without FLAG round-trips; emergent needs stay pre-edit FLAGs, and every grant row names the granted surface and rationale.
+- A charter naming a file or symbol verifies the location with one grep at dispatch (p10 t4: DEFAULT_SETTINGS pinned at src/db/repository.ts, lives in src/db/seed/settings.ts — the stale pointer cost an honest-resolution row and an audit observation).
 - A file-ownership map line is derived from the ticket row plus the cross-cycle contracts, so a contract-mandated file never reads as an excursion; where the map and a contract disagree, the contract wins and the map line is amended.
 
 ## Gates are symmetric with agent gates
