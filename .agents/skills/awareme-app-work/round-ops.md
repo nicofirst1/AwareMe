@@ -6,9 +6,9 @@ The coordinator side of a delegated round. The agents' duties live in SKILL.md; 
 
 - Every amendment is numbered (counted in the round hub). BEFORE applying one, snapshot the current `SKILL.md` into `versions/<date>-r<N>-SKILL.md` in this skill's directory: copied from the live file immediately before the edit and diff-verified byte-identical to it before the SKILL-UPDATE line names its hash (a snapshot copied from the wrong source preserves nothing — p7's debrief shipped a stale v1.8.0 file as its r19 snapshot).
 - Every amendment bumps the amended skill's version field in the same commit (standing rule = minor, lessons = patch); the SKILL-UPDATE line quotes old → new so registry supersession citations stay unambiguous.
-- An amendment is complete only when its numbered `SKILL-UPDATE` hub line, snapshot, and commit echo all exist; a skill landing between rounds posts them retroactively in the next open hub before any other coordinator action.
+- An amendment is complete only when its numbered `SKILL-UPDATE` hub line (posted before or with the edit, never after), snapshot, and commit echo all exist; a skill landing between rounds posts them retroactively in the next open hub before any other coordinator action.
 - Apply, then verify the file on disk: an amendment announced but not on disk does not exist.
-- Post a `SKILL-UPDATE` hub line and steer every working agent to re-read; agents re-read the file on such a line before their next device interaction or claim, and audits judge against the amended text.
+- Post a `SKILL-UPDATE` hub line and steer every working agent to re-read (the agent-side re-read duty and the audit rule live in SKILL.md).
 - Sibling reference files (`parallel-device-pools.md`, `round-ops.md`, `vision-audit-swarm.md`) amend under the same discipline.
 - Every 3rd amendment, review the axis registry (`.agents/skills/methodology-auditor/axis_classification.md`): prune to 5 axes — drop the lowest score, oldest wins ties, sort the rest by score. Auditors propose and score; the coordinator prunes. A recurrence of a superseded row's failure class re-activates that row (un-retire with the new seen-clause) instead of appending a sibling row.
 
@@ -18,7 +18,7 @@ One artifact class per commit: skill text, registry rows, and snapshots never sh
 
 ## Hub integrity
 
-- Check the line count after every append (`wc -l` before and after).
+- Appends follow the shared hub rules in SKILL.md (one-line timestamped rows, `wc -l` count check after every append).
 - Back the hub up to `.coordination/<round>-hub-backup.md` at each wave boundary.
 - Lost lines are recoverable: agent sessions append via `cat >>`, so reconstruct from the agents' session jsonl files and archive under `.coordination/` with a provenance header.
 - Absence claims ("no row", "no verdict yet", "still in flight") are written only after re-reading the hub tail and the packet Comments at post time: late-landing rows retire them, and the trail's rows — not the last sweep's memory — decide what is in flight (p7: two sweeps wrongly listed delivered audits as in-flight, corrected 16:32 and 17:43).
