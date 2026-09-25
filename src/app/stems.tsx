@@ -10,7 +10,16 @@ import { FilterChip } from '@/components/filter-chip';
 import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { CategoryColors, MinTouchTarget, Radius, Spacing, type CategoryName, type PaletteName } from '@/constants/theme';
+import {
+  CategoryColors,
+  MinTouchTarget,
+  Palette,
+  Radius,
+  Spacing,
+  type CategoryName,
+  type PaletteName,
+} from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getRepository, LibraryStemRow } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -45,15 +54,47 @@ const WEEK_OPTIONS: { label: string; value: WeekFilter }[] = [
 
 // The hue-bearing filter options (v13-feedback issue 07, owner feedback
 // "morning and programme have no color"): time-of-day and the programme
-// origin carry a Palette hue the way the category chips do. Neutral
-// options (All, Mine, Imported, Unset) stay uncolored: the hue marks the
-// dimension, not every choice. p10 flat port: the hue lives in the filter
-// sheet alone — rows carry no chips.
+// origin carry a Palette hue the way the category chips do. p11 restore
+// (the approved mockup): the same hues return to the row chips — the row
+// tag and its filter chip resolve from the same mapping, so they can never
+// drift apart. Origin gains the ratified packet-11 hues (Mine = teal,
+// Imported = stone, owner-approved option A 2026-09-25); the neutral
+// options (All, Unset) stay uncolored: the hue marks the dimension, not
+// every choice.
 const TIME_OF_DAY_HUES: Record<'morning' | 'evening', PaletteName> = {
   morning: 'amber',
   evening: 'indigo',
 };
 const PROGRAMME_ORIGIN_HUE: PaletteName = 'jade';
+
+// The p8 state badge, restored verbatim by packet 11 (the approved mockup
+// re-quotes its light pairs as .st/.st-off): a state chip on every row, so
+// active/disabled is readable as TEXT at all times, never only through the
+// group header. Same anatomy as the other row chips (stateBadge style), so
+// the chip row reads as one family.
+const STATE_BADGE = {
+  active: {
+    light: { bg: '#E4F0E5', text: '#3D6B43' },
+    dark: { bg: '#26372A', text: '#A6CFA9' },
+  },
+  resting: {
+    light: { bg: '#F6EAE9', text: '#7C4B47' },
+    dark: { bg: '#372A29', text: '#D0A09C' },
+  },
+} as const;
+
+// The mockup's category icon mapping (approved 2026-09-25: person =
+// integrity, heart = self-acceptance, eye/shield/bubble/compass for the
+// rest — all Ionicons-mappable). Supersedes the p8 set's megaphone/
+// ribbon picks; the mockup is the ratified reference.
+const CATEGORY_ICON: Record<CategoryName, keyof typeof Ionicons.glyphMap> = {
+  awareness: 'eye-outline',
+  self_acceptance: 'heart-outline',
+  responsibility: 'shield-outline',
+  assertiveness: 'chatbubble-outline',
+  purpose: 'compass-outline',
+  integrity: 'person-outline',
+};
 
 // The library's base grouping is Active / Disabled (p8, owner-approved
 // mirror: "you can immediately see what are actives and which one are
@@ -67,15 +108,24 @@ const PROGRAMME_ORIGIN_HUE: PaletteName = 'jade';
 // Supersedes the p7 §4.4 practice-first default (see docs/DECISIONS.md,
 // Superseded).
 //
-// Provenance is identity (D2): each flat row names its origin once, as the
-// quiet meta line under the text — Programme (weeked seed), Starter set
-// (D7's relabel of weekless seed), Mine, Imported, Reflection. p10 flat
-// port (owner-approved mockup): rows carry NO chips of any kind — category
-// and time of day live in the filter sheet, the group header is the state
-// — and rows separate by hairline dividers, not card fills or edge tints.
+// Provenance is identity (D2): each row names its origin once, as the
+// origin chip at the end of the chip row — Programme (weeked seed),
+// Starter set (D7's relabel of weekless seed), Mine, Imported, Reflection.
+// p11 restore (the owner-approved mockup,
+// .coordination/p11-design/stems-restore-mockup.html): the p8 card anatomy
+// is back — every stem row is a card in the ONE backgroundElement cream
+// (no per-card edge tint, no white-on-tint), and the chip row returns in
+// photo-536's order: state → time of day → category icon chip → origin.
+// Mine/Imported gain the ratified origin hues (Palette teal/stone); the
+// category chips carry the mockup's leading icon. The p10 gains stay: no
+// category strip on the list (the sheet is the categories' only home),
+// flat counts row with its hairline, bare group headers + count pills +
+// collapse chevron, Showing line counting the visible universe. The
+// in-group hairline dividers retire with the cards (the card edges carry
+// the separation; the p8 8px gap returns via the list's gap).
 // Soft-deleted rows hide behind the sheet's Show-deleted toggle and render
-// in `textMuted` (the silhouette token, never an opacity dim); they stay
-// non-writable exactly as before.
+// in `textMuted` (the silhouette token, never an opacity dim) — the full
+// chip set in transparent fills, no pencil, never writable.
 // Under the engine, deactivating a programme row is the user's own choice
 // that no automation reverses, so the w1-t6 temporary-deactivation note
 // stays retired everywhere — the D5 at-least-one guard is untouched
@@ -95,13 +145,7 @@ const SHEET_MAX_HEIGHT = '70%';
 
 type ListEntry =
   | { kind: 'header'; key: string; group: GroupName; count: number; collapsed: boolean }
-  | {
-      kind: 'stem';
-      key: string;
-      stem: LibraryStemRow;
-      /** p10: a group's last row drops its hairline divider. */
-      lastInGroup?: boolean;
-    };
+  | { kind: 'stem'; key: string; stem: LibraryStemRow };
 
 type GroupName = 'active' | 'deactivated' | 'deleted';
 
@@ -253,22 +297,21 @@ export default function StemsScreen() {
       const collapsed = collapsedGroups.has('active');
       entries.push({ kind: 'header', key: 'hdr-active', group: 'active', count: active.length, collapsed });
       if (!collapsed) {
-        const rows = orderForFlatView(active);
-        rows.forEach((s, i) => entries.push({ kind: 'stem', key: s.id, stem: s, lastInGroup: i === rows.length - 1 }));
+        for (const s of orderForFlatView(active)) entries.push({ kind: 'stem', key: s.id, stem: s });
       }
     }
     if (deactivated.length > 0) {
       const collapsed = collapsedGroups.has('deactivated');
       entries.push({ kind: 'header', key: 'hdr-deactivated', group: 'deactivated', count: deactivated.length, collapsed });
       if (!collapsed) {
-        deactivated.forEach((s, i) => entries.push({ kind: 'stem', key: s.id, stem: s, lastInGroup: i === deactivated.length - 1 }));
+        for (const s of deactivated) entries.push({ kind: 'stem', key: s.id, stem: s });
       }
     }
     if (deleted.length > 0) {
       const collapsed = collapsedGroups.has('deleted');
       entries.push({ kind: 'header', key: 'hdr-deleted', group: 'deleted', count: deleted.length, collapsed });
       if (!collapsed) {
-        deleted.forEach((s, i) => entries.push({ kind: 'stem', key: s.id, stem: s, lastInGroup: i === deleted.length - 1 }));
+        for (const s of deleted) entries.push({ kind: 'stem', key: s.id, stem: s });
       }
     }
     return entries;
@@ -370,7 +413,6 @@ export default function StemsScreen() {
           return (
             <StemRow
               item={item.stem}
-              divider={!item.lastInGroup}
               theme={theme}
               router={router}
               selectionMode={selectionMode}
@@ -542,10 +584,13 @@ export default function StemsScreen() {
                   options={[
                     { value: 'all', label: 'All' },
                     // Display-only rename (issue 03): origin value stays 'seed'
-                    // in DB, exports, and tests.
+                    // in DB, exports, and tests. p11: every origin option
+                    // carries its hue — Programme jade, Mine teal, Imported
+                    // stone (the ratified option A pairs; no plain origin
+                    // chips anywhere per the approved mockup).
                     { value: 'seed', label: 'Programme', hue: PROGRAMME_ORIGIN_HUE },
-                    { value: 'user', label: 'Mine' },
-                    { value: 'imported', label: 'Imported' },
+                    { value: 'user', label: 'Mine', hue: 'teal' },
+                    { value: 'imported', label: 'Imported', hue: 'stone' },
                   ]}
                   value={originFilter}
                   onChange={(v) => setOriginFilter(v as OriginFilter)}
@@ -585,12 +630,14 @@ export default function StemsScreen() {
   );
 }
 
-// p10 flat row (the approved mockup): no card fill, no 3px edge tint, no
-// chips of any kind — the serif text, the quiet origin meta line, and the
-// reserved action column. The Active/Disabled group header owns the state
-// (its badges retire with the card); the category lives in the filter
-// sheet; origin stays as text (D2). Soft-deleted rows render in textMuted
-// (the silhouette token, never an opacity dim), keep no pencil, and stay
+// The p8 stem card, restored by packet 11 (the approved mockup): the ONE
+// backgroundElement cream fill with Radius.medium corners — no per-card
+// edge tint, no white-on-tint anywhere — and the chip row in photo-536's
+// order: state → time of day → category icon chip → origin. Mine/Imported
+// carry the ratified origin hues (Palette teal/stone, option A);
+// Programme/Starter stay jade, Reflection stays rose. Soft-deleted rows
+// render the same chip set in transparent fills and textMuted ink (the
+// silhouette token, never an opacity dim), keep no pencil, and stay
 // non-writable (§6.6) — visible only through the sheet's Show-deleted gate.
 const StemRow = memo(function StemRow({
   item,
@@ -602,7 +649,6 @@ const StemRow = memo(function StemRow({
   onLongPress,
   editable = true,
   selectable = true,
-  divider = true,
 }: {
   item: LibraryStemRow;
   theme: Theme;
@@ -615,22 +661,39 @@ const StemRow = memo(function StemRow({
   /** Meaningless while `selectable` is false; the card's rows omit both. */
   selectionMode?: boolean;
   selected?: boolean;
-  /** p10: hairline divider — every row except its group's last. */
-  divider?: boolean;
 }) {
+  const scheme = useColorScheme();
+  const dark = scheme === 'dark';
   const isDeleted = item.deleted_at !== null;
   // v13-feedback issue 07 (c06 carry-forward): the library lists the two
-  // evening reflection meta-stems (origin 'meta'). The flat row names them
-  // on the meta line ('Reflection'), and the caption below carries the
-  // honesty: the reflection alternation reads these rows regardless of
-  // their state (listMetaStems has no active filter), so activating one is
-  // never the only path. Its state only ever gates the generic active-stem
-  // reads.
+  // evening reflection meta-stems (origin 'meta'). The chip row names them
+  // (the Reflection rose chip — the bare 'meta' is developer vocabulary),
+  // and the caption below the chips carries the honesty: the reflection
+  // alternation reads these rows regardless of their state (listMetaStems
+  // has no active filter), so activating one is never the only path. Its
+  // state only ever gates the generic active-stem reads.
   const isMeta = item.origin === 'meta';
 
-  // The quiet origin word (D2 display, p10 mockup): one meta line per row,
-  // no chips. The raw enums never surface as copy (issue 03's renames).
-  const originWord =
+  // The chip set's pairs, resolved per theme from the same mappings the
+  // sheet's filter chips read (issue 07's drift guard): state → STATE_BADGE,
+  // time of day → TIME_OF_DAY_HUES, category → CategoryColors (+ the
+  // mockup's leading icon), origin → jade / rose / teal / stone.
+  const statePair = (item.active ? STATE_BADGE.active : STATE_BADGE.resting)[dark ? 'dark' : 'light'];
+  const timeOfDayPair = item.time_of_day
+    ? Palette[TIME_OF_DAY_HUES[item.time_of_day]][dark ? 'dark' : 'light']
+    : null;
+  const categoryPair = isCategoryName(item.category) ? CategoryColors[item.category][dark ? 'dark' : 'light'] : null;
+  const originPair =
+    item.origin === 'meta'
+      ? Palette.rose[dark ? 'dark' : 'light']
+      : item.origin === 'seed'
+        ? Palette[PROGRAMME_ORIGIN_HUE][dark ? 'dark' : 'light']
+        : item.origin === 'user'
+          ? Palette.teal[dark ? 'dark' : 'light']
+          : item.origin === 'imported'
+            ? Palette.stone[dark ? 'dark' : 'light']
+            : null;
+  const originLabel =
     item.origin === 'meta'
       ? 'Reflection'
       : item.origin === 'seed'
@@ -642,6 +705,24 @@ const StemRow = memo(function StemRow({
           : item.origin === 'imported'
             ? 'Imported'
             : null;
+
+  // One chip anatomy for the whole row: the pair's fill + ink, or — on a
+  // soft-deleted row (the full chip set stays, the honesty without a write
+  // invitation) or an unmapped category — transparent with muted/secondary
+  // ink. Explicit backgrounds throughout: a bare ThemedView paints the
+  // theme `background` (the rowAction note's mismatched-box lesson), and
+  // the one-fill rule forbids any white-on-tint inside the cream card.
+  const renderChip = (pair: { bg: string; text: string } | null, chipLabel: string, icon?: keyof typeof Ionicons.glyphMap) => {
+    const ink = isDeleted ? theme.textMuted : (pair?.text ?? theme.textSecondary);
+    return (
+      <ThemedView style={[styles.categoryChip, { backgroundColor: isDeleted || !pair ? 'transparent' : pair.bg }]}>
+        {icon && <Ionicons name={icon} size={12} color={ink} />}
+        <ThemedText type="small" style={{ color: ink }}>
+          {chipLabel}
+        </ThemedText>
+      </ThemedView>
+    );
+  };
 
   // Issue 03: the state is named in the accessible label, so it never
   // depends on seeing the group header. (Copy unchanged since p8; p10 adds
@@ -658,14 +739,7 @@ const StemRow = memo(function StemRow({
         }${selectable ? ' Long-press to select.' : ''}`;
 
   return (
-    <ThemedView
-      style={[
-        styles.row,
-        divider && styles.rowDivider,
-        { borderBottomColor: theme.border },
-        selected ? { backgroundColor: theme.accentMuted } : null,
-      ]}
-    >
+    <ThemedView style={[styles.row, { backgroundColor: selected ? theme.accentMuted : theme.backgroundElement }]}>
       <Pressable
         onPress={() => onPress(item)}
         onLongPress={selectable ? () => onLongPress(item) : undefined}
@@ -678,15 +752,21 @@ const StemRow = memo(function StemRow({
         <ThemedText type="stem" style={isDeleted ? { color: theme.textMuted } : undefined}>
           {item.text}
         </ThemedText>
-        {originWord && (
-          <ThemedText
-            type="small"
-            themeColor={isDeleted ? undefined : 'textSecondary'}
-            style={isDeleted ? { color: theme.textMuted } : undefined}
-          >
-            {originWord}
-          </ThemedText>
-        )}
+        <ThemedView style={styles.rowMeta}>
+          {/* photo-536 order: state → time of day → category icon chip →
+              origin. Issue 03: the state chip keeps the state readable as
+              TEXT on every row, never only through the group header. */}
+          {renderChip(statePair, item.active ? 'Active' : 'Disabled')}
+          {timeOfDayPair &&
+            renderChip(timeOfDayPair, item.time_of_day === 'morning' ? 'Morning' : 'Evening')}
+          {item.category !== null &&
+            renderChip(
+              categoryPair,
+              item.category.replace(/_/g, ' '),
+              categoryPair && isCategoryName(item.category) ? CATEGORY_ICON[item.category] : undefined,
+            )}
+          {originPair && originLabel && renderChip(originPair, originLabel)}
+        </ThemedView>
         {isMeta && !isDeleted && (
           <ThemedText type="small" themeColor="textSecondary">
             Part of the evening reflection, whether Active or Disabled.
@@ -1056,12 +1136,12 @@ const styles = StyleSheet.create({
   list: {
     flex: 1,
   },
-  // Flat list (p10): rows sit contiguous inside their group, separated by
-  // hairline dividers — no inter-row gap; the group headers carry the
-  // breathing room (their marginTop). The container padding IS the screen
-  // margin.
+  // p11 restore (the approved mockup): the card separation — the p8 8px
+  // gap between cards, restored as the FlatList content gap. The container
+  // padding IS the screen margin.
   listContent: {
     padding: Spacing.four,
+    gap: Spacing.two,
   },
   // The groups' header rows (p8 anatomy, p10 flat): title + count pill +
   // one quiet chevron on the bare background — no fill, no radius. The
@@ -1085,27 +1165,49 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.one,
   },
-  // Flat stem row (p10): no card fill, no edge tint, no chips — text, one
-  // quiet origin meta line, the reserved 44pt action column. The hairline
-  // divider (rowDivider) separates rows inside a group; the mockup's 14px
-  // vertical breathing room maps to the scale's nearest token (16).
+  // The p8 stem card, restored (p11, the approved mockup): the ONE cream
+  // fill arrives from StemRow's style array (backgroundElement, or
+  // accentMuted while selected — the p8 selection), the Radius.medium
+  // corners and Spacing.three padding here. The card edges + the list's 8px
+  // gap carry the separation: the p10 hairline row divider retired with the
+  // cards, and the per-card edge tint stays retired (the one-fill rule —
+  // the mockup restores the card WITHOUT its old 3px tint).
   // `alignItems: 'flex-start'` (not 'center'): T2's measured wobble was the
   // stem-text first line centering against the row's full height, which
-  // varies 48–98pt with 1-line vs 2-line meta — top-anchoring keeps the
-  // first line's y constant regardless of how the meta line wraps.
+  // varies with the chip row's wrapping — top-anchoring keeps the first
+  // line's y constant regardless of how the chips wrap.
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingVertical: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: Radius.medium,
     gap: Spacing.two,
-  },
-  rowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowMain: {
     flex: 1,
     gap: Spacing.one,
+  },
+  // The chip row (photo-536 order). Transparent by explicit value — a bare
+  // ThemedView paints the theme `background`, a white-on-tint box inside
+  // the cream card that the one-fill rule forbids.
+  rowMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    backgroundColor: 'transparent',
+    gap: Spacing.one,
+  },
+  // The restored row chip (p8's categoryChip): the pair's tinted fill
+  // (stateBadge carries no leading icon, so it shares the anatomy via the
+  // same paddings) with the mockup's small leading gap for the icon.
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: Spacing.one,
+    paddingVertical: 1,
+    borderRadius: Radius.chip,
   },
   stateSummary: {
     paddingHorizontal: Spacing.four,

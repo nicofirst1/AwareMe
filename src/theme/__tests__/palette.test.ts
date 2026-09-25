@@ -40,7 +40,6 @@ describe('owner palette (issue 04)', () => {
     expect(Palette.amber.base).toBe('#f1a145');
     expect(Palette.jade.base).toBe('#73c099');
   });
-
   it.each(THEMES)('%s: every palette chip pair clears AA', (scheme) => {
     for (const hue of Object.values(Palette)) {
       expect(contrast(hue[scheme].text, hue[scheme].bg)).toBeGreaterThanOrEqual(AA);
@@ -52,6 +51,32 @@ describe('owner palette (issue 04)', () => {
     // chip pair (asserted above), never to text-on-background duty.
     for (const name of ['indigo', 'rose', 'amber', 'jade'] as const) {
       expect(contrast(Palette[name][scheme].text, Colors[scheme].background)).toBeGreaterThanOrEqual(AA);
+    }
+  });
+});
+
+describe('origin palette (packet 11, stems restore)', () => {
+  // Packet 11's stem-origin hues (p11 t2; owner-approved option A on
+  // Telegram 2026-09-25, "Version A is fine for the chip colors"): the raws
+  // pinned verbatim, the light pairs asserted to reproduce the approved
+  // mockup hexes exactly, and every pairing the chips ship measured here —
+  // row chips (pair.text on pair.bg), the sheet's unselected FilterChip
+  // labels (pair.text on the theme backgroundElement), and the dark
+  // raw/lifted texts on the black background.
+  it('pins the two origin raws verbatim (owner-approved option A)', () => {
+    expect(Palette.teal.base).toBe('#2E9EA0');
+    expect(Palette.stone.base).toBe('#8A7455');
+  });
+
+  it('light: the origin pairs reproduce the approved mockup hexes verbatim', () => {
+    expect(Palette.teal.light).toMatchObject({ bg: '#cce0d7', text: '#195758' });
+    expect(Palette.stone.light).toMatchObject({ bg: '#e2d6c5', text: '#4c402f' });
+  });
+
+  it.each(THEMES)('%s: origin chip labels clear AA on background and backgroundElement', (scheme) => {
+    for (const name of ['teal', 'stone'] as const) {
+      expect(contrast(Palette[name][scheme].text, Colors[scheme].background)).toBeGreaterThanOrEqual(AA);
+      expect(contrast(Palette[name][scheme].text, Colors[scheme].backgroundElement)).toBeGreaterThanOrEqual(AA);
     }
   });
 });

@@ -43,6 +43,17 @@ function mixHex(a: string, b: string, t: number): string {
  * color palette"). `Palette` publishes them with the derivations the theme
  * and the polish cycles consume; these literals are the only place the
  * owner's values are written.
+ *
+ * Packet 11 adds two stem-origin raws beside them (p11 t2, stems
+ * visualization restore; owner-approved option A on Telegram 2026-09-25,
+ * "Version A is fine for the chip colors", mockup
+ * `.coordination/p11-design/stems-restore-mockup.html`): Mine's teal is the
+ * family's one genuinely empty hue band (~180°, far from the jade greens
+ * and the steel blues) and Imported's stone a low-chroma warm taupe —
+ * effectively achromatic, so it carries no red-green signal (the CVD-safest
+ * neighbor; "undyed" for outside material). Both derive their pairs with
+ * the same mixHex discipline as the five owner hues (t1-design's DONE, hub
+ * 2026-09-25 09:30); the one-line override point for either is its raw here.
  */
 const PALETTE_HEX = {
   indigo: '#5f5f9f',
@@ -50,6 +61,8 @@ const PALETTE_HEX = {
   cream: '#fef5e8',
   amber: '#f1a145',
   jade: '#73c099',
+  teal: '#2E9EA0',
+  stone: '#8A7455',
 } as const;
 
 /**
@@ -67,10 +80,13 @@ const PALETTE_HEX = {
  *   margin. Each `text` also clears AA as text on that theme's plain
  *   `background`, so a hue can label a chip or color a headline alike.
  *   Measured pairs (light/dark): indigo 4.87/5.28, rose 4.91/6.98, amber
- *   4.82/7.41, jade 4.87/7.30, cream 6.55/4.85 — and each `text` on its
- *   theme's `background`: indigo 6.76/6.03, rose 5.83/9.20, amber
- *   5.63/9.92, jade 5.72/9.73 (cream's dark `text` is pair-scoped: the
- *   cream family is a surface hue, not a text color on black).
+ *   4.82/7.41, jade 4.87/7.30, cream 6.55/4.85, teal 5.98/5.26, stone
+ *   7.04/5.27 — and each `text` on its theme's `background`: indigo 6.76/6.03,
+ *   rose 5.83/9.20, amber 5.63/9.92, jade 5.72/9.73, teal 7.64/6.51, stone
+ *   9.34/6.22 (cream's dark `text` is pair-scoped: the cream family is a
+ *   surface hue, not a text color on black). The packet-11 origin hues'
+ *   figures are machine-asserted in the "origin palette" block of
+ *   `palette.test.ts`.
  *
  * The wave-2 polish cycles (issues 05/07/08) consume these pairs rather
  * than re-deriving colors; nothing outside this file may hardcode a hex.
@@ -105,6 +121,34 @@ export const Palette = {
     base: PALETTE_HEX.jade,
     light: { bg: mixHex(PALETTE_HEX.jade, PALETTE_HEX.cream, 0.76), text: mixHex(PALETTE_HEX.jade, BLACK, 0.45) },
     dark: { bg: mixHex(PALETTE_HEX.jade, BLACK, 0.8), text: PALETTE_HEX.jade },
+  },
+  /**
+   * Stem-origin hue: "Mine" rows and their filter chip (packet 11 t2; the
+   * owner-approved option A pair, verbatim: bg #CCE0D7 / text #195758 — the
+   * family recipe reproduces both approved hexes exactly). Dark follows the
+   * rose/amber/jade recipe: the raw as text, 6.51:1 on the black
+   * `background`, 5.26:1 on its fill. Measured (light/dark): pair 5.98/5.26,
+   * text on `background` 7.64/6.51, text on `backgroundElement` 7.06/5.22.
+   */
+  teal: {
+    base: PALETTE_HEX.teal,
+    light: { bg: mixHex(PALETTE_HEX.teal, PALETTE_HEX.cream, 0.76), text: mixHex(PALETTE_HEX.teal, BLACK, 0.45) },
+    dark: { bg: mixHex(PALETTE_HEX.teal, BLACK, 0.8), text: PALETTE_HEX.teal },
+  },
+  /**
+   * Stem-origin hue: "Imported" rows and their filter chip (packet 11 t2;
+   * the owner-approved option A pair, verbatim: bg #E2D6C5 / text #4C402F —
+   * the family recipe reproduces both approved hexes exactly). Dark: the
+   * family's default raw-text recipe misses AA on stone's fill (3.99:1 —
+   * the low-chroma taupe is too dim on its near-black blend), so the text
+   * takes the indigo-style lift: 15% toward white, 5.27:1 on its fill,
+   * 6.22:1 on the black `background`. Measured (light/dark): pair 7.04/5.27,
+   * text on `background` 9.34/6.22, text on `backgroundElement` 8.63/4.99.
+   */
+  stone: {
+    base: PALETTE_HEX.stone,
+    light: { bg: mixHex(PALETTE_HEX.stone, PALETTE_HEX.cream, 0.76), text: mixHex(PALETTE_HEX.stone, BLACK, 0.45) },
+    dark: { bg: mixHex(PALETTE_HEX.stone, BLACK, 0.8), text: mixHex(PALETTE_HEX.stone, WHITE, 0.15) },
   },
 } as const;
 

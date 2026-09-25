@@ -42,6 +42,8 @@ colors:
   cream: "#fef5e8"
   amber: "#f1a145"
   jade: "#73c099"
+  teal: "#2E9EA0"
+  stone: "#8A7455"
   indigoBg: "#d8d1d6"
   indigoText: "#515187"
   indigoBg-dark: "#131320"
@@ -62,6 +64,14 @@ colors:
   jadeText: "#3f6a54"
   jadeBg-dark: "#17261f"
   jadeText-dark: "#73c099"
+  tealBg: "#cce0d7"
+  tealText: "#195758"
+  tealBg-dark: "#092020"
+  tealText-dark: "#2E9EA0"
+  stoneBg: "#e2d6c5"
+  stoneText: "#4c402f"
+  stoneBg-dark: "#1c1711"
+  stoneText-dark: "#9c896f"
   categoryAwarenessBg: "#D6E6F5"
   categoryAwarenessText: "#0B3C61"
   categoryAwarenessBg-dark: "#173B52"
@@ -142,8 +152,10 @@ The app's look is **restrained, text-first, quiet**: one serif face reserved for
 stems and endings, one neutral sans for all interface chrome, generous line
 height, and dark mode that follows the system rather than being an
 afterthought. Color is built on the owner's five-hue palette — indigo, rose,
-cream, amber, jade — and **every theme token derives from those five hexes**, so
-recoloring the product means editing five values, not hunting literals.
+cream, amber, jade — plus the two packet-11 stem-origin raws (teal, stone;
+owner-approved option A, 2026-09-25), and **every theme token derives from
+those seven hexes**, so
+recoloring the product means editing a handful of values, not hunting literals.
 
 Two structural facts shape everything below. First, the design.md format has no
 theme-pair concept, so dark-theme variants are published as separate tokens with
@@ -175,9 +187,19 @@ chip fill, `indigoBg-dark` the dark one.
   dark cousin.
 - **Amber `#f1a145`** — the warm amber: badges, warm tints.
 - **Jade `#73c099`** — the calm green: growth/positive signals.
+- **Teal `#2E9EA0`** — the "Mine" stem-origin hue (packet 11, owner-approved
+  option A): the family's one genuinely empty hue band (~180°), far from the
+  jade greens and the steel blues.
+- **Stone `#8A7455`** — the "Imported" stem-origin hue (packet 11,
+  owner-approved option A): a low-chroma warm taupe, effectively achromatic —
+  it carries no red-green signal, the CVD-safest neighbor ("undyed" for
+  outside material).
 
-Raw rose, amber, and jade are too light for text on cream and are reserved to
-the dark theme, where they clear AA. Every text/surface pairing in `theme.ts`
+Raw rose, amber, jade, teal, and stone are too light for text on cream and are
+reserved to
+the dark theme, where they clear AA (stone's dark text takes a 15% white lift —
+the low-chroma taupe is too dim on its own near-black blend at the raw value).
+Every text/surface pairing in `theme.ts`
 is measured with the WCAG 2.x relative-luminance formula and asserted by
 `src/theme/__tests__/palette.test.ts`; the 4.5:1 AA floor applies to text.
 
@@ -223,10 +245,15 @@ per-channel `mixHex(a, b, t)` from `theme.ts` (t = 0 gives `a`, 1 gives `b`):
 For each hue, `XxxBg` is the hue blended 76% toward cream (light) or 80%
 toward black (dark), and `XxxText` is the hue darkened toward black (light) or
 lightened toward white (dark) until the pair clears AA 4.5:1 with margin.
-Specifics: indigo text darkened 15%; rose 44%; amber 45%; jade 45%; cream text
+Specifics: indigo text darkened 15%; rose 44%; amber 45%; jade 45%; teal 45%;
+stone 45%; cream text
 darkened 64% (light) and 62% (dark), with the dark cream background blended
-only 10% toward black. In the dark theme rose, amber, and jade text are the
-raw base hexes themselves. `creamText-dark` is pair-scoped — cream is a
+only 10% toward black. In the dark theme rose, amber, jade, and teal text are
+the raw base hexes themselves; stone's dark text is lifted 15% toward white
+(3.99:1 at the raw value on its fill — below the floor). The packet-11 origin
+pairs' light values ARE the owner-approved mockup hexes verbatim (teal
+`#cce0d7`/`#195758`, stone `#e2d6c5`/`#4c402f`). `creamText-dark` is
+pair-scoped — cream is a
 surface hue, not a text color on black.
 
 ### Category pairs
@@ -334,9 +361,9 @@ screens rides each screen's own cycle.
   owner hexes there.
 - Do keep touch targets at least 44 (`MinTouchTarget`); the shared
   touch-target components carry Android's 48dp effective floor (packet-3 t8).
-- Don't set raw rose, amber, or jade as light-theme text — they clear AA only
-  on the dark theme; raw indigo is the only raw hue that clears AA as
-  light-theme text on cream.
+- Don't set raw rose, amber, jade, teal, or stone as light-theme text — they
+  clear AA only on the dark theme; raw indigo is the only raw hue that clears
+  AA as light-theme text on cream.
 - Don't use red in the timer cue — the ramp ends in the warm amber family
   (`timerExpiring`), never `error`.
 - Don't render a label and its helper text at the same weight or size
