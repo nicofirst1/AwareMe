@@ -86,19 +86,27 @@ describe('IntroScreen', () => {
     expect(tree.indexOf('Welcome to AwareMe')).toBeLessThan(tree.indexOf('Include an evening practice?'));
   });
 
-  it('states the purpose of the exercise and the evening + weekly note', () => {
+  it('renders the evening copy on the shared card: contrast, routine, loop (owner copy 2026-09-25)', () => {
     render(<IntroScreen />);
 
-    // Purpose framing (owner feedback 2026-09-16): what the exercise is
-    // FOR, not merely the mechanics — factual, no outcome promises.
-    // REMOVED by owner (paragraph deleted from intro.tsx)
-    // REMOVED by owner (paragraph deleted from intro.tsx)
-    // The evening explanation: the original method practised morning and
-    // evening, plus what this app adds beyond it. p8-t2: the middle clause
-    // names the reread (the evening half of the loop) — approved draft.
-    expect(screen.getByText(/The original method is practised morning and evening/)).toBeTruthy();
-    expect(screen.getByText(/weekly reflection/)).toBeTruthy();
-    expect(screen.getByText(/reread what you wrote in the morning, then reflect on your day/)).toBeTruthy();
+    // Copy source: intro-final-copy.md (2026-09-25), ported verbatim to the
+    // shared card (p11-t4 pre-grant) — tab 4 renders the same component, so
+    // the two surfaces ask the identical question. The file's evening
+    // section needed no normalization (no apostrophes, no em dash in it).
+    expect(
+      screen.getByText(
+        /The morning practice brings your hidden thoughts to the surface; the evening practice grounds them in reality\./,
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/By adding the evening routine, you take a short moment to reread what you wrote that morning/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/Did your actions align with your morning insights\? Did you notice the patterns you wrote about\?/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/The app works just as well without it, but the evening practice closes the loop\./),
+    ).toBeTruthy();
     // The standalone card never renders the replay-disabled state (the
     // prop defaults false): both asks stay enabled here.
     expect(screen.getByRole('button', { name: 'Include evening practice' }).props.accessibilityState).toMatchObject({

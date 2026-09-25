@@ -30,8 +30,9 @@ const STEP_COUNT = 5;
  * Onboarding (§6.1, ticket 17): at most 4 screens, skippable, shown once —
  * since v13 (`.scratch/v13-feedback/issues/03-fresh-screen-rebuild.md`) the
  * first-launch flow is five tabs in the owner's stated order: About the
- * method → Here is how it works! → Reminders → Evening practice → Choose
- * your settings. The evening-practice question that used to be a separate
+ * method → How it works → Reminders → Evening practice → Choose your
+ * settings. Tab copy is the owner's intro-final-copy.md (2026-09-25),
+ * ported verbatim; normalizations are listed in the p11 hub (p11-t4). The evening-practice question that used to be a separate
  * pre-onboarding route (/intro) is now tab 4, "towards the end, not before
  * the actual intro"; the standalone route remains only for upgraders whose
  * onboarding completed long ago (they must still be asked exactly once —
@@ -202,13 +203,34 @@ export default function OnboardingScreen() {
           onMomentumScrollEnd={onScrollEnd}
           style={styles.pager}
         >
-          <ThemedView style={[styles.page, { width }]}>
+          {/* p11-t4 grant (floor-clip fix): the owner copy (2026-09-25) made
+              tabs 1/2/4 taller than the pager viewport at the ratified
+              320x640 floor, clipping titles and trailing copy (hub FLAG
+              lines 65-66). Every pager page now uses the ticket-01 scroll
+              pattern (tab 5's): a vertical scroll container whose flexGrow
+              content container keeps the centered look whenever the content
+              fits and scrolls when it cannot. The About replay inherits:
+              same route, same pages. */}
+          <ScrollView
+            style={[styles.pageScroll, { width }]}
+            contentContainerStyle={styles.pageContent}
+            showsVerticalScrollIndicator={false}
+          >
             <ThemedText type="title">About the method</ThemedText>
             <ThemedText type="default">
-              This app is built on the sentence completion method, developed by the psychologist
-              Nathaniel Branden. The method is part of a larger approach aimed at increasing
-              self-awareness. In practice it is small and daily: a few minutes in the morning to
-              write, a moment in the evening to reread.
+              Without self-awareness, we often run on autopilot, reacting to life out of habit,
+              repeating the same mistakes, and feeling confused about why we feel stuck.
+            </ThemedText>
+            <ThemedText type="default">
+              This app uses the sentence completion method, developed by psychologist Nathaniel
+              Branden, to break that cycle. Actively practicing self-awareness has a profound
+              impact: it shifts you from being a passenger in your life to the driver. It helps
+              you uncover hidden motivations, make better daily decisions, and live with
+              intention rather than confusion.
+            </ThemedText>
+            <ThemedText type="default">
+              The practice is small but powerful. Just a few minutes in the morning to write, and
+              a brief moment in the evening to reflect.
             </ThemedText>
             {/* accessibilityRole="link" + explicit label: the link convention
                 BackHeader documents (index.tsx's Link rows); the label keeps
@@ -223,30 +245,38 @@ export default function OnboardingScreen() {
                 Read more about the method
               </ThemedText>
             </Link>
-          </ThemedView>
+          </ScrollView>
 
-          <ThemedView style={[styles.page, { width }]}>
-            {/* v14 issue 03: the owner asked for the exclamation mark, the
-                semicolon sentence split, and the quickness paragraph broken
-                into short sentences (meaning kept). */}
-            <ThemedText type="title">Wow it works</ThemedText>
+          <ScrollView
+            style={[styles.pageScroll, { width }]}
+            contentContainerStyle={styles.pageContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Tab copy (title included) is the owner's intro-final-copy.md
+                (2026-09-25), ported verbatim; straight apostrophes normalized
+                to U+2019 and the file's one em dash to a comma (copy rules;
+                normalizations listed in the p11 hub). */}
+            <ThemedText type="title">How it works</ThemedText>
             <ThemedText type="default">
-              You’ll get the start of a sentence and finish it, several times, quickly. Write the first
-              thing that comes, without judging it. Repetition or nonsense is fine. That’s part of how it
-              works.
+              You’ll get the start of a sentence (a &quot;stem&quot;) and finish it several times, as
+              quickly as possible. Write whatever comes to mind first, without judging it.
             </ThemedText>
+            <ThemedText type="subtitle">Why use the same stems every day?</ThemedText>
             <ThemedText type="default">
-              The quickness is the point. Endings written before you can polish them tend to surface how you
-              actually respond. The value is in the pattern across many endings, not in any single one.
+              Your brain’s first instinct is to give you the answers you expect to hear. By
+              repeating the same start of a sentence all week, you eventually run out of those
+              standard replies. Combined with writing as fast as you can, this repetition forces
+              your mind to drop its guard and reveal what you’re actually thinking underneath the
+              surface.
             </ThemedText>
-            {/* p8-t2 draft: the loop — write, reread, reflect — stated once, plainly. */}
-            <ThemedText type="default">
-              A day with the app: in the morning you write your endings. In the evening you reread
-              what you wrote and reflect on it. Once a week, one reflection pulls the week together.
-            </ThemedText>
-          </ThemedView>
+            <ThemedText type="default">Don’t polish. Don’t overthink. Just write.</ThemedText>
+          </ScrollView>
 
-          <ThemedView style={[styles.page, { width }]}>
+          <ScrollView
+            style={[styles.pageScroll, { width }]}
+            contentContainerStyle={styles.pageContent}
+            showsVerticalScrollIndicator={false}
+          >
             <ThemedText type="title">Reminders</ThemedText>
             <ThemedText type="default">
               This app can remind you of your daily practice, tap &quot;Allow reminders&quot; if you want to be
@@ -277,11 +307,15 @@ export default function OnboardingScreen() {
               Allowing lets the app send those two daily nudges. Saying no costs nothing: the reminders
               just stay off.
             </ThemedText>
-          </ThemedView>
+          </ScrollView>
 
-          <ThemedView style={[styles.page, styles.pageForCard, { width }]}>
+          <ScrollView
+            style={[styles.pageScroll, { width }]}
+            contentContainerStyle={[styles.pageContent, styles.pageForCard]}
+            showsVerticalScrollIndicator={false}
+          >
             <EveningPracticeCard onAnswer={answerEvening} onSkip={skipEvening} disabled={isReplay} />
-          </ThemedView>
+          </ScrollView>
 
           {/* Step 5 (ticket 01, 320x640 floor): the flow's densest page —
               its content exceeds the pager viewport at the floor, which
@@ -489,14 +523,10 @@ const styles = StyleSheet.create({
   pager: {
     flex: 1,
   },
-  page: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: Spacing.three,
-    padding: Spacing.four,
-  },
   // The evening-practice tab: the card brings its own padding and max
-  // width, so the page only centers it.
+  // width, so the page's content container only centers it (overrides
+  // pageContent's gap/padding to zero; the container scrolls like the
+  // other pages since the p11-t4 grant).
   pageForCard: {
     gap: 0,
     padding: 0,

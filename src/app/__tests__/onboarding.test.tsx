@@ -101,7 +101,7 @@ describe('OnboardingScreen', () => {
     // Every tab's title is mounted (the pager keeps offscreen pages), and
     // the visual order is pinned by the step sequence asserted below.
     expect(screen.getByText('About the method')).toBeTruthy();
-    expect(screen.getByText('Wow it works')).toBeTruthy();
+    expect(screen.getByText('How it works')).toBeTruthy();
     expect(screen.getByText('Reminders')).toBeTruthy();
     expect(screen.getByText('Include an evening practice?')).toBeTruthy();
     expect(screen.getByText('Choose your settings')).toBeTruthy();
@@ -116,27 +116,27 @@ describe('OnboardingScreen', () => {
     expect(screen.getByLabelText('Step 5 of 5')).toBeTruthy();
   });
 
-  it('states the Branden method and the larger self-awareness approach on tab 1', () => {
+  it('states the autopilot opening, the Branden method, and the driver shift on tab 1', () => {
     render(<OnboardingScreen />);
 
-    expect(screen.getByText(/built on the sentence completion method/)).toBeTruthy();
-    expect(screen.getByText(/developed by the psychologist Nathaniel Branden/)).toBeTruthy();
-    expect(screen.getByText(/larger approach aimed at increasing self-awareness/)).toBeTruthy();
+    // Owner copy 2026-09-25 (intro-final-copy.md), verbatim; the em dash in
+    // the file's opening sentence is normalized to a comma (copy rules).
+    expect(screen.getByText(/Without self-awareness, we often run on autopilot/)).toBeTruthy();
+    expect(screen.getByText(/uses the sentence completion method, developed by psychologist Nathaniel Branden/)).toBeTruthy();
+    expect(screen.getByText(/from being a passenger in your life to the driver/)).toBeTruthy();
     expect(screen.getByLabelText('Read more about the method')).toBeTruthy();
   });
 
-  it('keeps the mechanics copy and adds how and why it works on tab 2', () => {
+  it('retitles tab 2 to How it works and adds the same-stems rationale', () => {
     render(<OnboardingScreen />);
 
-    expect(screen.getByText('Wow it works')).toBeTruthy();
-    expect(screen.getByText(/finish it, several times, quickly/)).toBeTruthy();
-    // v14 issue 03: the semicolon sentence split into two, and the quickness
-    // paragraph broken into short sentences without losing the meaning.
-    expect(screen.getByText(/Repetition or nonsense is fine\. That’s part of how it works\./)).toBeTruthy();
-    expect(screen.getByText(/The quickness is the point\. Endings written before you can polish them/)).toBeTruthy();
-    expect(screen.getByText(/how you actually respond/)).toBeTruthy();
-    expect(screen.getByText(/The value is in the pattern across many endings, not in any single one\./)).toBeTruthy();
-    expect(screen.queryByText(/is fine; that’s part/)).toBeNull();
+    expect(screen.getByText('How it works')).toBeTruthy();
+    expect(screen.getByText(/finish it several times, as quickly as possible/)).toBeTruthy();
+    expect(screen.getByText(/Write whatever comes to mind first, without judging it\./)).toBeTruthy();
+    expect(screen.getByText('Why use the same stems every day?')).toBeTruthy();
+    expect(screen.getByText(/brain’s first instinct is to give you the answers you expect to hear/)).toBeTruthy();
+    expect(screen.getByText(/drop its guard and reveal what you’re actually thinking/)).toBeTruthy();
+    expect(screen.getByText('Don’t polish. Don’t overthink. Just write.')).toBeTruthy();
   });
 
   it('makes Allow reminders unmistakably a button, with Not now as the quiet alternative', () => {
@@ -217,6 +217,26 @@ describe('OnboardingScreen', () => {
     expect(content.flexGrow).toBe(1);
     expect(content.justifyContent).toBe('center');
     expect(content.padding).toBe(Spacing.four);
+  });
+
+  // p11-t4 grant (floor-clip fix): the owner copy port made tabs 1/2/4
+  // taller than the pager viewport at the ratified 320x640 floor, clipping
+  // titles and trailing copy (hub FLAG lines 65-66). Every pager page now
+  // uses the ticket-01 scroll pattern; pinned on tab 1 and on the evening
+  // card's page (the About replay inherits: same route, same pages).
+  it('makes every pager page a vertical scroll container so floor-device copy stays visible (p11-t4 grant)', () => {
+    render(<OnboardingScreen />);
+
+    for (const label of ['About the method', 'Include an evening practice?']) {
+      let node = screen.getByText(label);
+      while (node && node.props.contentContainerStyle === undefined) node = node.parent;
+      expect(node).toBeTruthy();
+      // Vertical: not the horizontal pager itself.
+      expect(node.props.horizontal).toBeFalsy();
+      const content = StyleSheet.flatten(node.props.contentContainerStyle);
+      expect(content.flexGrow).toBe(1);
+      expect(content.justifyContent).toBe('center');
+    }
   });
 
   it('pins the committed Reminders ask and drops the old reassurance paragraphs', () => {
@@ -451,20 +471,22 @@ describe('OnboardingScreen', () => {
   });
 
   // ------------------------------------------------------------------
-  // p8-t2 copy pins: the approved drafts (worksheet "Agent drafts",
-  // owner-approved as rendered 2026-09-24), pinned verbatim.
+  // Copy pins: the owner's intro-final-copy.md (2026-09-25), the copy
+  // source since the p8-t2 drafts were superseded, pinned verbatim.
 
-  it('names the daily shape on tab 1 and states the loop on tab 2 (p8-t2 approved copy)', () => {
+  it('closes tab 1 and states the same-stems rationale, verbatim (owner copy 2026-09-25)', () => {
     render(<OnboardingScreen />);
 
+    // The file mixes straight and curly apostrophes; the port normalizes to
+    // U+2019 (copy rules forbid the straight one), so the pin reads curly.
     expect(
       screen.getByText(
-        /In practice it is small and daily: a few minutes in the morning to write, a moment in the evening to reread\./,
+        'The practice is small but powerful. Just a few minutes in the morning to write, and a brief moment in the evening to reflect.',
       ),
     ).toBeTruthy();
     expect(
       screen.getByText(
-        'A day with the app: in the morning you write your endings. In the evening you reread what you wrote and reflect on it. Once a week, one reflection pulls the week together.',
+        'Your brain’s first instinct is to give you the answers you expect to hear. By repeating the same start of a sentence all week, you eventually run out of those standard replies. Combined with writing as fast as you can, this repetition forces your mind to drop its guard and reveal what you’re actually thinking underneath the surface.',
       ),
     ).toBeTruthy();
   });
@@ -484,9 +506,9 @@ describe('OnboardingScreen', () => {
     ).toBeTruthy();
   });
 
-  it('names the reread in the evening ask (p8-t2 approved copy, shared card)', () => {
+  it('names the reread in the evening ask (owner copy 2026-09-25, shared card)', () => {
     render(<OnboardingScreen />);
 
-    expect(screen.getByText(/reread what you wrote in the morning, then reflect on your day\./)).toBeTruthy();
+    expect(screen.getByText(/reread what you wrote that morning and reflect on your day/)).toBeTruthy();
   });
 });
