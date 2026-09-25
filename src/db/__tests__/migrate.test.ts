@@ -9,6 +9,7 @@ import { MIGRATION_0004_OFFICIAL_PROGRAMME } from '../migrations/0004_official_p
 import { MIGRATION_0006_EVENING_META_TIME_OF_DAY } from '../migrations/0006_evening_meta_time_of_day';
 import { MIGRATION_0007_EVENING_PRACTICE_STARTER_SET } from '../migrations/0007_evening_practice_starter_set';
 import { MIGRATION_0008_ACTIVATION_PROVENANCE } from '../migrations/0008_activation_provenance';
+import { MIGRATION_0009_HOME_NAV_DEFAULT_RESET } from '../migrations/0009_home_nav_default_reset';
 import { nodeSqliteExecutor } from '../testSupport/nodeSqliteExecutor';
 import { EVENING_META_STEMS, EVENING_PRACTICE_SEED_STEMS, PROGRAMME_SEED_STEMS, programmeStemCategory, WEEKLY_META_STEM } from '../seed/stems';
 
@@ -38,6 +39,18 @@ const MIGRATION_0004_TAGGED_TEXT = /UPDATE stems SET is_weekly_meta = 1 WHERE or
  */
 const MIGRATION_0008_BACKFILL_UPDATE =
   /^UPDATE stems SET activation_provenance = 'programme' WHERE week_number IS NOT NULL;$/m.exec(MIGRATION_0008_ACTIVATION_PROVENANCE)?.[0];
+
+/**
+ * The exact reset UPDATE migration 0009 ships, extracted from the shipped
+ * SQL constant itself (issue 10's extraction pattern): the reset must BE
+ * `home_nav_expanded = 'true' → 'false'` scoped to that one key — a changed
+ * predicate fails the pin below instead of silently resetting other keys
+ * or standing values.
+ */
+const MIGRATION_0009_RESET_UPDATE =
+  /^UPDATE settings SET value = 'false', updated_at = '2026-09-25T00:00:00\.000Z' WHERE key = 'home_nav_expanded' AND value = 'true';$/m.exec(
+    MIGRATION_0009_HOME_NAV_DEFAULT_RESET,
+  )?.[0];
 
 function fixturePath(version: number): string {
   return path.join(FIXTURES_DIR, `schema-v${version}.db`);
@@ -505,7 +518,8 @@ describe('migrate', () => {
   // --- Migration 0008 (wave-2 w2-t1): activation provenance + programme-on record ---
 
   it("the v8 fixture carries migration 0008's two columns with their NOT NULL defaults", () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(8);
+    // Frozen at the migration that introduced the pin; 0009's cycle bumps it.
+    expect(CURRENT_SCHEMA_VERSION).toBe(9);
     const raw = new DatabaseSync(fixturePath(8));
     const columnsOf = (table: string) =>
       Object.fromEntries(
@@ -718,6 +732,105 @@ describe('migrate', () => {
     expect((db.getFirstSync<{ c: number }>('SELECT COUNT(*) AS c FROM sessions', []) as { c: number }).c).toBe(0);
     const meta = db.getFirstSync<{ schema_version: number }>('SELECT schema_version FROM schema_meta WHERE id = 1', []);
     expect(meta?.schema_version).toBe(CURRENT_SCHEMA_VERSION);
+
+    raw.close();
+    fs.rmSync(path.dirname(scratch), { recursive: true, force: true });
+  });
+
+  // Packet-11 t7-fixes (owner report 2026-09-25: "menu must be collapsed by
+  // default"): the seed default for home_nav_expanded is false, but
+  // installs that ever toggled the dock open carry a stored 'true' the
+  // default could never reach again. 0009 resets that one stored value —
+  // the three install classes must resolve correctly, and a toggle after
+  // the migration must persist normally (a one-time reset, not a trigger).
+  it('the shipped 0009 reset is scoped exactly to the home_nav_expanded true row', () => {
+    expect(MIGRATION_0009_RESET_UPDATE).toBeDefined();
+  });
+
+  it('migration 0009 (v8→v9) resets a stored expanded dock to the default and leaves every other shape untouched', () => {
+    const scratch = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'six-endings-migrate-')), 'copy.db');
+    fs.copyFileSync(fixturePath(8), scratch);
+    const raw = new DatabaseSync(scratch);
+    const db = nodeSqliteExecutor(raw);
+
+    // Mimic a real v8 install's settings table: the owner's class (stored
+    // 'true' from an earlier toggle), a collapsed install ('false'), an
+    // old install without the row, and an unrelated KV row the reset must
+    // never touch. Values are the repository's JSON-encoded forms.
+    const insertSetting = (key: string, value: string, at: string) =>
+      raw.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)').run(key, value, at);
+    insertSetting('home_nav_expanded', 'true', '2026-09-24T10:00:00.000Z');
+    insertSetting('stem_terminator', '"..."', '2026-09-20T10:00:00.000Z');
+    insertSetting('onboarding_completed', 'true', '2026-09-20T10:00:00.000Z');
+
+    migrate(db, '9.9.9');
+
+    const meta = db.getFirstSync<{ schema_version: number }>('SELECT schema_version FROM schema_meta WHERE id = 1', []);
+    expect(meta?.schema_version).toBe(CURRENT_SCHEMA_VERSION);
+
+    const byKey = Object.fromEntries(
+      (db.getAllSync<{ key: string; value: string; updated_at: string }>('SELECT key, value, updated_at FROM settings', []) as {
+        key: string;
+        value: string;
+        updated_at: string;
+      }[]).map((r) => [r.key, r]),
+    );
+    // The owner's class: reset to the JSON-encoded default, bookkeeping stamp.
+    expect(byKey['home_nav_expanded']).toEqual({ key: 'home_nav_expanded', value: 'false', updated_at: '2026-09-25T00:00:00.000Z' });
+    // Unrelated rows untouched (value AND stamp).
+    expect(byKey['stem_terminator']).toEqual({ key: 'stem_terminator', value: '"..."', updated_at: '2026-09-20T10:00:00.000Z' });
+    expect(byKey['onboarding_completed']).toEqual({ key: 'onboarding_completed', value: 'true', updated_at: '2026-09-20T10:00:00.000Z' });
+
+    // A toggle after the migration persists normally: the reset is a
+    // one-time write, not a standing trigger.
+    db.runSync("UPDATE settings SET value = 'true', updated_at = '2026-09-26T08:00:00.000Z' WHERE key = 'home_nav_expanded'", []);
+    const toggled = db.getFirstSync<{ value: string }>('SELECT value FROM settings WHERE key = ?', ['home_nav_expanded']);
+    expect(toggled?.value).toBe('true');
+
+    raw.close();
+    fs.rmSync(path.dirname(scratch), { recursive: true, force: true });
+  });
+
+  it('migration 0009 is a no-op for installs already collapsed or without the row', () => {
+    const scratch = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'six-endings-migrate-')), 'copy.db');
+    fs.copyFileSync(fixturePath(8), scratch);
+    const raw = new DatabaseSync(scratch);
+    const db = nodeSqliteExecutor(raw);
+
+    // The collapsed class: 'false' stays 'false' with its own stamp. The
+    // pre-packet-10 class: no row at all — getSettings' defaults merge
+    // resolves it collapsed; the migration must not insert one.
+    raw
+      .prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)')
+      .run('home_nav_expanded', 'false', '2026-09-23T10:00:00.000Z');
+
+    migrate(db, '9.9.9');
+
+    const row = db.getFirstSync<{ value: string; updated_at: string }>(
+      'SELECT value, updated_at FROM settings WHERE key = ?',
+      ['home_nav_expanded'],
+    );
+    expect(row).toEqual({ value: 'false', updated_at: '2026-09-23T10:00:00.000Z' });
+
+    // Fresh-install class: migrations run before seeding, so an empty
+    // settings table must stay empty through 0009 (the seed writes the
+    // default itself; repository.test.ts pins that side).
+    const fresh = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'six-endings-migrate-')), 'fresh.db');
+    const rawFresh = new DatabaseSync(fresh);
+    const dbFresh = nodeSqliteExecutor(rawFresh);
+    migrate(dbFresh, '9.9.9');
+    // (Migration 0004 legitimately inserts its four §7 settings on this
+    // path — the fresh-install assertion is that home_nav_expanded in
+    // particular has NO row: the seed writes the default itself;
+    // repository.test.ts pins that side.)
+    expect(
+      (dbFresh.getFirstSync<{ c: number }>(
+        'SELECT COUNT(*) AS c FROM settings WHERE key = ?',
+        ['home_nav_expanded'],
+      ) as { c: number }).c,
+    ).toBe(0);
+    rawFresh.close();
+    fs.rmSync(path.dirname(fresh), { recursive: true, force: true });
 
     raw.close();
     fs.rmSync(path.dirname(scratch), { recursive: true, force: true });
