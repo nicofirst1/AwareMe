@@ -1,6 +1,6 @@
 # Layout round 2026-09-15 — agent coordination hub
 
-Shared coordination for the layout-audit implementation cycles. Sources of truth: `docs/design/layout-audit-brief-2026-09-15.md` (mandate), `docs/design/layout-audit-2026-09-15.md` (findings + constitution LC1–LC9 + cycle plan), `.scratch/layout-audit-2026-09-15/issues/01–06` (work specs). Coordinator: the `pi` agent that spawned you — reach it with `herdr agent prompt pi "<msg>"`.
+Shared coordination for the layout-audit implementation cycles. Sources of truth: `docs/design/layout-audit-brief-2026-09-15.md` (mandate), `docs/design/layout-audit-2026-09-15.md` (findings + constitution LC1–LC9 + cycle plan), `.scratch/legacy/layout-audit-2026-09-15/issues/01–06` (work specs). Coordinator: the `pi` agent that spawned you — reach it with `herdr agent prompt pi "<msg>"`.
 
 ## 0. Reading order (before ANY work)
 
@@ -12,7 +12,7 @@ Shared coordination for the layout-audit implementation cycles. Sources of truth
 
 ## 1. Roster & waves
 
-| cycle | issue (`.scratch/layout-audit-2026-09-15/issues/`) | worktree | branch | impl | review | wave |
+| cycle | issue (`.scratch/legacy/layout-audit-2026-09-15/issues/`) | worktree | branch | impl | review | wave |
 |---|---|---|---|---|---|---|
 | 01 | `01-home-sitting-hero.md` | `~/repos/personal/six_endings-c01` | `layout/cycle-01` | c01-impl | c01-review | 1 |
 | 02 | `02-write-pinned-timer.md` | `~/repos/personal/six_endings-c02` | `layout/cycle-02` | c02-impl | c02-review | 1 |

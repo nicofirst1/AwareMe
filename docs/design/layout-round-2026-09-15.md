@@ -1,6 +1,6 @@
 # Layout round — 2026-09-15 (close-out report)
 
-**Status: COMPLETE.** All six cycles from `layout-audit-2026-09-15.md` (constitution LC1–LC9 + cycle plan) were implemented, independently reviewed, merged `--no-ff` into `main`, and retired. Main ends the round at **typecheck clean, 309/309 tests** (round started at 277). This report is the round's durable summary; the per-cycle evidence (implementer measurements + full reviewer verdicts) lives committed in `.scratch/layout-audit-2026-09-15/issues/01–06`, and the capture images in `docs/design/layout-round-2026-09-15-captures/`.
+**Status: COMPLETE.** All six cycles from `layout-audit-2026-09-15.md` (constitution LC1–LC9 + cycle plan) were implemented, independently reviewed, merged `--no-ff` into `main`, and retired. Main ends the round at **typecheck clean, 309/309 tests** (round started at 277). This report is the round's durable summary; the per-cycle evidence (implementer measurements + full reviewer verdicts) lives committed in `.scratch/legacy/layout-audit-2026-09-15/issues/01–06`, and the capture images in `docs/design/layout-round-2026-09-15-captures/`.
 
 ## How the round ran
 
@@ -59,7 +59,7 @@ Progress stat values render at `subtitle` scale (h30, right edge x378) under `TO
 
 ## Residues (owner items)
 
-1. **Issue 07 side-observations** (`needs-triage`, `.scratch/layout-audit-2026-09-15/issues/07-side-observations.md`): dead Theme setting (`settings.theme` persisted but `use-theme.ts` reads only the system scheme), locale-mixed date formats, dual search inputs.
+1. **Issue 07 side-observations** (`needs-triage`, `.scratch/legacy/layout-audit-2026-09-15/issues/07-side-observations.md`): dead Theme setting (`settings.theme` persisted but `use-theme.ts` reads only the system scheme), locale-mixed date formats, dual search inputs.
 2. **M7 store prep** inherits the compliant UI.
 3. **Optional follow-up:** `BackHeader` can now be privatized behind `ScreenHeader` (migration is complete; flagged by the c03 reviewer as the right direction).
 4. **Non-blocking advisories** (contrast notes, JSDoc tensions, methodology noise) are catalogued inside each cycle's `## Reviewer verdict` in its issue file — nothing open, all judgement-call severity.
