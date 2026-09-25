@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 
 import StemsScreen from '@/app/stems';
 import { LibraryStemRow } from '@/db';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Colors, Palette, Radius, Spacing } from '@/constants/theme';
 
 // `useFocusEffect` no-ops without a real navigation tree (see
 // node_modules/expo-router/build/useFocusEffect.js); run the effect once on
@@ -340,8 +340,11 @@ describe('StemsScreen', () => {
     // The resting row is visible under the Disabled group, state on the group header.
     expect(screen.getByLabelText('Disabled group: 1 stem')).toBeTruthy();
     expect(screen.getByLabelText('Write on: Stem number 1. Disabled. Long-press to select.')).toBeTruthy();
-    // p10: rows carry no state badges — the group header is the state.
-    expect(screen.getAllByText('Disabled')).toHaveLength(1); // the header alone
+    // p11 restore: the state is on the group header AND the row's own chip
+    // (the p8 STATE_BADGE returns with the cards) — the header + the resting
+    // row's chip. The deleted row's muted chip reads Active (its state), not
+    // Disabled, so nothing else collides.
+    expect(screen.getAllByText('Disabled')).toHaveLength(2);
 
     // The deleted gate: absent by default, and the Showing line counts the
     // visible universe (2 rows, not 3).
@@ -369,11 +372,16 @@ describe('StemsScreen', () => {
     expect(screen.getByLabelText('Stem number 2. Deleted.')).toBeTruthy();
     const deletedText = screen.getByText('Stem number 2');
     expect(StyleSheet.flatten(deletedText.props.style)?.color).toBe(Colors.light.textMuted);
-    const groupTitles = screen.getAllByText(/^(Active|Disabled|Deleted)$/).map((n) => n.props.children);
-    expect(groupTitles).toEqual(['Active', 'Disabled', 'Deleted']);
+    // Group order via the headers' a11y labels (the rows' state chips now
+    // also say Active/Disabled, so the bare words no longer isolate the
+    // headers).
+    const groupHeaders = screen
+      .getAllByLabelText(/^(Active|Disabled|Deleted) group:/)
+      .map((n) => n.props.accessibilityLabel);
+    expect(groupHeaders).toEqual(['Active group: 1 stem', 'Disabled group: 1 stem', 'Deleted group: 1 stem']);
     // The old opacity dim is gone: no ancestor of the row carries an opacity.
     let node: typeof deletedText | null = deletedText;
-    while (node && StyleSheet.flatten(node.props.style)?.paddingVertical !== Spacing.three) node = node.parent;
+    while (node && StyleSheet.flatten(node.props.style)?.padding !== Spacing.three) node = node.parent;
     expect(node).toBeTruthy();
     expect(StyleSheet.flatten(node!.props.style)?.opacity).toBeUndefined();
   });
@@ -480,9 +488,10 @@ describe('StemsScreen', () => {
     // resting; the grouping carries the state axis, so no State detour is
     // needed — or possible — to see it).
     expect(screen.getByText('Evening reflection stem')).toBeTruthy();
-    expect(screen.getByText('Reflection')).toBeTruthy(); // the flat row's origin meta word
-    // p10: no row badges — the Disabled group header is the only bearer.
-    expect(screen.getAllByText('Disabled')).toHaveLength(1);
+    expect(screen.getByText('Reflection')).toBeTruthy(); // the row's Reflection origin chip
+    // p11 restore: the state chip returns with the cards — the header + the
+    // resting row's own chip.
+    expect(screen.getAllByText('Disabled')).toHaveLength(2);
     expect(screen.getByText('Part of the evening reflection, whether Active or Disabled.')).toBeTruthy();
     expect(
       screen.getByLabelText(
@@ -505,11 +514,12 @@ describe('StemsScreen', () => {
     expect(screen.queryByText(/meta/)).toBeNull();
   });
 
-  // p10 flat port: the per-row identity chips are gone — origin stays as
-  // the quiet meta line's text (Programme / Starter set / Mine / Imported;
-  // D7's relabel, D2 display). The week number renders nowhere; the raw
-  // enums never leak as copy; category lives in the sheet alone.
-  it('renders origin provenance as the quiet meta line: Programme, Starter set, Mine, Imported — no chips', () => {
+  // p11 restore (the approved mockup): origin returns to the rows as the
+  // origin chip — Programme (weeked seed) and Starter set (D7's relabel) in
+  // jade, Mine in the ratified teal, Imported in the ratified stone
+  // (D2 display). The week number renders nowhere; the raw enums never leak
+  // as copy; the category chips return with the cards too.
+  it('renders origin provenance as chips: Programme, Starter set, Mine, Imported — with the ratified origin hues', () => {
     // One controlled stem per branch, so each origin word is read off
     // exactly one row: a seed morning stem of week 7, a seed weekless
     // evening stem (a starter), a user evening stem, and an imported
@@ -526,6 +536,17 @@ describe('StemsScreen', () => {
     expect(screen.getByText('Starter set')).toBeTruthy();
     expect(screen.getByText('Mine')).toBeTruthy();
     expect(screen.getByText('Imported')).toBeTruthy();
+    // The ratified option A pairs render as the chips' fills: walk up from
+    // each origin word to its chip and pin the approved bg hexes.
+    const chipBgOf = (label: string) => {
+      let node = screen.getByText(label).parent;
+      while (node && StyleSheet.flatten(node.props.style)?.borderRadius !== Radius.chip) node = node.parent;
+      expect(node).toBeTruthy();
+      return StyleSheet.flatten(node!.props.style)?.backgroundColor;
+    };
+    expect(chipBgOf('Mine')).toBe(Palette.teal.light.bg); // #cce0d7, the approved pair
+    expect(chipBgOf('Imported')).toBe(Palette.stone.light.bg); // #e2d6c5, the approved pair
+    expect(chipBgOf('Programme')).toBe(Palette.jade.light.bg); // jade, unchanged
     // The owner revision holds: the row's week number renders nowhere (the
     // card is counts only, no header carries a week; the weeks browser
     // owns the week).
@@ -535,11 +556,11 @@ describe('StemsScreen', () => {
     expect(screen.queryByText('imported')).toBeNull();
     expect(screen.queryByText('morning')).toBeNull();
     expect(screen.queryByText(/seed/)).toBeNull();
-    // p10: rows carry NO chips — no category text anywhere with the sheet
-    // closed (the meta line is origin-only), and the old chips' labels are
-    // gone from rows too.
-    expect(screen.queryByText('awareness')).toBeNull();
-    expect(screen.queryByText('self acceptance')).toBeNull();
+    // p11: the category chips return to the rows (the mockup's photo-536
+    // order) — the categorized fixture rows carry theirs with the sheet
+    // closed.
+    expect(screen.getByText('awareness')).toBeTruthy();
+    expect(screen.getByText('assertiveness')).toBeTruthy();
   });
 
   // w2-t4 (s2-12, design §4.6) + p10: category chips live in the filter
@@ -553,8 +574,11 @@ describe('StemsScreen', () => {
     ];
     render(<StemsScreen />);
 
-    // No strip on the list; the deleted row's category offers no chip.
-    expect(screen.queryByText('awareness')).toBeNull();
+    // p11: the categorized row carries its category chip on the card (the
+    // mockup's photo-536 order); the deleted row's category (purpose) is
+    // nowhere as text — its row is hidden and it offers no chip.
+    expect(screen.getByText('awareness')).toBeTruthy();
+    expect(screen.queryByText('purpose')).toBeNull();
     openFilters();
     expect(screen.getByLabelText('awareness')).toBeTruthy();
     expect(screen.queryByLabelText('purpose')).toBeNull();
@@ -654,11 +678,12 @@ describe('StemsScreen', () => {
     expect(mockRouter.push).toHaveBeenCalledWith('/stem-edit');
   });
 
-  // p10 flat anatomy (the mockup's port): rows carry no card fill and no
-  // edge tint — a hairline divider and roomier vertical padding carry the
-  // separation; group headers lose their fill and gain the count pill; the
-  // practice counts card is a flat tappable row.
-  it('renders flat rows: no fill, no edge tint, hairline divider, roomier padding; pill-bearing flat group headers', () => {
+  // p11 restore (the approved mockup): stem rows are cards again — the ONE
+  // backgroundElement cream fill, Radius.medium corners, the p8 8px gaps —
+  // no edge tint, no in-group row divider (the card edges carry the
+  // separation); group headers stay bare with the count pill; the practice
+  // counts row keeps its hairline.
+  it('renders restored stem cards: one cream fill, card radius, no edge tint, no row divider; pill-bearing flat group headers', () => {
     render(<StemsScreen />);
 
     // Active group: 28 of the 30-row fixture (one resting, one deleted).
@@ -677,15 +702,16 @@ describe('StemsScreen', () => {
       borderRadius: Radius.chip,
     });
 
-    // A stem row: the first ancestor carrying the row's vertical padding.
+    // A stem card: the first ancestor carrying the row's padding.
     let row = screen.getByText(mockStems[0].text).parent;
-    while (row && StyleSheet.flatten(row.props.style)?.paddingVertical !== Spacing.three) row = row.parent;
+    while (row && StyleSheet.flatten(row.props.style)?.padding !== Spacing.three) row = row.parent;
     expect(row).toBeTruthy();
     const rowStyle = StyleSheet.flatten(row!.props.style);
-    expect(rowStyle.borderLeftWidth).toBeUndefined(); // the edge tint is gone
-    expect(rowStyle.borderBottomWidth).toBe(StyleSheet.hairlineWidth); // the hairline divider
-    expect(rowStyle.paddingVertical).toBe(Spacing.three); // the mockup's ~14px at the scale's 16
-    expect(rowStyle.borderRadius).toBeUndefined(); // no card radius
+    expect(rowStyle.backgroundColor).toBe(Colors.light.backgroundElement); // the one cream
+    expect(rowStyle.borderRadius).toBe(Radius.medium); // the card corners return
+    expect(rowStyle.borderLeftWidth).toBeUndefined(); // the edge tint stays retired
+    expect(rowStyle.borderBottomWidth).toBeUndefined(); // the in-group divider retires with the cards
+    expect(rowStyle.padding).toBe(Spacing.three);
   });
 
   // Ticket 01 (320x640 floor, p7 w2t4): the bar's contents (label + three
