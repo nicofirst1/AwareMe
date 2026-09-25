@@ -326,6 +326,34 @@ describe('StemsScreen', () => {
     expect(screen.getByText('Show deleted')).toBeTruthy();
   });
 
+  // t7-fixes (owner report 2026-09-25: "the stem filter setting still have
+  // the white background"): the sheet's row containers sat INSIDE the
+  // filterSheet's one backgroundElement cream as bare ThemedViews, painting
+  // the pale theme `background` (#fef5e8) over it — measured on device as
+  // pale bands y344-615 inside the cream sheet. The rows must be
+  // transparent so the sheet's one cream shows through (the settings
+  // round's lesson, applied to the stems sheet; shared by FilterRow and
+  // WeekPicker's trigger row).
+  it('renders the sheet row containers transparent — the sheet keeps its one cream (t7-fixes)', () => {
+    render(<StemsScreen />);
+
+    openFilters();
+    // Walk up from a row label to its filterRow container (the ancestor
+    // carrying the row's gap) and pin the absence of any fill.
+    const rowBgOf = (label: string) => {
+      let node = screen.getByText(label).parent;
+      while (node && StyleSheet.flatten(node.props.style)?.gap !== Spacing.one) node = node.parent;
+      expect(node).toBeTruthy();
+      return StyleSheet.flatten(node!.props.style)?.backgroundColor;
+    };
+    expect(rowBgOf('Categories')).toBe('transparent');
+    expect(rowBgOf('Origin')).toBe('transparent');
+    // The WeekPicker trigger row shares the container (its trigger itself
+    // carries backgroundElement explicitly — defined on the cream sheet).
+    const weekTrigger = screen.getByLabelText('Programme week: All weeks');
+    expect(StyleSheet.flatten(weekTrigger.props.style).backgroundColor).toBe(Colors.light.backgroundElement);
+  });
+
   // p8: under the grouping, deactivated rows are first-class. p10's deleted
   // gate: a soft-deleted row is ABSENT from the default list; the sheet's
   // single-select "Show deleted" chip reveals a read-only "Deleted" tail
