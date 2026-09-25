@@ -17,22 +17,36 @@ jest.mock('expo-linking', () => ({
 }));
 
 describe('AboutScreen', () => {
-  it('renders app identity, version, both links, framing, and attribution', () => {
+  it('renders app identity, version, the three links, the ported intro sections, and attribution', () => {
     render(<AboutScreen />);
 
     expect(screen.getByText('About')).toBeTruthy();
     expect(screen.getByText(/AwareMe is a quiet place/)).toBeTruthy();
     expect(screen.getByText(/Version/)).toBeTruthy();
-    expect(screen.getByText('About the method')).toBeTruthy();
+    // p11 t7-fixes: the section titles and their link row now coexist —
+    // the title is screen copy, the link row navigates to /about-method.
+    expect(screen.getAllByText('About the method')).toHaveLength(2);
     expect(screen.getByText('Created by Nicolo\' Brandizzi')).toBeTruthy();
 
-    // §5.1 amendment (c04): method framing — Branden's sentence completion,
-    // an exercise for self-esteem and increased self-awareness.
+    // p11 t7-fixes (owner instruction): the intro's three content sections
+    // ported verbatim from the shipped post-t4 intro copy (onboarding tabs
+    // 1–2 + the shared EveningPracticeCard; the why-same-stems section is
+    // deliberately absent). Verbatim first lines per section (the section
+    // title/link-row coexistence is pinned by getAllByText above).
     expect(
       screen.getByText(
-        /sentence completion, developed by psychologist Nathaniel Branden as an exercise for\s+self-esteem and increased self-awareness/, //
+        /Without self-awareness, we often run on autopilot, reacting to life out of habit,\s+repeating the same mistakes, and feeling confused about why we feel stuck\./,
       ),
     ).toBeTruthy();
+    expect(screen.getByText('How it works')).toBeTruthy();
+    expect(screen.getByText(/You’ll get the start of a sentence \(a "stem"\) and finish it several times/)).toBeTruthy();
+    expect(screen.getByText("Don’t polish. Don’t overthink. Just write.")).toBeTruthy();
+    expect(screen.getByText('Include an evening practice?')).toBeTruthy();
+    expect(screen.getByText(/The morning practice brings your hidden thoughts to the surface/)).toBeTruthy();
+    // The not-ported section stays absent (owner's list has three, not four).
+    expect(screen.queryByText('Why use the same stems every day?')).toBeNull();
+    // The old method paragraph is superseded by the ported section.
+    expect(screen.queryByText(/as an exercise for\s+self-esteem and increased self-awareness/)).toBeNull();
 
     // §5.1 amendment (c04): permission attribution, per the issue's wording sketch.
     expect(
@@ -42,30 +56,27 @@ describe('AboutScreen', () => {
     ).toBeTruthy();
   });
 
-  it('renders the four links as standard link rows (layout audit A1, p8-t2)', () => {
+  it('renders the three links as standard link rows (layout audit A1; p8-t2 replay row removed in t7-fixes)', () => {
     render(<AboutScreen />);
 
     // A1: label left, chevron in the reserved right slot — the rows keep
     // `accessibilityRole="link"` with the row label as the accessible name.
-    // p8-t2 adds the replay entry as the first row of the block.
-    expect(screen.getByRole('link', { name: 'Show the introduction from your first launch' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'About the method' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Created by Nicolo\' Brandizzi' })).toBeTruthy();
     // The header's back affordance is the only other link on the screen.
     expect(screen.getByRole('link', { name: 'Back' })).toBeTruthy();
   });
 
-  it('pushes the read-only onboarding replay from the Show introduction row (p8-t2)', () => {
+  it('no longer offers the onboarding replay: the Show introduction row is gone (p11 t7-fixes)', () => {
     render(<AboutScreen />);
 
-    // p8-t2, owner-approved mechanics: the row is one more link row; the
-    // `replay=1` route param is the whole re-entry mechanism (no new
-    // storage) — onboarding renders the flow read-only and returns here.
-    const row = screen.getByRole('link', { name: 'Show the introduction from your first launch' });
-    fireEvent.press(row);
-
-    expect(mockPush).toHaveBeenCalledTimes(1);
-    expect(mockPush).toHaveBeenCalledWith({ pathname: '/onboarding', params: { replay: '1' } });
+    // Owner instruction 2026-09-25: remove the replay entry row. The
+    // replay=1 param path in onboarding.tsx itself stays untouched —
+    // nothing navigates to it from here anymore.
+    expect(screen.queryByRole('link', { name: 'Show the introduction from your first launch' })).toBeNull();
+    expect(screen.queryByText('Show introduction')).toBeNull();
+    fireEvent.press(screen.getByText('AwareMe is a quiet place to finish a sentence: no scoring, no feed, nothing leaving your device.'));
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('programme link opens the official URL and announces it opens the website', () => {
