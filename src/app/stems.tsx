@@ -1049,10 +1049,15 @@ const styles = StyleSheet.create({
   filterLabel: {
     marginBottom: Spacing.half,
   },
+  // Same transparency rule as filterRow (see its note): this is the chips'
+  // wrap container INSIDE each row — a bare ThemedView here painted the
+  // pale background over the sheet cream even after the row itself went
+  // transparent (measured post-fix: the y372-574 block stayed #fef5e8).
   filterOptions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.one,
+    backgroundColor: 'transparent',
   },
   sheetScrim: {
     flex: 1,

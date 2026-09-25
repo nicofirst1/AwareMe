@@ -348,6 +348,17 @@ describe('StemsScreen', () => {
     };
     expect(rowBgOf('Categories')).toBe('transparent');
     expect(rowBgOf('Origin')).toBe('transparent');
+    // The chips' wrap container (filterOptions) sits inside each row and
+    // carried the same bare-ThemedView pale fill — the on-device post-fix
+    // probe caught it (pale block y372-574 survived the row fix), so it is
+    // pinned transparent too, walked from a chip label.
+    const optionsBgOf = (label: string) => {
+      let node = screen.getByText(label).parent;
+      while (node && StyleSheet.flatten(node.props.style)?.flexWrap === undefined) node = node.parent;
+      expect(node).toBeTruthy();
+      return StyleSheet.flatten(node!.props.style)?.backgroundColor;
+    };
+    expect(optionsBgOf('Unset')).toBe('transparent');
     // The WeekPicker trigger row shares the container (its trigger itself
     // carries backgroundElement explicitly — defined on the cream sheet).
     const weekTrigger = screen.getByLabelText('Programme week: All weeks');
