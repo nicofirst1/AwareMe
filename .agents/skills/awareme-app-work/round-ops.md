@@ -18,15 +18,24 @@ One artifact class per commit: skill text, registry rows, and snapshots never sh
 
 ## Hub integrity
 
+- Every hub row goes through `append-status.py` — printf/heredoc appends are breaches (p11: five backtick-stamped rows bypassed the format); the script hard-fails on a non-canonical tail line unless `--force`. A time quoted inside a note (an owner event, a transition) is copied from the row that carries it, never estimated from memory (p11 L72: a coordinator row stamped 10:34 quoted an owner Telegram event as 10:38 — the same defect t2-impl disclosed and corrected, here undisclosed).
+
 - Appends follow the shared hub rules in SKILL.md (one-line timestamped rows, `wc -l` count check after every append).
 - Back the hub up to `.coordination/<round>-hub-backup.md` at each wave boundary.
 - Lost lines are recoverable: agent sessions append via `cat >>`, so reconstruct from the agents' session jsonl files and archive under `.coordination/` with a provenance header.
 - Absence claims ("no row", "no verdict yet", "still in flight") are written only after re-reading the hub tail and the packet Comments at post time: late-landing rows retire them, and the trail's rows — not the last sweep's memory — decide what is in flight (p7: two sweeps wrongly listed delivered audits as in-flight, corrected 16:32 and 17:43).
 
+## Coordinator transition SLA
+
+- The coordinator re-reads the hub tail for actionable rows (an open FLAG, a READY awaiting review, an APPROVED/VERDICT awaiting the next action, a pre-authorization whose trigger fired) BEFORE ending every turn. Transition deadlines: READY → review dispatch ≤10 min; APPROVED/VERDICT → next action (audit dispatch or merge) ≤10 min; FLAG → route-or-escalate ≤10 min. A breach gets a hub NOTE naming the breach (owner-as-watchdog transition latency, registered 2026-09-25 off p11: four owner pings each preceded a coordinator action within 1-12 min while 64/51/84/88/17/12-min unacted windows sat in the same trail; 51% of round wall was coordinator latency).
+- Consume your own standing authorizations: a hub row that pre-authorizes a spawn or action binds the coordinator at its trigger event (e.g. "DONE accepted as final; t2 spawns on that DONE"), not at a later confirmation — holding it for a redundant pick contradicts the row (p11: the t1-restore acceptance row pre-authorized the t2 spawn; it sat 64 min for the Telegram pick it had already delegated).
+- An outage FLAG is a broadcast: the coordinator relays it to every running sibling within the same SLA (10 min; p11: t2 burned 17 min re-diagnosing a gateway outage t4 had already FLAGged). Charters carry the outage budget (SKILL.md evidence section): 2 failed reads (~5 min) then FLAG with the failure mode, and a grep for an open outage FLAG before any read attempt.
+
 ## Steering, grants, ownership
 
 - A scope-changing STEER lands its delta on the receiving ticket's packet row (or the hub row records the row as amended-by-steer) before the receiver implements or reviews — superseded scope must be unreadable as current (p7 10:20: the Archive note reassigned t6 → t3 lived only in hub prose until the audit flagged it).
 - Charters pre-declare anticipated out-of-map necessities and judgment calls as numbered scoped grants at dispatch (surface, rationale, declined alternatives) so cycles consume them without FLAG round-trips; emergent needs stay pre-edit FLAGs, and every grant row names the granted surface and rationale.
+- Design/research charters carry an explicit exploration budget: ≤10 min unbounded search, then converge (two candidates + one-pass programmatic verify, or the best candidate with the kill rationale); a hub heartbeat row every ~10 min while exploring — design cycles have no gates, so silence is the only failure signal (p11 t1-design: ~77 min of silent hue search past a 20-min budget, surfaced by an owner ping).
 - A charter naming a file or symbol verifies the location with one grep at dispatch (p10 t4: DEFAULT_SETTINGS pinned at src/db/repository.ts, lives in src/db/seed/settings.ts — the stale pointer cost an honest-resolution row and an audit observation).
 - A file-ownership map line is derived from the ticket row plus the cross-cycle contracts, so a contract-mandated file never reads as an excursion; where the map and a contract disagree, the contract wins and the map line is amended.
 
