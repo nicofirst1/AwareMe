@@ -43,19 +43,59 @@ describe('parseHmMinutes', () => {
 });
 
 describe('currentPracticePeriod', () => {
-  describe('midpoint rule with the §7 defaults (08:00/21:00 → flips at 14:30)', () => {
+  describe('circular closest-of-two rule with the §7 defaults (08:00/21:00; 2026-09-26 owner decision, packet-12 B2)', () => {
     const morningHm = '08:00';
     const eveningHm = '21:00';
 
-    it("is morning before the midpoint", () => {
-      expect(currentPracticePeriod(morningHm, eveningHm, at(0, 0))).toBe('morning');
+    it("is morning on the day arc nearer the morning alarm", () => {
       expect(currentPracticePeriod(morningHm, eveningHm, at(8, 0))).toBe('morning');
       expect(currentPracticePeriod(morningHm, eveningHm, at(14, 29))).toBe('morning');
     });
 
-    it("is evening at and after the midpoint", () => {
+    it("is evening from the day-arc tie onward", () => {
       expect(currentPracticePeriod(morningHm, eveningHm, at(14, 30))).toBe('evening');
       expect(currentPracticePeriod(morningHm, eveningHm, at(21, 0))).toBe('evening');
+      expect(currentPracticePeriod(morningHm, eveningHm, at(23, 59))).toBe('evening');
+    });
+  });
+
+  // The owner's four stated times (packet-12 B2, alarms 08:00/21:00) plus the
+  // wraparound boundary: the day circle has TWO tie points — 14:30 (the old
+  // same-day midpoint) and 02:30 (its wraparound mirror through midnight).
+  // Ties keep the >= convention: evening on both.
+  describe('wraparound: closest-of-two across midnight (owner-stated times)', () => {
+    const morningHm = '08:00';
+    const eveningHm = '21:00';
+
+    it('keeps 2:00 on the evening side (owner: "midnight still the evening")', () => {
+      expect(currentPracticePeriod(morningHm, eveningHm, at(2, 0))).toBe('evening');
+    });
+
+    it('sends 4:00 to morning (owner)', () => {
+      expect(currentPracticePeriod(morningHm, eveningHm, at(4, 0))).toBe('morning');
+    });
+
+    it('sends 10:00 to morning (owner)', () => {
+      expect(currentPracticePeriod(morningHm, eveningHm, at(10, 0))).toBe('morning');
+    });
+
+    it('sends 18:00 to evening (owner)', () => {
+      expect(currentPracticePeriod(morningHm, eveningHm, at(18, 0))).toBe('evening');
+    });
+
+    it('flips at the wraparound tie 02:30: evening at and before it, morning just after', () => {
+      expect(currentPracticePeriod(morningHm, eveningHm, at(2, 29))).toBe('evening');
+      expect(currentPracticePeriod(morningHm, eveningHm, at(2, 30))).toBe('evening'); // tie → evening
+      expect(currentPracticePeriod(morningHm, eveningHm, at(2, 31))).toBe('morning');
+    });
+
+    it('keeps the day-arc tie 14:30 evening (the >= convention survives)', () => {
+      expect(currentPracticePeriod(morningHm, eveningHm, at(14, 29))).toBe('morning');
+      expect(currentPracticePeriod(morningHm, eveningHm, at(14, 30))).toBe('evening');
+    });
+
+    it('keeps midnight itself on the evening side (the arc runs through 0:00)', () => {
+      expect(currentPracticePeriod(morningHm, eveningHm, at(0, 0))).toBe('evening');
       expect(currentPracticePeriod(morningHm, eveningHm, at(23, 59))).toBe('evening');
     });
   });
@@ -86,11 +126,21 @@ describe('currentPracticePeriod', () => {
   });
 
   describe('degenerate wraparound config (morning > evening)', () => {
-    // 22:00/02:00 → floor((1320 + 120) / 2) = 720 → flips at 12:00: the
-    // plain midpoint arithmetic, deliberately with no midnight special case.
-    it('flips at midday', () => {
-      expect(currentPracticePeriod('22:00', '02:00', at(11, 59))).toBe('morning');
-      expect(currentPracticePeriod('22:00', '02:00', at(12, 0))).toBe('evening');
+    // 22:00/02:00 sit 4h apart on the day circle; closest-of-two makes the
+    // morning arc the (12:00, 22:00) half and the evening arc everything
+    // else, with ties at 12:00 and 0:00 both falling to evening (the >=
+    // convention). Deliberately one rule, no midnight special case — the
+    // former plain-midpoint pin (11:59 → morning) is superseded by the
+    // 2026-09-26 owner decision (packet-12 B2): 11:59 is 5h59m from 02:00
+    // but 6h01m from 22:00, so the honest answer is evening.
+    it('flips around midday with both ties on the evening side', () => {
+      expect(currentPracticePeriod('22:00', '02:00', at(11, 59))).toBe('evening');
+      expect(currentPracticePeriod('22:00', '02:00', at(12, 0))).toBe('evening'); // tie
+      expect(currentPracticePeriod('22:00', '02:00', at(12, 1))).toBe('morning');
+      expect(currentPracticePeriod('22:00', '02:00', at(13, 0))).toBe('morning');
+      expect(currentPracticePeriod('22:00', '02:00', at(21, 59))).toBe('morning');
+      expect(currentPracticePeriod('22:00', '02:00', at(22, 0))).toBe('morning'); // at the morning alarm
+      expect(currentPracticePeriod('22:00', '02:00', at(0, 0))).toBe('evening'); // tie-adjacent arc
     });
   });
 

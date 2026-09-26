@@ -110,18 +110,25 @@ export function applyWeekSetActivation(repo: Repository, now: Date = new Date())
 }
 
 /**
- * D1's pick: an active, non-deleted, user/imported stem not tagged evening —
- * the user's own morning content. Seed rows never masquerade as picks (the
- * evening starters are seed evening content; w2-t5 draws them), untagged
- * picks land in the morning (design §8.2: an untagged pick must land
- * somewhere), and the meta-stems never join a practice draw.
+ * D1's pick, as widened by the 2026-09-26 owner decision (packet-12 B1:
+ * "enabled means it shows"): an active, non-deleted, non-evening stem that
+ * is either the user's own content (user/imported) or a programme stem —
+ * origin 'seed' with a week number (the `stemLibraryFilter` idiom). An
+ * individually enabled programme stem (the user's `setStemActive` flip or
+ * the D2 week-set funnel) joins the morning practice even while the
+ * Programme setting is off — §6.2's pause leaves manual activation live,
+ * and enabled-but-invisible was the owner-reported defect. Seed rows still
+ * never masquerade as picks: the evening starters are seed evening content
+ * (w2-t5 draws them) and weekless anyway, untagged picks land in the
+ * morning (design §8.2: an untagged pick must land somewhere), and the
+ * meta-stems never join a practice draw.
  */
 function isMorningPick(s: LibraryStemRow): boolean {
   return (
     s.active === 1 &&
     s.deleted_at === null &&
-    (s.origin === 'user' || s.origin === 'imported') &&
-    s.time_of_day !== 'evening'
+    s.time_of_day !== 'evening' &&
+    (s.weekNumber != null || s.origin === 'user' || s.origin === 'imported')
   );
 }
 
@@ -143,19 +150,27 @@ function isEveningPick(s: LibraryStemRow): boolean {
 }
 
 /**
- * The morning practice's queue (§6.2, packet-7 D1): the user's active picks
- * (not evening-tagged) first, then — while the Programme setting is on — the
- * active programme block of the effective week, seed order. While Programme
- * is off the queue is the picks alone and the programme week is never read
- * (D3: zero programme state). Pick order is `listAllStems`' own order (the
- * library's recency order) — the composition adds no re-sort, so start and
- * resume walk the identical queue.
+ * The morning practice's queue (§6.2, packet-7 D1; widened 2026-09-26,
+ * packet-12 B1): the user's active picks (not evening-tagged — programme
+ * stems included since the owner's "enabled means it shows" decision)
+ * first, then — while the Programme setting is on — the active programme
+ * block of the effective week, seed order. A stem both picked and in the
+ * week block (an enabled programme stem of the current week) appears ONCE:
+ * the block leg skips ids the picks already carry, so the queue never
+ * doubles a stem while the programme is on. While Programme is off the
+ * queue is the picks alone and the programme week is never read (D3: zero
+ * programme state) — enabled programme stems arrive through the picks leg,
+ * which is the owner-reported defect's fix. Pick order is `listAllStems`'
+ * own order (the library's recency order) — the composition adds no
+ * re-sort, so start and resume walk the identical queue.
  */
 export function readMorningPracticeQueue(repo: Repository, now: Date = new Date()): StemRow[] {
   const picks = repo.listAllStems().filter(isMorningPick);
   if (!repo.getSettings().programme) return picks;
   const { currentWeek } = readProgrammeWeek(repo, now);
-  return [...picks, ...repo.getProgrammeStemsForWeek(currentWeek)];
+  const pickedIds = new Set(picks.map((s) => s.id));
+  const block = repo.getProgrammeStemsForWeek(currentWeek).filter((s) => !pickedIds.has(s.id));
+  return [...picks, ...block];
 }
 
 export interface HomeProgrammeStatus {
