@@ -296,9 +296,9 @@ export default function HomeScreen() {
             and its Start; the evening reflection (when
             `evening_practice_enabled`, §7) and the weekly reflection (on its
             target day, §7 `weekly_meta_day`) each get their own quiet card
-            below. The current practice period (midpoint of the user's two
-            notification times, `currentPractice.ts`) still decides which
-            card's button is primary. Inner rows are plain `View`s (issue 03):
+            below. The current practice period (circular closest-of-two of
+            the user's two notification times, `currentPractice.ts`) still
+            decides which card's button is primary. Inner rows are plain `View`s (issue 03):
             `ThemedView` painted `theme.background` inside the card's
             `backgroundElement` fill — the owner's "weird white background"
             strips.
