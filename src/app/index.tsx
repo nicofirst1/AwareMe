@@ -33,8 +33,9 @@ import { isWeeklyReviewDue } from '@/session/reviewPeriod';
 
 /**
  * The render path's own period read (issue 03, owner decision 2026-09-15):
- * the highlighted practice flips at the midpoint between the user's two
- * configured notification times (`currentPractice.ts`), not at a hardcoded
+ * the highlighted practice follows the user's two configured notification
+ * times (`currentPractice.ts` — since 2026-09-26 circular closest-of-two,
+ * wraparound through midnight; was the plain midpoint), not at a hardcoded
  * 17:00. Unlike `loadHomeStatus` this call is not behind the focus-effect
  * try/catch, so it guards the settings read itself — settings unreadable
  * (e.g. no DB in tests) must not crash the home screen (§13.4: a status
