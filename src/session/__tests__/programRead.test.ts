@@ -415,8 +415,8 @@ describe('applyWeekSetActivation (issue 09: cumulative unlock with regression gu
 
 // ── Packet-7 D1: the composition — picks + the gated programme block ──────
 
-/** A library row (the listAllStems shape) for one pick. Picks are user/imported stems. */
-function pick(id: string, overrides: Partial<{ origin: string; time_of_day: string | null; active: number; deleted_at: string | null }> = {}) {
+/** A library row (the listAllStems shape) for one pick. Picks are user/imported stems; programme-seed rows carry a week number. */
+function pick(id: string, overrides: Partial<{ origin: string; time_of_day: string | null; active: number; deleted_at: string | null; weekNumber: number | null }> = {}) {
   return {
     id,
     text: `pick ${id}`,
@@ -461,16 +461,20 @@ describe('readMorningPracticeQueue — D1 composition (picks + gated programme b
     expect(weekReads).toEqual([]); // the derivation is never consulted while off
   });
 
-  it('the pick filter is exact: only active, non-deleted, user/imported, non-evening stems join (cannot pass vacuously)', () => {
+  it('the pick filter is exact: only active, non-deleted, user/imported or programme, non-evening stems join (cannot pass vacuously)', () => {
     const repo = makeRepo({
       listAllStems: () => [
         pick('qualifies'), // the one that must join
         pick('inactive', { active: 0 }),
         pick('deleted', { deleted_at: '2026-09-10T00:00:00.000Z' }),
         pick('evening', { time_of_day: 'evening' }),
-        pick('seeded', { origin: 'seed' }), // seed starters are evening content, never picks
+        pick('seeded', { origin: 'seed' }), // weekless seed rows (the evening starters' class) are never picks
         pick('imported', { origin: 'imported' }), // imported picks DO join
         pick('untagged', { time_of_day: null }), // untagged joins the morning (design §8.2)
+        pick('prog-enabled', { origin: 'seed', weekNumber: 2 }), // programme stems are picks (2026-09-26, packet-12 B1)
+        pick('prog-resting', { origin: 'seed', weekNumber: 3, active: 0 }), // resting programme stems stay out
+        pick('prog-deleted', { origin: 'seed', weekNumber: 3, deleted_at: '2026-09-10T00:00:00.000Z' }),
+        pick('prog-evening', { origin: 'seed', weekNumber: 3, time_of_day: 'evening' }), // evening-tagged stay out of the morning
       ],
       getSettings: () => ({ ...DEFAULT_SETTINGS, programme: false }),
     });
@@ -478,7 +482,65 @@ describe('readMorningPracticeQueue — D1 composition (picks + gated programme b
       'qualifies',
       'imported',
       'untagged',
+      'prog-enabled',
     ]);
+  });
+
+  it('an individually enabled programme stem is a pick while the Programme setting is OFF (owner decision 2026-09-26, packet-12 B1: enabled means it shows)', () => {
+    // The owner-reported defect, as a pin: programme off, one programme
+    // stem enabled by hand — the queue is NOT the empty picks list, the
+    // enabled stem shows. The week is never read (D3) and the stem arrives
+    // through the picks leg, not a block read.
+    const weekReads: number[] = [];
+    const repo = makeRepo({
+      listAllStems: () => [pick('prog-enabled', { origin: 'seed', weekNumber: 2 })],
+      getProgrammeStemsForWeek: (week) => {
+        weekReads.push(week);
+        return [blockStem('w2-block')];
+      },
+      getSettings: () => ({ ...DEFAULT_SETTINGS, programme: false }),
+    });
+    const queue = readMorningPracticeQueue(repo, new Date('2026-09-16T10:00:00Z'));
+    expect(queue.map((s) => s.id)).toEqual(['prog-enabled']);
+    expect(weekReads).toEqual([]); // still zero programme state while off
+  });
+
+  it('with Programme on, a stem both picked and in the week block appears ONCE — at its recency position among the picks, and the block leg does not re-add it (owner composition, packet-12 B1: picks first, then week-block stems not already picked)', () => {
+    // listAllStems recency puts p2 first, then the enabled programme stem
+    // w1a, then p1. The owner's composition: picks first (recency), then
+    // the block in seed order minus what the picks already carry.
+    const repo = makeRepo({
+      ...ANCHOR,
+      listAllStems: () => [
+        pick('p2'),
+        pick('w1a', { origin: 'seed', weekNumber: 1 }), // enabled programme stem: a pick AND a block member
+        pick('p1'),
+      ],
+      getProgrammeStemsForWeek: (week) => (week === 1 ? [blockStem('w1a'), blockStem('w1b')] : []),
+    });
+    const queue = readMorningPracticeQueue(repo, new Date('2026-09-16T10:00:00Z'));
+    expect(queue.map((s) => s.id)).toEqual(['p2', 'w1a', 'p1', 'w1b']); // 'w1a' exactly once
+  });
+
+  it('with Programme on, an enabled programme stem of another week rides the picks leg too (enabled means it shows, whatever its week)', () => {
+    const repo = makeRepo({
+      ...ANCHOR,
+      listAllStems: () => [
+        pick('p1'),
+        pick('w2a', { origin: 'seed', weekNumber: 2 }), // enabled, but the effective week is 1
+      ],
+      getProgrammeStemsForWeek: (week) => (week === 1 ? [blockStem('w1a')] : []),
+    });
+    const queue = readMorningPracticeQueue(repo, new Date('2026-09-16T10:00:00Z'));
+    expect(queue.map((s) => s.id)).toEqual(['p1', 'w2a', 'w1a']);
+  });
+
+  it('with Programme off there is no dedupe to do: enabled programme stems queue once through the picks leg alone', () => {
+    const repo = makeRepo({
+      listAllStems: () => [pick('w1a', { origin: 'seed', weekNumber: 1 })],
+      getSettings: () => ({ ...DEFAULT_SETTINGS, programme: false }),
+    });
+    expect(readMorningPracticeQueue(repo, new Date('2026-09-16T10:00:00Z')).map((s) => s.id)).toEqual(['w1a']);
   });
 
   it('Programme on with an emptied block still queues the picks (the honest empty state stays reachable when both are gone)', () => {

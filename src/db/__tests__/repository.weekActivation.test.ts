@@ -187,16 +187,34 @@ describe('setProgrammeWeekActive (D2: provenance-scoped activation, never restin
     }
   });
 
-  it('never reorders: the rotation queue keeps rowid order across repeated funnel runs', () => {
-    const { repo } = makeDb();
+  it('never reorders: re-running the funnel never shuffles already-enabled stems\' queue order (packet-12 B1: the queue follows the enabled set; the funnel only grows it)', () => {
+    const { raw, repo } = makeDb();
     repo.setProgrammeWeekActive(weekA);
     const before = readMorningPracticeQueue(repo).map((s) => s.id);
-    expect(before).toEqual(repo.getProgrammeWeekBlock(weekA).map((s) => s.id)); // rowid/seed order
 
     repo.setProgrammeWeekActive(weekC);
     repo.setProgrammeWeekActive(weekB);
     repo.setProgrammeWeekActive(weekA);
-    expect(readMorningPracticeQueue(repo).map((s) => s.id)).toEqual(before);
+    const after = readMorningPracticeQueue(repo).map((s) => s.id);
+
+    // Every previously queued stem keeps its relative position: the funnel
+    // touches only the active flag, never created_at or rowid, so nothing
+    // already in the queue can jump or shuffle. (The old pin — the queue
+    // equals the week-A block in rowid order — is superseded by the
+    // 2026-09-26 owner decision: enabled programme stems of every week are
+    // picks, so the queue is the whole enabled set, not one week's block.)
+    expect(after.filter((id) => before.includes(id))).toEqual(before);
+
+    // And the grown queue is exactly the newly enabled set: programme on,
+    // the queue is every enabled programme stem (the block leg re-derives
+    // to week 1, whose stems the picks leg already carries — once each).
+    const enabled = (
+      raw.prepare('SELECT id FROM stems WHERE active = 1 AND deleted_at IS NULL AND week_number IS NOT NULL').all() as {
+        id: string;
+      }[]
+    ).map((r) => r.id);
+    expect([...after].sort()).toEqual([...enabled].sort());
+    expect(after.length).toBeGreaterThanOrEqual(before.length); // grew, never shrank
   });
 
   it('leaves user stems, the weekly meta-stem, the evening meta-stems and the retired originals untouched', () => {
@@ -414,10 +432,16 @@ describe('week-set activation end to end over the §6.2/§7 setting (D2 engine)'
     applyWeekSetActivation(repo);
     expect(activeFlags(raw, weekA)).toEqual(allActive(weekA)); // cumulative: 1..B unlocked
     expect(activeFlags(raw, weekB)).toEqual(allActive(weekB));
-    // The morning rotation reads the override week's active stems.
-    expect(readMorningPracticeQueue(repo).map((s) => s.text)).toEqual(
-      PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === weekB).map((s) => s.text),
-    );
+    // The morning rotation under the 2026-09-26 owner decision (packet-12
+    // B1, "enabled means it shows"): every enabled programme stem shows —
+    // weeks 1..B after the cumulative unlock — with the effective week's
+    // block members appearing exactly once (the picks/block dedupe).
+    const queueTexts = readMorningPracticeQueue(repo).map((s) => s.text);
+    const enabledTexts = PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber <= weekB).map((s) => s.text);
+    expect([...queueTexts].sort()).toEqual([...enabledTexts].sort());
+    for (const text of PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber === weekB).map((s) => s.text)) {
+      expect(queueTexts.filter((t) => t === text)).toHaveLength(1); // block member: ONCE
+    }
 
     // The clear path (card toggle or reflection completion): the override is
     // gone so the queue reads the derived week again (weekA — no anchor on a
@@ -428,7 +452,15 @@ describe('week-set activation end to end over the §6.2/§7 setting (D2 engine)'
     applyWeekSetActivation(repo);
     expect(activeFlags(raw, weekA)).toEqual(allActive(weekA));
     expect(activeFlags(raw, weekB)).toEqual(allActive(weekB));
-    expect(readMorningPracticeQueue(repo)).toHaveLength(countOf(weekA));
+    // D2: nothing is ever rested, so every unlocked row STAYS active — no
+    // auto-re-lock exists to test for, because the resting write no longer
+    // exists. Under B1 the queue keeps showing every enabled stem: weeks
+    // 1..B through the picks leg (the cleared override re-derives the block
+    // to week 1, whose stems the picks already carry).
+    repo.setSetting('program_week_override', null);
+    expect(readMorningPracticeQueue(repo)).toHaveLength(
+      PROGRAMME_SEED_STEMS.filter((s) => s.weekNumber <= weekB).length,
+    );
   });
 
   it('user stems and the weekly meta-stem stay out of the activation set entirely', () => {
