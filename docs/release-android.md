@@ -1,4 +1,4 @@
-# Android release runbook (AwareMe 1.1.0 → Google Play)
+# Android release runbook (AwareMe → Google Play; current release state: 1.5.1 / versionCode 5)
 
 Everything needed to take this repo from `main` to a published Play listing.
 Steps marked **[owner]** can only be done by a human (they need the Play
@@ -21,8 +21,8 @@ Sources of truth this runbook depends on — never retype from memory:
 
 | Artifact    | Where it is set | Value for this release |
 | ----------- | --------------- | ---------------------- |
-| `versionName` | `app.json` → `expo.version` | `"1.1.0"` |
-| `versionCode` | `app.json` → `expo.android.versionCode` | `2` |
+| `versionName` | `app.json` → `expo.version` | the release being shipped (currently `"1.5.1"`) |
+| `versionCode` | `app.json` → `expo.android.versionCode` | currently `5`; bump by 1 every Play submission |
 
 - `versionCode` is a monotonically increasing integer; Google Play rejects an
   upload whose `versionCode` is ≤ the live one. Bump it by 1 **every** Play
@@ -149,10 +149,7 @@ All application questions below have their worked-out answers in
 
 1. Create app → name **AwareMe** (exact `store/listing-copy.md` spelling),
    default language English (United States), **App** (not game), **Free**.
-2. **Privacy policy URL**: serve `docs/privacy.md` via GitHub Pages (repo Settings
-   → Pages → deploy from branch `main`, root). The page will live at
-   `https://<account>.github.io/<repo>/privacy` — paste that URL into both
-   Play's App content → Privacy policy and the listing.
+2. **Privacy policy URL**: `https://nicolobrandizzi.com/awareme-privacy/privacy` — served by the separate public repo `nicofirst1/awareme-privacy` (a verbatim copy of `docs/privacy.md`; re-sync it on every privacy.md change). This repo cannot serve Pages itself: it is public, but Pages was deliberately not enabled here — the standalone repo keeps the policy live independent of this repo's visibility. Paste the URL into both Play's App content → Privacy policy and the listing. (Live 2026-10-13, HTTP 200 verified.)
 3. **App access**: all functionality is available without restrictions (no
    credentials, no special access).
 4. **Ads**: contains no ads.
@@ -184,7 +181,7 @@ All application questions below have their worked-out answers in
 
 1. Production → Create new release.
 2. Upload `app-release.aab` (the one built with the PRODUCTION keystore).
-3. Release name: `1.1.0`. Release notes: one or two quiet sentences in the
+3. Release name: the versionName (`1.5.1` for the first release). Release notes: one or two quiet sentences in the
    listing's voice (first release: "First public release.").
 4. Review the release summary Play computes from the data-safety/content
    rating answers; start the rollout to production (full 100%).
@@ -197,3 +194,14 @@ The **[owner]** steps in this file (§2.2–2.4 key generation/backup, §5
 Console forms) are exactly what the round-end wizard script will walk
 through interactively. Until then, this document is sufficient on its own:
 every Console answer above is a copy-paste from a file in this repo.
+
+## 7. State (2026-10-13)
+
+- Production key EXISTS: `~/keys/six-endings-release.keystore`, alias
+  `six-endings`, RSA 2048, valid to 2054-02-28. Password + key file backed up
+  in the owner's Bitwarden. §2.2–2.4 are done; do not generate a second key.
+- First signed AAB built and verified: versionCode 5 / versionName 1.5.1,
+  production-signed (jarsigner: `CN=Nicolo Brandizzi, OU=AwareMe`), sha256
+  `24e683112b78701713be2b4a785d186084571933b5e754289493c3452df1d67d`.
+- `keystore.properties` sits at the repo root (gitignored, chmod 600) and
+  must stay for every build.
