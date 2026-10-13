@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**AwareMe**: Last updated September 16, 2026
+**AwareMe**: Last updated October 13, 2026
 
 AwareMe is a private, on-device journaling app. This policy describes what happens to your data, and it is short because the answer to almost every question is: nothing leaves your device.
 
@@ -23,6 +23,7 @@ Only when you export it yourself. The export feature (SQLite file, JSON bundle, 
 
 - **Notifications**: used for local reminders at times you set. These are scheduled on your device; nothing is sent from a server, and notification text never contains your writing. You can decline or disable them and the app remains fully usable.
 - **Biometrics / device passcode**: used only if you turn on the optional app lock. The check happens on your device through the operating system's own authentication (Face ID, fingerprint, or passcode); the app never sees or stores your biometric data.
+- **Outbound links**: the Home footer, the About screen, and the About-the-method screen offer links to the developer's site (nicolobrandizzi.com) and to nathanielbranden.com. Tapping one opens your browser; the app itself stays offline and transmits nothing.
 
 ## What we do not do
 
