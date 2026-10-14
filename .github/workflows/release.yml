@@ -145,7 +145,10 @@ jobs:
         run: |
           cd android
           ./gradlew assembleRelease --no-daemon
-        timeout-minutes: 15
+        # 15 min proved too tight on CI (run 38531807277 died at
+        # mergeReleaseJavaResource after Metro bundling ~3 min; local builds
+        # are faster). 30 min with --no-daemon.
+        timeout-minutes: 30
 
       - name: Verify the APK signature
         # Prints the signing certificate (public material) as proof the APK
