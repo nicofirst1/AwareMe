@@ -16,11 +16,11 @@
   <img src="https://img.shields.io/badge/license-GPL--3.0-111111?style=flat-square" alt="GPL-3.0 license">
 </p>
 
-<!-- Download slot: uncomment once the release pipeline (cycle c02) has produced the first release.
-<p align="center">
-  <a href="https://github.com/nicofirst1/AwareMe/releases/latest"><strong>Download the latest Android build</strong></a>
-</p>
--->
+## Try it out
+
+- **Download for Android (APK).** [Get the latest release](https://github.com/nicofirst1/AwareMe/releases/latest) and install the signed APK. Every release is built and signature-verified by the public workflow in this repository.
+- **Google Play.** Planned; the store listing is in preparation.
+- **The dev process.** [Read the blog post](https://nicolobrandizzi.com/blog/awareme/) on how AwareMe was built.
 
 ---
 
