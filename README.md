@@ -37,7 +37,7 @@ AwareMe is a private, on-device journaling app built around sentence completion,
 
 ## Privacy
 
-Everything you write stays on your device. The app performs no network communication of any kind, behaves identically in airplane mode, and has no account, no sync, no analytics, and no advertising. The full privacy policy is at [nicolobrandizzi.com/awareme-privacy/privacy](https://nicolobrandizzi.com/awareme-privacy/privacy).
+Everything you write stays on your device. The app performs no network communication of any kind, behaves identically in airplane mode, and has no account, no sync, no analytics, and no advertising. The full privacy policy is [docs/privacy.md](docs/privacy.md) in this repository.
 
 ## Quickstart
 

@@ -149,7 +149,7 @@ All application questions below have their worked-out answers in
 
 1. Create app → name **AwareMe** (exact `store/listing-copy.md` spelling),
    default language English (United States), **App** (not game), **Free**.
-2. **Privacy policy URL**: `https://nicolobrandizzi.com/awareme-privacy/privacy` — served by the separate public repo `nicofirst1/awareme-privacy` (a verbatim copy of `docs/privacy.md`; re-sync it on every privacy.md change). This repo cannot serve Pages itself: it is public, but Pages was deliberately not enabled here — the standalone repo keeps the policy live independent of this repo's visibility. Paste the URL into both Play's App content → Privacy policy and the listing. (Live 2026-10-13, HTTP 200 verified.)
+2. **Privacy policy URL**: `https://github.com/nicofirst1/AwareMe/blob/main/docs/privacy.md` — the policy lives only in this repo (owner decision 2026-10-14: the website copy is retired). GitHub renders the file for reviewers. The standalone Pages repo `nicofirst1/awareme-privacy` is now redundant; archiving or deleting it is an owner call. Paste the URL into both Play's App content → Privacy policy and the listing.
 3. **App access**: all functionality is available without restrictions (no
    credentials, no special access).
 4. **Ads**: contains no ads.
