@@ -16,15 +16,15 @@
   <img src="https://img.shields.io/badge/license-GPL--3.0-111111?style=flat-square" alt="GPL-3.0 license">
 </p>
 
+---
+
+AwareMe is a private, on-device journaling app built around sentence completion, the self-reflection exercise developed by the psychologist Nathaniel Branden to increase self-awareness. You receive an incomplete sentence, a stem, and write several different endings to it, quickly, without stopping to evaluate them. A timer keeps the pen moving, editing is deliberately awkward, and nothing you write is scored, praised, or discarded.
+
 ## Try it out
 
 - **Download for Android (APK).** [Get the latest release](https://github.com/nicofirst1/AwareMe/releases/latest) and install the signed APK. Every release is built and signature-verified by the public workflow in this repository.
 - **Google Play.** Planned; the store listing is in preparation.
 - **The dev process.** [Read the blog post](https://nicolobrandizzi.com/blog/awareme/) on how AwareMe was built.
-
----
-
-AwareMe is a private, on-device journaling app built around sentence completion, the self-reflection exercise developed by the psychologist Nathaniel Branden to increase self-awareness. You receive an incomplete sentence, a stem, and write several different endings to it, quickly, without stopping to evaluate them. A timer keeps the pen moving, editing is deliberately awkward, and nothing you write is scored, praised, or discarded.
 
 ## What it does
 
