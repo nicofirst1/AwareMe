@@ -1,0 +1,183 @@
+# Release pipeline for AwareMe (Android APK via GitHub Releases).
+#
+# Triggered by a `v*` tag push (a coordinator/owner act; tags are cut from
+# main after a green CI run on the tagged commit) and by manual
+# `workflow_dispatch`. It builds the production-signed release APK exactly
+# the way `scripts/build-android.sh` does locally (expo prebuild, where the
+# with-android-signing plugin wires the signing config, then
+# `./gradlew assembleRelease`) and attaches the APK to a GitHub Release.
+#
+# Signing: the production keystore arrives as the repo secret
+# ANDROID_KEYSTORE_BASE64; this workflow decodes it to a temp path and writes
+# a `keystore.properties` at the repo root, the location
+# `scripts/with-android-signing.js` recommends (it survives prebuild, which
+# wipes `android/`). Secret values are only ever written to files, never
+# echoed; the runner cleans up both files after the job.
+#
+# Version guard (issue 02, the versionCode/versionName hand-match class):
+# before gradle runs, the workflow fails loudly unless the generated
+# `android/app/build.gradle` carries the versionName/versionCode declared in
+# `app.json`, the tag matches the app version, and the signing block is in
+# place.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: build signed APK, publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Secret scan (gitleaks)
+        # Same scan as ci.yml: any finding fails the job before anything runs.
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node 26
+        # Same pin as ci.yml (node:sqlite needs >= 22.5; see the comment there).
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: Set up JDK 17
+        # The local release runbook requires JDK 17 (scripts/build-android.sh).
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Check Android SDK
+        # ubuntu-latest ships an Android SDK with ANDROID_HOME preset. Fail
+        # loudly here (not mid-gradle) if the runner image ever drops it.
+        run: |
+          if [ -z "${ANDROID_HOME:-}" ] || [ ! -d "$ANDROID_HOME" ]; then
+            echo "ERROR: ANDROID_HOME is not set or not a directory on this runner; cannot build the APK."
+            exit 1
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME"
+
+      - name: Install dependencies
+        # Same clean-room install as ci.yml: plain `npm ci` would auto-install
+        # peer dependencies the lockfile resolution intentionally omits
+        # (docs/DECISIONS.md, environment quirks).
+        run: npm ci --legacy-peer-deps
+        timeout-minutes: 10
+
+      - name: Stage production signing from secrets
+        # Decodes the keystore and writes keystore.properties at the repo
+        # root, the first candidate scripts/with-android-signing.js reads.
+        # storeFile gets an absolute path so the plugin's directory-relative
+        # resolution lands on the same file. Nothing is echoed; GitHub also
+        # masks the secret values in any accidental output.
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          if [ ! -s "$RUNNER_TEMP/release.keystore" ]; then
+            echo "ERROR: ANDROID_KEYSTORE_BASE64 decoded to an empty keystore; check the secret."
+            exit 1
+          fi
+          cat > keystore.properties <<EOF
+          storeFile=$RUNNER_TEMP/release.keystore
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+          echo "keystore.properties written at the repo root; keystore decoded to \$RUNNER_TEMP."
+
+      - name: Prebuild the native Android project
+        # Generates android/ and appends the signing block (the
+        # with-android-signing plugin from app.json). Same command as
+        # scripts/build-android.sh.
+        run: npx expo prebuild --platform android
+        timeout-minutes: 15
+
+      - name: Verify version and signing before gradle
+        # The hand-match guard (issue 02): fail loudly, before a long gradle
+        # run, if the generated build.gradle does not carry the version from
+        # app.json, if a pushed tag disagrees with it, or if the signing
+        # block is missing (which would silently debug-sign the APK).
+        run: |
+          VERSION=$(node -p "JSON.parse(require('fs').readFileSync('app.json','utf8')).expo.version")
+          VERSION_CODE=$(node -p "JSON.parse(require('fs').readFileSync('app.json','utf8')).expo.android.versionCode")
+          echo "app.json declares versionName $VERSION / versionCode $VERSION_CODE"
+
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "ERROR: pushed tag $GITHUB_REF_NAME does not match app.json version v$VERSION; bump app.json or re-tag."
+            exit 1
+          fi
+          TAG="v$VERSION"
+
+          grep -Eq "versionCode[[:space:]]+$VERSION_CODE\$" android/app/build.gradle \
+            || { echo "ERROR: generated android/app/build.gradle has no 'versionCode $VERSION_CODE' (the prebuild hand-match class fired; check app.json and the expo template)."; exit 1; }
+          grep -Eq "versionName[[:space:]]+\"$VERSION\"" android/app/build.gradle \
+            || { echo "ERROR: generated android/app/build.gradle has no 'versionName \"$VERSION\"' (the prebuild hand-match class fired; check app.json and the expo template)."; exit 1; }
+          grep -q "@six-endings-signing" android/app/build.gradle \
+            || { echo "ERROR: the @six-endings-signing block is missing from android/app/build.gradle; the release would fall back to debug signing."; exit 1; }
+          test -s keystore.properties \
+            || { echo "ERROR: keystore.properties was not staged; the release would fall back to debug signing."; exit 1; }
+          echo "Verified: versionCode $VERSION_CODE, versionName \"$VERSION\", signing block present. Releasing as $TAG."
+
+      - name: Assemble release APK
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon
+        timeout-minutes: 15
+
+      - name: Verify the APK signature
+        # Prints the signing certificate (public material) as proof the APK
+        # is production-signed, not the debug fallback.
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: $APK was not produced by assembleRelease."
+            exit 1
+          fi
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          APKSIGNER="$BUILD_TOOLS/apksigner"
+          if [ ! -x "$APKSIGNER" ]; then
+            echo "ERROR: apksigner not found under $ANDROID_HOME/build-tools."
+            exit 1
+          fi
+          "$APKSIGNER" verify --print-certs "$APK"
+
+      - name: Publish the GitHub Release
+        # On a tag push the tag already exists; on workflow_dispatch, gh
+        # creates the tag at the dispatched commit. Release notes are two
+        # quiet sentences in the listing's voice (store/listing-copy.md).
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "JSON.parse(require('fs').readFileSync('app.json','utf8')).expo.version")
+          TAG="v$VERSION"
+          APK_NAME="AwareMe-$VERSION.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$APK_NAME"
+          NOTES=$(printf 'AwareMe %s for Android, production-signed and built by GitHub Actions from this tag.\nA quiet place to finish a sentence: private, on-device journaling with a short morning and evening practice.' "$VERSION")
+          gh release create "$TAG" "$APK_NAME" --title "AwareMe $VERSION" --notes "$NOTES"
+
+      - name: Remove staged signing material
+        if: always()
+        run: rm -f keystore.properties "$RUNNER_TEMP/release.keystore"
